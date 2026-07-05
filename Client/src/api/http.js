@@ -10,11 +10,11 @@ export const queryClient = new QueryClient({
   },
 });
 
-export async function fetchNavbar({ signal, role }) {
-  const response = await fetch(
-    `http://localhost:3000/api/nav?role=${encodeURIComponent(role)}`,
-    { signal },
-  );
+export async function fetchNavbar({ signal }) {
+  const response = await fetch("http://localhost:3000/api/nav", {
+    signal,
+    credentials: "include",
+  });
 
   if (!response.ok) {
     const error = new Error("Failed to fetch navbar");

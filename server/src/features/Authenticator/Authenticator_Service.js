@@ -13,7 +13,15 @@ export default class AuthenticatorService {
     if (!isPasswordValid) {
       throw new Error("Invalid email or password");
     }
-    return { id: user.users_id, email: user.user_email };
+
+    const profile = await authModel.findUserProfile(user.users_id);
+
+    return {
+      id: user.users_id,
+      name: profile?.user_name || user.user_name,
+      email: user.user_email,
+      role: profile?.user_level,
+    };
   }
 
   async registerUser(email, password, confirmPassword, firstName, lastName) {

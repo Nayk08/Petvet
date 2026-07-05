@@ -31,7 +31,12 @@ export default class AuthenticatorController {
         if (err) {
           return res.status(500).json({ error: "Login failed" });
         }
-        req.session.user = { id: user.id, email: user.email };
+        req.session.user = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
         req.session.isLoggedIn = true;
         res
           .status(200)
@@ -58,5 +63,9 @@ export default class AuthenticatorController {
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
+  }
+
+  async me(req, res) {
+    res.status(200).json({ user: req.session.user });
   }
 }

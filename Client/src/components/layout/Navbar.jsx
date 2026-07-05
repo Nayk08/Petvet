@@ -38,30 +38,38 @@ export default function Navbar({ onLogout }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
-  const userRole = "Super Admin";
-  const userInitials = "SA";
 
   const { data, isPending, isError } = useQuery({
-    queryKey: ["navData", userRole],
-    queryFn: ({ signal }) => fetchNavbar({ signal, role: userRole }),
+    queryKey: ["navData"],
+    queryFn: ({ signal }) => fetchNavbar({ signal }),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10,
   });
 
+  const user = data?.user;
+  const modules = data?.modules || [];
+  const userRole = user?.role || "No role";
+  const userInitials = (user?.name || user?.email || "User")
+    .split(/\s+|@/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
   const { topLevel, childrenMap } = useMemo(() => {
-    if (!data?.length) return { topLevel: [], childrenMap: new Map() };
-    const top = data
+    if (!modules.length) return { topLevel: [], childrenMap: new Map() };
+    const top = modules
       .filter((m) => m.parent_module_id === null)
       .sort((a, b) => a.sort_order - b.sort_order);
     const map = new Map();
     top.forEach((parent) => {
-      const children = data
+      const children = modules
         .filter((m) => m.parent_module_id === parent.user_module_id)
         .sort((a, b) => a.sort_order - b.sort_order);
       map.set(parent.module_code, children);
     });
     return { topLevel: top, childrenMap: map };
-  }, [data]);
+  }, [modules]);
 
   const handleLogout = async () => {
     setIsOpen(false);

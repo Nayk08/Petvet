@@ -6,6 +6,8 @@ const router = express.Router();
 const commonController = new CommonController();
 
 // ✅ wrapped in arrow function
-router.get("/nav", (req, res) => commonController.getNavbarData(req, res));
+router.get("/nav", isAuth, (req, res) =>
+  commonController.getNavbarData(req, res),
+);
 
 export default router;
