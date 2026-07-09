@@ -23,7 +23,7 @@ import {
   HeartPulse,
 } from "lucide-react";
 import { queryClient } from "@/api/http";
-
+const baseUrl = import.meta.env.VITE_API_BASE_URL;
 export default function AuthForm() {
   const [searchParams] = useSearchParams();
   const actionData = useActionData();
@@ -239,7 +239,7 @@ export async function action({ request }) {
     //    This assumes you expose a GET route (e.g. /api/csrf-token)
     //    that calls generateCsrfToken() and returns { csrfToken } while
     //    also setting the csrf cookie via Set-Cookie.
-    const csrfRes = await fetch("http://localhost:3000/api/csrf-token", {
+    const csrfRes = await fetch(`${baseUrl}/csrf-token`, {
       method: "GET",
       credentials: "include", // required to receive/send the httpOnly csrf cookie
     });
@@ -255,7 +255,7 @@ export async function action({ request }) {
 
     // 2. Now make the actual auth request, awaited, with the token attached
     //    and credentials included so the csrf cookie travels with it.
-    const response = await fetch("http://localhost:3000/api/auth/" + mode, {
+    const response = await fetch(`${baseUrl}/auth/` + mode, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

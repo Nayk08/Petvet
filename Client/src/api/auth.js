@@ -1,6 +1,8 @@
 // src/api/auth.js
+
 export async function getCurrentUser() {
-  const res = await fetch("http://localhost:3000/api/auth/me", {
+  const authUrl = import.meta.env.VITE_API_AUTH_URL;
+  const res = await fetch(`${authUrl}/me`, {
     credentials: "include",
   });
 

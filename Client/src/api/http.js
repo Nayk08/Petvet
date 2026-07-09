@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
+const AuthUrl = import.meta.env.VITE_API_AUTH_URL;
+const baseUrl = import.meta.env.VITE_API_BASE_URL;
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -15,7 +17,7 @@ export const queryClient = new QueryClient({
 // ─────────────────────────────
 
 export async function fetchCurrentUser({ signal }) {
-  const response = await fetch("http://localhost:3000/api/auth/me", {
+  const response = await fetch(`${AuthUrl}/me}`, {
     signal,
     credentials: "include",
   });
@@ -30,7 +32,7 @@ export async function fetchCurrentUser({ signal }) {
 }
 
 export async function logoutUser() {
-  const csrfRes = await fetch("http://localhost:3000/api/csrf-token", {
+  const csrfRes = await fetch(`${baseUrl}/csrf-token`, {
     method: "GET",
     credentials: "include",
   });
@@ -41,7 +43,7 @@ export async function logoutUser() {
 
   const { csrfToken } = await csrfRes.json();
 
-  const response = await fetch("http://localhost:3000/api/auth/logout", {
+  const response = await fetch(`${AuthUrl}/logout`, {
     method: "POST",
     headers: {
       "x-csrf-token": csrfToken,
@@ -62,7 +64,7 @@ export async function logoutUser() {
 // ─────────────────────────────
 
 export async function fetchNavbar({ signal }) {
-  const response = await fetch("http://localhost:3000/api/nav", {
+  const response = await fetch(`${baseUrl}/navbar`, {
     signal,
     credentials: "include",
   });
@@ -77,7 +79,7 @@ export async function fetchNavbar({ signal }) {
 }
 
 export async function getCategoryUserLevel({ signal }) {
-  const response = await fetch("http://localhost:3000/api/categoryUserLevel", {
+  const response = await fetch(`${baseUrl}/categoryUserLevel`, {
     signal,
     credentials: "include",
   });
@@ -96,7 +98,7 @@ export async function getCategoryUserLevel({ signal }) {
 // ─────────────────────────────
 
 export async function fetchUsers({ signal }) {
-  const response = await fetch(`http://localhost:3000/api/users`, { signal });
+  const response = await fetch(`${baseUrl}/users`, { signal });
 
   if (!response.ok) {
     const error = new Error("Failed to fetch users");
@@ -109,7 +111,7 @@ export async function fetchUsers({ signal }) {
 
 export async function fetchUserById(id, { signal } = {}) {
   console.log("fetchUserById id:", id);
-  const response = await fetch(`http://localhost:3000/api/users/${id}`, {
+  const response = await fetch(`${baseUrl}/users/${id}`, {
     signal,
   });
 
@@ -123,7 +125,7 @@ export async function fetchUserById(id, { signal } = {}) {
 }
 
 export async function addNewUser(user) {
-  const response = await fetch("http://localhost:3000/api/addUser", {
+  const response = await fetch(`${baseUrl}/addUser`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -142,7 +144,7 @@ export async function addNewUser(user) {
 }
 
 export async function updateUser(id, user) {
-  const response = await fetch(`http://localhost:3000/api/updateUser/${id}`, {
+  const response = await fetch(`${baseUrl}/updateUser/${id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -161,7 +163,7 @@ export async function updateUser(id, user) {
 }
 
 export async function deleteUser(id) {
-  const response = await fetch(`http://localhost:3000/api/deleteUser/${id}`, {
+  const response = await fetch(`${baseUrl}/deleteUser/${id}`, {
     method: "PUT",
     credentials: "include",
   });
@@ -180,7 +182,7 @@ export async function deleteUser(id) {
 // ─────────────────────────────
 
 export async function fetchUserLevel({ signal }) {
-  const response = await fetch(`http://localhost:3000/api/usersLevel`, {
+  const response = await fetch(`${baseUrl}/usersLevel`, {
     signal,
   });
 
@@ -195,7 +197,7 @@ export async function fetchUserLevel({ signal }) {
 
 export async function fetchUserLevelById(id, { signal } = {}) {
   console.log("fetchUserLevelById id:", id);
-  const response = await fetch(`http://localhost:3000/api/usersLevel/${id}`, {
+  const response = await fetch(`${baseUrl}/usersLevel/${id}`, {
     signal,
   });
 
@@ -209,7 +211,7 @@ export async function fetchUserLevelById(id, { signal } = {}) {
 }
 
 export async function addNewUserLevel(userlevel, description) {
-  const response = await fetch("http://localhost:3000/api/addUserLevel", {
+  const response = await fetch("${baseUrl}/addUserLevel", {
     method: "POST",
     body: JSON.stringify({ userLevel: userlevel, description: description }),
     headers: {
@@ -228,16 +230,13 @@ export async function addNewUserLevel(userlevel, description) {
 }
 
 export async function updateUserLevel({ id, userLevel, description }) {
-  const response = await fetch(
-    `http://localhost:3000/api/updateUserLevel/${id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ userLevel, description }),
-      headers: {
-        "Content-Type": "application/json",
-      },
+  const response = await fetch(`${baseUrl}/updateUserLevel/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ userLevel, description }),
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+  });
 
   if (!response.ok) {
     const error = new Error("An error occurred while updating user level");
@@ -250,16 +249,13 @@ export async function updateUserLevel({ id, userLevel, description }) {
 }
 
 export async function deleteUserLevel(id) {
-  const response = await fetch(
-    `http://localhost:3000/api/deleteUserLevel/${id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ id }),
-      headers: {
-        "Content-Type": "application/json",
-      },
+  const response = await fetch(`${baseUrl}/deleteUserLevel/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ id }),
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+  });
 
   if (!response.ok) {
     const error = new Error("An error occurred while updating user level");
@@ -276,13 +272,10 @@ export async function deleteUserLevel(id) {
 // ─────────────────────────────
 
 export async function getPermissionMatrix({ userLevelId, signal }) {
-  const response = await fetch(
-    `http://localhost:3000/api/permissions/${userLevelId}`,
-    {
-      signal,
-      credentials: "include",
-    },
-  );
+  const response = await fetch(`${baseUrl}/permissions/${userLevelId}`, {
+    signal,
+    credentials: "include",
+  });
 
   if (!response.ok) {
     const error = new Error("Failed to fetch permission matrix");
@@ -300,7 +293,7 @@ export async function updatePermissionField({
   field,
   value,
 }) {
-  const response = await fetch("http://localhost:3000/api/permissions", {
+  const response = await fetch("${baseUrl}/permissions", {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
