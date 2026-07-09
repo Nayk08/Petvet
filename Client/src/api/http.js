@@ -64,7 +64,7 @@ export async function logoutUser() {
 // ─────────────────────────────
 
 export async function fetchNavbar({ signal }) {
-  const response = await fetch(`${baseUrl}/navbar`, {
+  const response = await fetch(`${baseUrl}/nav`, {
     signal,
     credentials: "include",
   });
