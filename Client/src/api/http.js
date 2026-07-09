@@ -17,7 +17,7 @@ export const queryClient = new QueryClient({
 // ─────────────────────────────
 
 export async function fetchCurrentUser({ signal }) {
-  const response = await fetch(`${AuthUrl}/me}`, {
+  const response = await fetch(`${AuthUrl}/me`, {
     signal,
     credentials: "include",
   });
