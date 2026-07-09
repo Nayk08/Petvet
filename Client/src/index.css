@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+@theme {
+  /* Define the core theme properties for v4 */
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0.018 254.498);
+
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.145 0.018 254.498);
+
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0.018 254.498);
+
+  /* Maps to bg-primary and text-primary-foreground */
+  --color-primary: oklch(0.205 0.014 254.254);
+  --color-primary-foreground: oklch(0.985 0 0);
+
+  /* Maps to bg-secondary and text-secondary-foreground */
+  --color-secondary: oklch(0.97 0.001 106.624);
+  --color-secondary-foreground: oklch(0.205 0.014 254.254);
+
+  /* Maps to bg-muted and text-muted-foreground */
+  --color-muted: oklch(0.97 0.001 106.624);
+  --color-muted-foreground: oklch(0.556 0.014 252.325);
+
+  /* Maps to bg-accent and text-accent-foreground */
+  --color-accent: oklch(0.97 0.001 106.624);
+  --color-accent-foreground: oklch(0.205 0.014 254.254);
+
+  /* Maps to bg-destructive */
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
+
+  /* Utility borders & inputs */
+  --color-border: oklch(0.922 0 0);
+  --color-input: oklch(0.922 0 0);
+  --color-ring: oklch(0.708 0.012 253.947);
+
+  --color-neon: oklch(0.75 0.25 190);
+  --color-neon-foreground: oklch(0.1 0.05 190);
+  --color-ring: oklch(0.75 0.25 190);
+}

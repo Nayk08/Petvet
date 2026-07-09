@@ -12,7 +12,7 @@ import commonRoutes from "./src/features/Common/Common_Route.js";
 import userRoutes from "./src/features/Users_Management/Users/Users_Route.js";
 import userLevelRoutes from "./src/features/Users_Management/User_Level/User_Level_Route.js";
 import AuthenticatorRoute from "./src/features/Authenticator/Authenticator_Route.js";
-
+import PermissionRoute from "./src/features/Users_Management/Permission/Permission_Route.js";
 const app = express();
 const PgSession = connectPgSimple(session);
 
@@ -68,10 +68,11 @@ app.get("/", (req, res) => {
 });
 
 // --- Routes ---
+app.use("/api/auth", AuthenticatorRoute);
 app.use("/api", commonRoutes);
 app.use("/api", userRoutes);
 app.use("/api", userLevelRoutes);
-app.use("/api/auth", AuthenticatorRoute);
+app.use("/api", PermissionRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {

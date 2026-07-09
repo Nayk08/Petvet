@@ -16,10 +16,18 @@ export default class AuthenticatorModel {
     return result.rows[0];
   }
 
-  async registerUser(userName, email, password) {
+  async findUserLevelId(userLevel) {
     const result = await pool.query(
-      "INSERT INTO tbl_users (user_name, user_email, user_password) VALUES ($1, $2, $3) RETURNING *",
-      [userName, email, password],
+      "SELECT user_level_id FROM tbl_user_level WHERE LOWER(user_level) = LOWER($1) LIMIT 1",
+      [userLevel],
+    );
+    return result.rows[0]?.user_level_id;
+  }
+
+  async registerUser(userName, email, password, userLevelId) {
+    const result = await pool.query(
+      "INSERT INTO tbl_users (user_name, user_email, user_password, user_level_id) VALUES ($1, $2, $3, $4) RETURNING *",
+      [userName, email, password, userLevelId],
     );
     return result.rows[0];
   }

@@ -1,9 +1,12 @@
-import { usersColumns, usersActions } from "../../../utils/COLUMNS.jsx";
-import DynamicGrid from "../../../components/ui/DynamicGrid";
+import { usersColumns } from "../../../../utils/COLUMNS.jsx";
+import DynamicGrid from "../../../../components/ui/DynamicGrid.jsx";
 import { useQuery } from "@tanstack/react-query";
-import { fetchUsers } from "../../../api/http.js";
+import { fetchUsers, queryClient } from "../../../../api/http.js";
+import { Outlet, useNavigate } from "react-router-dom";
 
-export default function Users() {
+export function Component() {
+  const navigate = useNavigate();
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["usersdata"],
     queryFn: ({ signal }) => fetchUsers({ signal }),
@@ -30,9 +33,20 @@ export default function Users() {
       <DynamicGrid
         data={data ?? []}
         columnsConfig={usersColumns}
-        actions={usersActions}
         title="Users Management"
+        buttonText="Add User"
+        buttonLink="add-user"
+        onEdit={(row) => navigate(`edit-user/${row.users_id}`)}
+        onDelete={(row) => navigate(`delete-user/${row.users_id}`)}
       />
+      <Outlet />
     </>
   );
+}
+
+export function loader() {
+  return queryClient.fetchQuery({
+    queryKey: ["usersdata"],
+    queryFn: ({ signal }) => fetchUsers({ signal }),
+  });
 }

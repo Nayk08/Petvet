@@ -10,10 +10,19 @@ import {
 import {
   Link,
   useSearchParams,
-  redirect,
   Form,
   useActionData,
+  redirect,
 } from "react-router-dom";
+import {
+  AlertCircle,
+  Lock,
+  Mail,
+  User,
+  ShieldCheck,
+  HeartPulse,
+} from "lucide-react";
+import { queryClient } from "@/api/http";
 
 export default function AuthForm() {
   const [searchParams] = useSearchParams();
@@ -21,156 +30,183 @@ export default function AuthForm() {
   const isLogin = searchParams.get("mode") !== "register";
 
   return (
-    <Card className="w-full max-w-md bg-zinc-900/40 border-zinc-800/80 backdrop-blur-md shadow-2xl">
-      <CardHeader className="space-y-2 text-center pb-4">
-        <div className="flex justify-center mb-1">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center">
-            🔑
+    <Card className="w-full max-w-md bg-zinc-900/40 border-zinc-800/80 backdrop-blur-xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.9)] relative overflow-hidden transition-all duration-300">
+      {/* Brand Top Accent Line (PetVet Green) */}
+      <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-green-500 to-transparent opacity-80" />
+
+      <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
+        <div className="flex justify-center mb-2">
+          {/* Hexagonal/Square Icon Container matched to Clinic palette */}
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 text-green-500 border border-green-500/20 flex items-center justify-center shadow-inner ring-4 ring-green-500/[0.02]">
+            {isLogin ? (
+              <HeartPulse className="h-5 w-5 text-green-500" />
+            ) : (
+              <ShieldCheck className="h-5 w-5 text-amber-500" />
+            )}
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">
-          {isLogin ? "Sign In" : "Create an Account"}
+        <CardTitle className="text-2xl font-bold tracking-tight bg-gradient-to-b from-zinc-50 to-zinc-300 bg-clip-text text-transparent">
+          {isLogin ? "PetVet Portal Sign In" : "Create PetVet Account"}
         </CardTitle>
+        <p className="text-xs text-zinc-400 max-w-[280px] mx-auto">
+          {isLogin
+            ? "Access your digital medical files, updates, and upcoming grooming slots."
+            : "Register to skip long clinic queues and check live stock updates."}
+        </p>
       </CardHeader>
 
-      <CardContent>
-        {/* Using React Router's <Form> so this actually triggers the route's action() */}
+      <CardContent className="pt-2">
         <Form method="post" className="space-y-4">
-          {/* Registration Fields (Side-by-side grid layout) */}
+          {/* Side-by-Side Registration Layout */}
           {!isLogin && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 animate-in fade-in-50 slide-in-from-top-2 duration-200">
               <div className="space-y-1.5">
                 <label
                   htmlFor="firstName"
-                  className="text-xs font-medium text-zinc-400"
+                  className="text-xs font-semibold text-zinc-400 tracking-wide"
                 >
                   First Name
                 </label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  placeholder="John"
-                  className="bg-zinc-900/60 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-indigo-500 focus-visible:ring-offset-zinc-950"
-                />
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    placeholder="John"
+                    className="pl-9 bg-zinc-950/50 border-zinc-800/60 text-zinc-200 placeholder:text-zinc-700 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 transition-all duration-200"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">
                 <label
                   htmlFor="lastName"
-                  className="text-xs font-medium text-zinc-400"
+                  className="text-xs font-semibold text-zinc-400 tracking-wide"
                 >
                   Last Name
                 </label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  placeholder="Doe"
-                  className="bg-zinc-900/60 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-indigo-500 focus-visible:ring-offset-zinc-950"
-                />
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    placeholder="Doe"
+                    className="pl-9 bg-zinc-950/50 border-zinc-800/60 text-zinc-200 placeholder:text-zinc-700 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 transition-all duration-200"
+                  />
+                </div>
               </div>
             </div>
           )}
 
-          {/* Email Field */}
+          {/* Email Input */}
           <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="text-xs font-medium text-zinc-400"
+              className="text-xs font-semibold text-zinc-400 tracking-wide"
             >
-              Email address
+              Email Address
             </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="name@example.com"
-              className="bg-zinc-900/60 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-indigo-500 focus-visible:ring-offset-zinc-950"
-            />
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="name@example.com"
+                className="pl-9 bg-zinc-950/50 border-zinc-800/60 text-zinc-200 placeholder:text-zinc-700 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 transition-all duration-200"
+              />
+            </div>
           </div>
 
-          {/* Password Field */}
+          {/* Password Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label
                 htmlFor="password"
-                className="text-xs font-medium text-zinc-400"
+                className="text-xs font-semibold text-zinc-400 tracking-wide"
               >
                 Password
               </label>
               {isLogin && (
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  className="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
                 >
                   Forgot password?
                 </Link>
               )}
             </div>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="••••••••"
-              className="bg-zinc-900/60 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-indigo-500 focus-visible:ring-offset-zinc-950"
-            />
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="••••••••"
+                className="pl-9 bg-zinc-950/50 border-zinc-800/60 text-zinc-200 placeholder:text-zinc-700 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 transition-all duration-200"
+              />
+            </div>
           </div>
 
-          {/* Confirm Password Field */}
+          {/* Confirm Password (Registration Only) */}
           {!isLogin && (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 animate-in fade-in-50 slide-in-from-top-2 duration-200">
               <label
                 htmlFor="confirmPassword"
-                className="text-xs font-medium text-zinc-400"
+                className="text-xs font-semibold text-zinc-400 tracking-wide"
               >
                 Confirm Password
               </label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                className="bg-zinc-900/60 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-indigo-500 focus-visible:ring-offset-zinc-950"
-              />
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  className="pl-9 bg-zinc-950/50 border-zinc-800/60 text-zinc-200 placeholder:text-zinc-700 focus-visible:ring-green-500 focus-visible:ring-offset-zinc-950 transition-all duration-200"
+                />
+              </div>
             </div>
           )}
 
-          {/* Submit Action */}
+          {/* Error Message Box */}
+          {(actionData?.error || actionData?.message) && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm animate-in shake-1 duration-200">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="font-medium leading-tight">
+                {actionData.error || actionData.message}
+              </p>
+            </div>
+          )}
+
+          {/* Submit Button matched to Landing Page Call to Action */}
           <Button
             type="submit"
-            className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 h-10 transition-colors"
+            className="w-full mt-2 bg-green-600 hover:bg-green-500 text-white font-medium shadow-lg shadow-green-600/10 h-10 transition-all duration-200 active:scale-[0.99]"
           >
-            {isLogin ? "Log In" : "Create Account"}
+            {isLogin ? "Sign In" : "Register Account"}
           </Button>
-
-          {actionData?.error || actionData?.message ? (
-            <p className="text-sm text-rose-400 text-center">
-              {actionData.error || actionData.message}
-            </p>
-          ) : null}
         </Form>
       </CardContent>
 
-      {/* Dynamic Footer Context */}
-      <CardFooter className="justify-center border-t border-zinc-800/60 pt-4 pb-6">
-        <p className="text-sm text-zinc-400">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
+      {/* Footer Nav Links */}
+      <CardFooter className="justify-center border-t border-zinc-800/50 pt-4 pb-6 bg-zinc-950/20">
+        <p className="text-sm text-zinc-500">
+          {isLogin ? "New to PetVet? " : "Already registered? "}
           <Link
             to={`?mode=${isLogin ? "register" : "login"}`}
-            className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="font-semibold text-green-400 hover:text-green-300 transition-colors underline-offset-4 hover:underline"
           >
-            {isLogin ? "Sign Up" : "Sign In"}
+            {isLogin ? "Create Account" : "Sign In Here"}
           </Link>
         </p>
       </CardFooter>
     </Card>
   );
 }
-
-// Ensures that visiting the route with no "mode" param (e.g. plain /login)
-// redirects to ?mode=login so the login form renders by default, and the
-// address bar reflects the actual mode (matches ?mode=register elsewhere).
 export async function loader({ request }) {
   const url = new URL(request.url);
   if (!url.searchParams.has("mode")) {
@@ -244,7 +280,8 @@ export async function action({ request }) {
       );
     }
 
-    return redirect("/");
+    queryClient.clear();
+    return redirect("/dashboard");
   } catch (err) {
     // Network errors, JSON parse errors, etc.
     throw new Response(

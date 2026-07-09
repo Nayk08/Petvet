@@ -6,8 +6,23 @@ export default class CommonModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        "SELECT * FROM v_user_permissions WHERE user_level = $1",
+        "SELECT * FROM v_user_permissions WHERE user_level = $1 AND can_view = true ORDER BY user_module_id  ASC ",
         [role],
+      );
+      return res.rows;
+    } catch (err) {
+      console.error("Error fetching navbar data:", err);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getCategoryUserLevel() {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        "SELECT user_level_id, user_level FROM tbl_user_level WHERE is_deleted = 'false'",
       );
       return res.rows;
     } catch (err) {

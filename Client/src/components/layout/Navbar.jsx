@@ -1,8 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNavbar, logoutUser, queryClient } from "../../api/http";
-
+import {
+  fetchCurrentUser,
+  fetchNavbar,
+  logoutUser,
+  queryClient,
+} from "../../api/http";
+import petvetLogo from "../../assets/petvet_icon.svg";
 // 1. Import your Lucide Icons
 import {
   LayoutDashboard,
@@ -18,16 +23,21 @@ import {
   ChevronDown,
   Circle,
   LogOut,
+  Cat,
+  ClipboardClock,
 } from "lucide-react";
 
 // 2. Map codes directly to Icon Component objects
 const MODULE_ICONS = {
   DASHBOARD: LayoutDashboard,
   APPOINTMENT: Calendar,
+  G_APPOINTMENTS: ClipboardClock,
+  C_APPOINTMENTS: ClipboardClock,
+  C_P_RECORDS: Cat,
   CART: ShoppingCart,
   PAYMENTS: CreditCard,
   INVENTORY: Package,
-  SETTINGS: Settings,
+
   USER_MGMT: Users,
   USER_MGMT_USERS: User,
   USER_MGMT_ROLES: Shield,
@@ -39,14 +49,29 @@ export default function Navbar({ onLogout }) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
 
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["navData"],
-    queryFn: ({ signal }) => fetchNavbar({ signal }),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+  const {
+    data: currentUserData,
+    isPending: isUserPending,
+    isError: isUserError,
+  } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: ({ signal }) => fetchCurrentUser({ signal }),
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
 
-  const user = data?.user;
+  const currentUser = currentUserData?.user;
+
+  const { data, isPending, isError } = useQuery({
+    queryKey: ["navData", currentUser?.id, currentUser?.role],
+    queryFn: ({ signal }) => fetchNavbar({ signal }),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 10,
+    enabled: Boolean(currentUser?.id && currentUser?.role),
+  });
+
+  const user = data?.user || currentUser;
+  const hasUserId = Boolean(user?.id);
   const modules = data?.modules || [];
   const userRole = user?.role || "No role";
   const userInitials = (user?.name || user?.email || "User")
@@ -97,93 +122,155 @@ export default function Navbar({ onLogout }) {
 
   return (
     <nav className="bg-slate-950 border-b border-slate-900 fixed w-full top-0 left-0 z-50">
+      {/* Custom scrollbar styling for the horizontally-scrolling nav strip */}
+      <style>{`
+        .petvet-nav-scroll {
+          scrollbar-color: #4338ca transparent;
+          scrollbar-width: thin;
+        }
+        .petvet-nav-scroll::-webkit-scrollbar {
+          height: 6px;
+        }
+        .petvet-nav-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .petvet-nav-scroll::-webkit-scrollbar-thumb {
+          background: linear-gradient(90deg, #4338ca, #6366f1);
+          border-radius: 9999px;
+        }
+        .petvet-nav-scroll::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(90deg, #4f46e5, #818cf8);
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-        {/* Brand Logo */}
+        {/* Brand Vector Logo Integration */}
         <Link
           to="/"
-          className="flex items-center gap-2 text-white font-semibold text-sm"
+          className="flex items-center m-4 select-none active:scale-[0.98] transition-transform shrink-0"
         >
-          <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-[11px] font-black">
-            R
+          <div className="h-10 w-30  gap-1 flex items-center justify-center shrink-0">
+            <img
+              src={petvetLogo}
+              alt="PetVet logo"
+              className="h-full w-full object-contain"
+            />
           </div>
-          RBAC System
+          <p className="text-red-500 font-extrabold text-xl tracking-tight">
+            Pet<span className="text-green-500 font-semibold">Vet</span>
+          </p>
         </Link>
 
         {/* Loading / Error States */}
-        {(isPending || isError) && (
+        {(isUserPending || (hasUserId && isPending) || isError) && (
           <div className="text-slate-500 text-xs flex items-center gap-2">
             {isError ? "Sync failed" : "Syncing menu tree..."}
           </div>
         )}
 
+        {!isUserPending && !hasUserId && (
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg bg-transparent border-none cursor-pointer transition-all hover:text-rose-300"
+          >
+            <LogOut size={14} />
+            {isLoggingOut ? "Logging out..." : "Log Out"}
+          </button>
+        )}
+
         {/* Main Content */}
-        {!isPending && !isError && (
+        {!isUserPending && hasUserId && !isPending && !isError && (
           <>
-            {/* Desktop Navigation Dropdowns */}
-            <div className="hidden md:flex items-center gap-2 h-full">
-              {topLevel.map((module) => {
+            {/* Desktop Navigation — plain links scroll horizontally;
+                items with dropdowns stay fixed outside the scroll strip
+                so their panels aren't clipped by the forced overflow-y
+                that overflow-x: auto triggers on its container. */}
+            {(() => {
+              const scrollableItems = topLevel.filter(
+                (m) => (childrenMap.get(m.module_code) || []).length === 0,
+              );
+              const dropdownItems = topLevel.filter(
+                (m) => (childrenMap.get(m.module_code) || []).length > 0,
+              );
+
+              const renderDropdown = (module) => {
                 const subItems = childrenMap.get(module.module_code) || [];
                 const IconComponent =
                   MODULE_ICONS[module.module_code] || Circle;
+                return (
+                  <div
+                    key={module.module_code}
+                    className="relative group flex items-center h-full shrink-0"
+                  >
+                    <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-400 group-hover:text-slate-100 bg-transparent cursor-pointer border-none transition-colors whitespace-nowrap">
+                      <IconComponent size={16} />
+                      {module.module_name}
+                      <ChevronDown
+                        size={14}
+                        className="ml-0.5 transition-transform group-hover:rotate-180"
+                      />
+                    </button>
 
-                if (subItems.length > 0) {
-                  return (
-                    <div
-                      key={module.module_code}
-                      className="relative group flex items-center h-full"
-                    >
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-400 group-hover:text-slate-100 bg-transparent cursor-pointer border-none transition-colors">
-                        <IconComponent size={16} />
-                        {module.module_name}
-                        <ChevronDown
-                          size={14}
-                          className="ml-0.5 transition-transform group-hover:rotate-180"
-                        />
-                      </button>
-
-                      {/* Dynamic Modules Dropdown Panel */}
-                      <div className="absolute top-[100%] left-0 pt-1 w-48 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl p-1 shadow-2xl">
-                          {subItems.map((child) => {
-                            const ChildIcon =
-                              MODULE_ICONS[child.module_code] || Circle;
-                            return (
-                              <NavLink
-                                key={child.module_code}
-                                to={child.route}
-                                className={linkClass}
-                              >
-                                <ChildIcon size={16} />
-                                {child.module_name}
-                              </NavLink>
-                            );
-                          })}
-                        </div>
+                    {/* Dynamic Modules Dropdown Panel */}
+                    <div className="absolute top-[100%] right-0 pt-1 w-48 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-1 shadow-2xl">
+                        {subItems.map((child) => {
+                          const ChildIcon =
+                            MODULE_ICONS[child.module_code] || Circle;
+                          return (
+                            <NavLink
+                              key={child.module_code}
+                              to={child.route}
+                              className={linkClass}
+                            >
+                              <ChildIcon size={16} />
+                              {child.module_name}
+                            </NavLink>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                }
+                  </div>
+                );
+              };
 
+              const renderLink = (module) => {
+                const IconComponent =
+                  MODULE_ICONS[module.module_code] || Circle;
                 return (
                   <NavLink
                     key={module.module_code}
                     to={module.route}
-                    className={linkClass}
+                    className={({ isActive }) =>
+                      `${linkClass({ isActive })} shrink-0 whitespace-nowrap`
+                    }
                   >
                     <IconComponent size={16} />
                     {module.module_name}
                   </NavLink>
                 );
-              })}
-            </div>
+              };
+
+              return (
+                <>
+                  <div className="hidden md:flex items-center gap-2 h-full mx-6 overflow-x-auto petvet-nav-scroll pb-1">
+                    {scrollableItems.map(renderLink)}
+                  </div>
+                  {dropdownItems.length > 0 && (
+                    <div className="hidden md:flex items-center gap-2 h-full shrink-0">
+                      {dropdownItems.map(renderDropdown)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Desktop User Profile Dropdown */}
-            <div className="hidden md:flex items-center gap-4 h-full">
+            <div className="hidden md:flex items-center gap-4 h-full shrink-0">
               <span className="text-[11px] px-2 py-0.5 bg-slate-900 text-slate-400 rounded-full border border-slate-800">
                 {userRole}
               </span>
               <div className="relative group flex items-center h-full">
-                {/* Trigger Area extending full height */}
                 <button className="flex items-center gap-1.5 bg-transparent p-1 rounded-full cursor-pointer border-none">
                   <div className="w-7 h-7 bg-indigo-600 rounded-full text-xs font-semibold text-white flex items-center justify-center">
                     {userInitials}
@@ -194,7 +281,6 @@ export default function Navbar({ onLogout }) {
                   />
                 </button>
 
-                {/* FIXED LOGOUT: Added precise full hover containment wrapper, top-[100%] layout alignment, and z-50 high layering */}
                 <div className="absolute top-[100%] right-0 pt-1 w-44 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-1 shadow-2xl">
                     <div className="px-3 py-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-wider border-b border-slate-900 mb-1">
@@ -240,7 +326,7 @@ export default function Navbar({ onLogout }) {
       </div>
 
       {/* Mobile Drawer Panel */}
-      {isOpen && !isPending && !isError && (
+      {isOpen && !isUserPending && hasUserId && !isPending && !isError && (
         <div className="md:hidden bg-slate-950 border-t border-slate-900 p-4 space-y-4 max-h-[85vh] overflow-y-auto">
           <div className="flex flex-col gap-1">
             {topLevel.map((module) => {

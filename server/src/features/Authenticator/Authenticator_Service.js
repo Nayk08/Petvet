@@ -43,11 +43,18 @@ export default class AuthenticatorService {
       throw new Error("Email already exists");
     }
 
+    const defaultUserLevelId = await authModel.findUserLevelId("Cashier");
+
+    if (!defaultUserLevelId) {
+      throw new Error("Default user role not found");
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await authModel.registerUser(
       userName,
       email,
       hashedPassword,
+      defaultUserLevelId,
     );
 
     return newUser;

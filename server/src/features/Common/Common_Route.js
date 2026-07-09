@@ -10,4 +10,8 @@ router.get("/nav", isAuth, (req, res) =>
   commonController.getNavbarData(req, res),
 );
 
+router.get("/categoryUserLevel", isAuth, (req, res) =>
+  commonController.getCategoryUserLevel(req, res),
+);
+
 export default router;

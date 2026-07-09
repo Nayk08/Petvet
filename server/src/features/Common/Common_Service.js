@@ -12,4 +12,14 @@ export default class CommonService {
       throw error;
     }
   }
+
+  async getCategoryUserLevel() {
+    try {
+      const data = await commonModel.getCategoryUserLevel();
+      return data;
+    } catch (error) {
+      console.error("Error in CommonService", error); // ✅ error not err
+      throw error;
+    }
+  }
 }
