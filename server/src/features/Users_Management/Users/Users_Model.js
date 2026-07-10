@@ -1,13 +1,18 @@
 import pool from "../../../config/db.js";
 
+import { paginateQuery } from "../../../../utils/paginateQuery.js";
+
 export default class UsersModel {
-  async getUsers() {
+  async getUsers({ page = 1, limit = 10 } = {}) {
     const client = await pool.connect();
     try {
-      const res = await client.query(
-        "SELECT * FROM v_users WHERE is_deleted = false",
-      );
-      return res.rows;
+      return await paginateQuery(client, {
+        baseQuery:
+          "SELECT * FROM v_users WHERE is_deleted = false ORDER BY users_id",
+        countQuery: "SELECT COUNT(*) AS total FROM v_users",
+        page,
+        limit,
+      });
     } catch (error) {
       console.log(`error occurred in Users Model: ${error}`);
       throw error;

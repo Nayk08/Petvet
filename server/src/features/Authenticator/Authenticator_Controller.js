@@ -36,6 +36,8 @@ export default class AuthenticatorController {
           name: user.name,
           email: user.email,
           role: user.role,
+          user_level_id: user.user_level_id,
+          level_ids: user.level_ids,
         };
         req.session.isLoggedIn = true;
         res

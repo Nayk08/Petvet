@@ -2,12 +2,15 @@ import pool from "../../config/db.js";
 
 // ✅ Class must be defined BEFORE it's used
 export default class CommonModel {
-  async getNavbarData(role) {
+  // commonModel.js
+  async getNavbarData(levelIds) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        "SELECT * FROM v_user_permissions WHERE user_level = $1 AND can_view = true ORDER BY user_module_id  ASC ",
-        [role],
+        `SELECT * FROM v_user_permissions
+       WHERE user_level_id = ANY($1::int[])
+       ORDER BY user_module_id ASC`,
+        [levelIds],
       );
       return res.rows;
     } catch (err) {
@@ -17,7 +20,6 @@ export default class CommonModel {
       client.release();
     }
   }
-
   async getCategoryUserLevel() {
     const client = await pool.connect();
     try {

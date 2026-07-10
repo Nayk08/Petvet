@@ -24,6 +24,7 @@ import {
   Circle,
   LogOut,
   Cat,
+  Scissors,
   ClipboardClock,
 } from "lucide-react";
 
@@ -31,8 +32,8 @@ import {
 const MODULE_ICONS = {
   DASHBOARD: LayoutDashboard,
   APPOINTMENT: Calendar,
-  G_APPOINTMENTS: ClipboardClock,
-  C_APPOINTMENTS: ClipboardClock,
+  G_APPOINTMENT: Scissors,
+  C_APPOINTMENT: ClipboardClock,
   C_P_RECORDS: Cat,
   CART: ShoppingCart,
   PAYMENTS: CreditCard,

@@ -3,18 +3,19 @@ import CommonService from "./Common_Service.js"; // ✅ fixed typo
 const commonService = new CommonService();
 
 export default class CommonController {
+  // commonController.js
   async getNavbarData(req, res) {
     try {
       const user = req.session.user;
 
-      if (!user?.role) {
-        return res.status(403).json({ error: "User has no assigned role" });
+      if (!user?.level_ids?.length) {
+        return res.status(403).json({ error: "User has no assigned roles" });
       }
 
-      const data = await commonService.getNavbarData(user.role);
+      const data = await commonService.getNavbarData(user.level_ids);
       res.json({ user, modules: data });
     } catch (error) {
-      console.error("Error in CommonController.getNavbarData:", error); // ✅ error not err
+      console.error("Error in CommonController.getNavbarData:", error);
       res.status(500).json({ error: "Failed to fetch navbar data" });
     }
   }

@@ -3,12 +3,13 @@ import CommonModel from "./Common_Model.js";
 const commonModel = new CommonModel();
 
 export default class CommonService {
-  async getNavbarData(role) {
+  // service
+  // commonService.js
+  async getNavbarData(levelIds) {
     try {
-      const data = await commonModel.getNavbarData(role);
-      return data;
+      return await commonModel.getNavbarData(levelIds);
     } catch (error) {
-      console.error("Error in CommonService", error); // ✅ error not err
+      console.error("Error in CommonService", error);
       throw error;
     }
   }

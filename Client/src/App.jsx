@@ -25,6 +25,7 @@ import {
 import Login from "./pages/Authentication/Login";
 
 import { queryClient } from "./api/http";
+import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
 
 const router = createBrowserRouter([
   { index: true, element: <LandingPage />, errorElement: <ErrorPage /> },
@@ -35,6 +36,11 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     action: loginAction,
     loader: loginLoader,
+  },
+  {
+    path: "/unauthorized",
+    element: <UnauthorizedPage />,
+    errorElement: <ErrorPage />,
   },
 
   {
@@ -50,7 +56,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="dashboard" replace /> },
 
-      // Now governed by the Permission Matrix via requirePermission,
+      // Governed by the Permission Matrix via requirePermission,
       // matching the real module_code values in tbl_user_module.
       {
         path: "dashboard",
@@ -93,6 +99,10 @@ const router = createBrowserRouter([
         loader: requirePermission("C_P_RECORDS"),
       },
 
+      // NOTE: Settings is imported but has no route below. Either wire it up
+      // (e.g. path: "settings", loader: requirePermission("SETTINGS")) or
+      // remove the unused import — left as-is pending your confirmation.
+
       {
         path: "user-management",
         loader: requirePermission("USER_MGMT"),
@@ -106,6 +116,7 @@ const router = createBrowserRouter([
             children: [
               {
                 path: "add-user",
+                loader: requirePermission("USER_MGMT_USERS", "can_create"),
                 lazy: async () => {
                   const mod =
                     await import("./pages/ServerSide/Users_Management/Users/components/AddUsersModal.jsx");
@@ -114,18 +125,16 @@ const router = createBrowserRouter([
               },
               {
                 path: "edit-user/:user_id",
+                loader: requirePermission("USER_MGMT_USERS", "can_edit"),
                 lazy: async () => {
                   const mod =
-                    await import("./pages/ServerSide/Users_Management/Users/components/AddUsersModal.jsx");
-                  return {
-                    ...mod,
-                    loader: mod.editUserLoader,
-                    action: mod.editUserAction,
-                  };
+                    await import("@/pages/ServerSide/Users_Management/Users/components/AddUsersModal.jsx");
+                  return { ...mod, action: mod.editUserAction }; // loader removed, no longer needed
                 },
               },
               {
                 path: "delete-user/:user_id",
+                loader: requirePermission("USER_MGMT_USERS", "can_delete"),
                 lazy: async () => {
                   const mod =
                     await import("./pages/ServerSide/Users_Management/Users/components/DeleteUserModal.jsx");
@@ -147,9 +156,7 @@ const router = createBrowserRouter([
             children: [
               {
                 path: "add-role",
-                // Fixed: was previously double-imported (a static top-level
-                // import AND a lazy import of the same file). Now it's lazy
-                // only, so it's actually code-split like its siblings.
+                loader: requirePermission("USER_MGMT_ROLES", "can_create"),
                 lazy: async () => {
                   const mod =
                     await import("./pages/ServerSide/Users_Management/Roles/components/AddRolesModal.jsx");
@@ -158,11 +165,13 @@ const router = createBrowserRouter([
               },
               {
                 path: "edit-role/:user_level_id",
+                loader: requirePermission("USER_MGMT_ROLES", "can_edit"),
                 lazy: () =>
-                  import("./pages/ServerSide/Users_Management/Roles/components/EditRolesModal.jsx"),
+                  import("@/pages/ServerSide/Users_Management/Roles/components/EditRolesModal.jsx"),
               },
               {
                 path: "delete-role/:user_level_id",
+                loader: requirePermission("USER_MGMT_ROLES", "can_delete"),
                 lazy: () =>
                   import("./pages/ServerSide/Users_Management/Roles/components/DeleteRolesModal.jsx"),
               },

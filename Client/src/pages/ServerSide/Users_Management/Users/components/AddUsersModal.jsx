@@ -1,12 +1,14 @@
 import {
   useNavigate,
-  useLoaderData,
   useParams,
   useSubmit,
   useNavigation,
+  useActionData,
 } from "react-router-dom";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { XCircle, CheckCircle2 } from "lucide-react";
 
 import {
   Dialog,
@@ -43,52 +45,105 @@ export function Component() {
 
   const navigation = useNavigation();
 
+  const actionData = useActionData();
+
   const { user_id } = useParams();
 
-  const loaderUser = useLoaderData(); // undefined on add-user route
-
   const isEditMode = Boolean(user_id);
+
+  const {
+    data: loaderUser,
+    isPending: isUserPending,
+    isError: isUserError,
+    error: userError,
+  } = useQuery({
+    queryKey: ["user", user_id],
+    queryFn: ({ signal }) => fetchUserById(user_id, { signal }),
+    enabled: isEditMode,
+  });
 
   const isSubmitting = navigation.state === "submitting";
 
   const [formData, setFormData] = useState({
-    name: loaderUser?.user_name ?? "",
-
-    email: loaderUser?.user_email ?? "",
-
+    name: "",
+    email: "",
     password: "",
   });
 
   // level_ids is an ORDERED array of role ids — index 0 is treated as the
-
   // primary role by sp_upsert_user_with_roles (it writes p_level_ids[1] into
-
   // tbl_users.user_level_id). Everything after that just lands in
-
   // tbl_user_level_assignments as additional active roles.
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
 
-  //
+  // formData/selectedRoleIds can't be initialized directly from loaderUser
+  // anymore since it now arrives asynchronously via useQuery instead of
+  // synchronously via useLoaderData. Sync them once the fetch resolves.
+  useEffect(() => {
+    if (!loaderUser) return;
 
-  // Expecting loaderUser to expose something like `level_ids: [1, 3]` with the
-
-  // primary role first. If your v_users / getUserById doesn't return that yet,
-
-  // you'll need to add it there — otherwise edit mode can't prefill roles.
-
-  const [selectedRoleIds, setSelectedRoleIds] = useState(
-    loaderUser?.level_ids ?? [],
-  );
+    setFormData({
+      name: loaderUser.user_name ?? "",
+      email: loaderUser.user_email ?? "",
+      password: "",
+    });
+    setSelectedRoleIds(loaderUser.level_ids ?? []);
+  }, [loaderUser]);
 
   const closeModal = () => {
     navigate("..");
   };
 
+  // React to the result of the last submitted action.
+  // Success -> toast + close modal (parent route's query invalidation refreshes the table).
+  // Failure -> toast with the backend's real error, keep modal open so the user can fix it.
+  useEffect(() => {
+    if (!actionData) return;
+
+    if (actionData.ok) {
+      toast.success(isEditMode ? "User updated" : "User added", {
+        className:
+          "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: isEditMode
+          ? "The user's details have been saved."
+          : "The new user has been created.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 3000,
+        icon: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
+      });
+      closeModal();
+    } else {
+      toast.error("Error", {
+        className:
+          "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description:
+          actionData.error || "Something went wrong while saving this user.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 3000,
+        icon: <XCircle className="h-5 w-5 text-destructive" />,
+      });
+    }
+  }, [actionData]);
+
+  // Show a toast if fetching the user to edit fails (e.g. network error,
+  // deleted user, etc.)
+  useEffect(() => {
+    if (!isUserError) return;
+
+    toast.error("Error", {
+      className:
+        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+      description:
+        userError?.message || "Something went wrong while loading this user.",
+      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+      duration: 3000,
+      icon: <XCircle className="h-5 w-5 text-destructive" />,
+    });
+  }, [isUserError, userError]);
+
   // Clicking a role toggles it in/out of the selection. Newly selected roles
-
   // are appended to the end, so the *first* one ever picked stays primary
-
   // unless the user explicitly promotes another (see makePrimary below).
-
   const toggleRole = (roleId) => {
     setSelectedRoleIds((prev) =>
       prev.includes(roleId)
@@ -98,13 +153,10 @@ export function Component() {
   };
 
   // Lets the user pick which selected role is primary (moves it to index 0)
-
   // without having to deselect/reselect everything else.
-
   const makePrimary = (roleId) => {
     setSelectedRoleIds((prev) => [
       roleId,
-
       ...prev.filter((id) => id !== roleId),
     ]);
   };
@@ -118,50 +170,57 @@ export function Component() {
 
     if (selectedRoleIds.length === 0) {
       // Guard against submitting with no role — this is exactly how
-
       // level_ids ends up empty/undefined server-side and user_level_id
-
       // comes back null.
 
-      alert("Please select at least one role.");
-
+      toast.error(" ", {
+        className:
+          "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: "Please select at least one role.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 3000,
+        icon: <XCircle className="h-5 w-5 text-destructive" />,
+      });
       return;
     }
 
     const payload = {
       user_name: formData.name,
-
       user_email: formData.email,
-
       level_ids: selectedRoleIds, // matches userModel's `level_ids` destructure
-
       ...(formData.password ? { user_password: formData.password } : {}),
     };
 
     // Sends the payload to whichever action is wired to this route
-
-    // (addUserAction or editUserAction), then closes on success.
-
+    // (addUserAction or editUserAction). Closing the modal is handled
+    // by the actionData effect above, once we know whether it succeeded.
     submit(payload, {
       method: isEditMode ? "put" : "post",
-
       encType: "application/json",
     });
   };
 
-  // Close the modal once the action resolves (navigation returns to idle)
-
-  // and there was no error. Simple approach: close right after calling submit
-
-  // and let the parent route's query invalidate on refetch. If you want to
-
-  // wait for the action result, use a fetcher instead of useSubmit + navigate.
-
-  const handleFormSubmit = (e) => {
-    handleSubmit(e);
-
-    closeModal();
-  };
+  // Don't render the form until we know what to prefill in edit mode —
+  // avoids a flash of empty fields followed by a jump once loaderUser
+  // resolves. NOTE: this early return happens after all hooks above, so
+  // it's safe (Rules of Hooks: no hooks are called below this point in
+  // the same render path).
+  if (isEditMode && isUserPending) {
+    return (
+      <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
+        <DialogContent className="bg-slate-950 border border-slate-800 text-slate-100 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-100">
+              Edit user
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-400 py-10 text-center">
+            Loading user...
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
@@ -172,7 +231,7 @@ export function Component() {
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400">
               Full name
@@ -324,27 +383,36 @@ export function Component() {
   );
 }
 
-export async function editUserLoader({ params, request }) {
-  return fetchUserById(params.user_id, { signal: request.signal });
-}
-
 export async function CategoryLoader({ request }) {
   return getCategoryUserLevel({ signal: request.signal });
 }
+
 // ---- Actions ----
+// Actions only fetch data and report success/failure — they don't trigger
+// UI (toasts, navigation) directly. The component reacts to the returned
+// { ok, error } via useActionData().
 
 export async function addUserAction({ request }) {
   const payload = await request.json();
-  await queryClient.invalidateQueries({ queryKey: ["usersdata"] }); // add this
-  await addNewUser(payload);
-  return { ok: true };
+
+  try {
+    await addNewUser(payload);
+    await queryClient.invalidateQueries({ queryKey: ["usersdata"] });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 }
 
 export async function editUserAction({ request, params }) {
   const payload = await request.json();
 
-  await updateUser(params.user_id, payload);
-  await queryClient.invalidateQueries({ queryKey: ["usersdata"] }); // add this
-
-  return { ok: true };
+  try {
+    await updateUser(params.user_id, payload);
+    await queryClient.invalidateQueries({ queryKey: ["usersdata"] });
+    await queryClient.invalidateQueries({ queryKey: ["user", params.user_id] });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 }

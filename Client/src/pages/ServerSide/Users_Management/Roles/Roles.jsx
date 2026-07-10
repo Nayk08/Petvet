@@ -7,12 +7,19 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchUserLevel } from "../../../../api/http.js";
 import { Outlet, useNavigate } from "react-router-dom";
 import { queryClient } from "../../../../api/http.js";
+import { usePagination } from "@/hooks/usePagination.jsx";
+import { Pagination } from "@/components/ui/Pagination.jsx";
 
 export function Component() {
   const navigate = useNavigate();
+
+  const { page, limit, setPage, setLimit } = usePagination({
+    defaultLimit: 10,
+  });
+
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["usersLeveldata"],
-    queryFn: ({ signal }) => fetchUserLevel({ signal }),
+    queryKey: ["usersLeveldata", page, limit],
+    queryFn: ({ signal }) => fetchUserLevel({ page, limit, signal }),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10,
   });
@@ -34,13 +41,23 @@ export function Component() {
   return (
     <>
       <DynamicGrid
-        data={data ?? []}
+        data={data?.data ?? []}
         columnsConfig={usersLevelColumns}
         title="Roles Management"
         buttonText="Add Role"
         buttonLink="add-role"
         onEdit={(row) => navigate(`edit-role/${row.user_level_id}`)}
         onDelete={(row) => navigate(`delete-role/${row.user_level_id}`)}
+        rowKey="user_level_id"
+        limit={limit}
+        onLimitChange={setLimit}
+      />
+
+      <Pagination
+        page={page}
+        totalPages={limit === "all" ? 1 : (data?.pagination?.totalPages ?? 1)}
+        onPageChange={setPage}
+        disabled={isPending}
       />
       <Outlet />
     </>

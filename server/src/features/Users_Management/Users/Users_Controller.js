@@ -3,13 +3,14 @@ const userService = new UsersService();
 export default class UsersController {
   async getUsers(req, res) {
     try {
-      const users = await userService.getUsers();
-      res.json(users);
+      const { page, limit } = req.query;
+      const { rows, pagination } = await userService.getUsers({ page, limit });
+      res.json({ data: rows, pagination });
     } catch (error) {
       console.error(error);
       res
         .status(500)
-        .json({ error: "An error occurred while fetching users." });
+        .json({ message: "An error occurred while fetching users." });
     }
   }
 
@@ -20,7 +21,9 @@ export default class UsersController {
       res.json(user);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "An error occurred while fetching user." });
+      res
+        .status(500)
+        .json({ message: "An error occurred while fetching user." });
     }
   }
 

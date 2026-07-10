@@ -21,6 +21,8 @@ export default class AuthenticatorService {
       name: profile?.user_name || user.user_name,
       email: user.user_email,
       role: profile?.user_level,
+      user_level_id: profile?.user_level_id, // primary role, for display
+      level_ids: profile?.level_ids, // all roles, for permission checks
     };
   }
 

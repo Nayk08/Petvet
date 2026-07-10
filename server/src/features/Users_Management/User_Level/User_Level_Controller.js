@@ -4,8 +4,13 @@ const userLevelService = new UserLevelService();
 export default class UserLevelController {
   async getUserLevel(req, res) {
     try {
-      const data = await userLevelService.getUserLevel();
-      res.json(data);
+      const { page, limit } = req.query;
+
+      const { rows, pagination } = await userLevelService.getUserLevel({
+        page,
+        limit,
+      });
+      res.json({ data: rows, pagination });
     } catch (error) {
       console.error("Error in UserLevelController", error); // ✅ error not err
       res.status(500).json({ error: "Failed to fetch navbar data" });

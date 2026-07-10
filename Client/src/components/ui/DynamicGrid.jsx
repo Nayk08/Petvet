@@ -27,10 +27,13 @@ export default function DynamicGrid({
   title = "Dynamic Grid",
   buttonText = "Add New",
   buttonLink = "",
-  onEdit, // (row) => void
-  onDelete, // (row) => void
+  onEdit,
+  onDelete,
   confirmDeleteMessage = (row) =>
     `Are you sure you want to delete "${row.name ?? row.id}"?`,
+  limit,
+  onLimitChange,
+  limitOptions = [10, 20, 50, "all"],
 }) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
@@ -190,7 +193,24 @@ export default function DynamicGrid({
             )}
           </div>
         </div>
-
+        {onLimitChange && (
+          <div className="shrink-0">
+            <select
+              value={limit ?? 10}
+              onChange={(e) => {
+                const value = e.target.value;
+                onLimitChange(value === "all" ? "all" : Number(value));
+              }}
+              className="text-sm px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+            >
+              {limitOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt === "all" ? "Show All" : `${opt} rows`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="relative shrink-0">
           <button
             onClick={() => setShowColumnDropdown(!showColumnDropdown)}

@@ -2,9 +2,10 @@ import {
   useNavigate,
   useSubmit,
   useNavigation,
-  useLoaderData,
+  useParams,
   redirect,
 } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   updateUserLevel,
   queryClient,
@@ -28,7 +29,16 @@ export function Component() {
   const { state } = useNavigation();
   const navigate = useNavigate();
   const submit = useSubmit();
-  const data = useLoaderData();
+  const { user_level_id } = useParams();
+
+  // Fetches client-side instead of relying on the route loader, since the
+  // router's static requirePermission loader on this route overrides any
+  // loader exported from this module (see App.jsx route config).
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["userLevel", user_level_id],
+    queryFn: ({ signal }) => fetchUserLevelById(user_level_id, { signal }),
+    enabled: !!user_level_id,
+  });
 
   const closeModal = () => {
     navigate("..");
@@ -52,53 +62,55 @@ export function Component() {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Role Name
-            </label>
-            <Input
-              name="userLevel"
-              defaultValue={data?.user_level}
-              className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 focus-visible:ring-indigo-500"
-            />
-          </div>
+        {isLoading ? (
+          <p className="text-sm text-slate-400 py-6 text-center">
+            Loading role...
+          </p>
+        ) : isError ? (
+          <p className="text-sm text-destructive py-6 text-center">
+            Failed to load this role. Please try again.
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">
+                Role Name
+              </label>
+              <Input
+                name="userLevel"
+                defaultValue={data?.user_level}
+                className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 focus-visible:ring-indigo-500"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Description
-            </label>
-            <Input
-              name="description"
-              defaultValue={data?.description}
-              className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 focus-visible:ring-indigo-500"
-            />
-          </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">
+                Description
+              </label>
+              <Input
+                name="description"
+                defaultValue={data?.description}
+                className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 focus-visible:ring-indigo-500"
+              />
+            </div>
 
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="ghost" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="neon"
-              disabled={state === "submitting"}
-            >
-              {state === "submitting" ? "saving...." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="ghost" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="neon"
+                disabled={state === "submitting"}
+              >
+                {state === "submitting" ? "saving...." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
-}
-
-export async function loader({ params }) {
-  return queryClient.fetchQuery({
-    queryKey: ["userLevel", params.user_level_id],
-    queryFn: ({ signal }) =>
-      fetchUserLevelById(params.user_level_id, { signal }),
-  });
 }
 
 export async function action({ request, params }) {
@@ -108,6 +120,7 @@ export async function action({ request, params }) {
   try {
     await updateUserLevel({ id: params.user_level_id, userLevel, description });
     await queryClient.invalidateQueries(["usersLeveldata"]);
+    await queryClient.invalidateQueries(["userLevel", params.user_level_id]);
 
     toast.success("Role updated", {
       className:

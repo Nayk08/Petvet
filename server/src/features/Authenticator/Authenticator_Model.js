@@ -9,7 +9,7 @@ export default class AuthenticatorModel {
     return result.rows[0];
   }
 
-  async findUserProfile(usersId) {
+  async findUserProfile(usersId) {  
     const result = await pool.query("SELECT * FROM v_users WHERE users_id = $1", [
       usersId,
     ]);

@@ -96,7 +96,6 @@ export default function Cart({ bookedItems = [] }) {
     ...formatBookedItems,
     ...INITIAL_CART_ITEMS,
   ]);
-  const [couponCode, setCouponCode] = useState("");
 
   const updateQuantity = (id, delta) => {
     setCartItems((prevItems) =>
@@ -285,29 +284,6 @@ export default function Cart({ bookedItems = [] }) {
             </div>
 
             {/* Coupons + Table Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#161b2c]">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Code"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                  className="bg-[#070911] border border-[#1e253a] rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-600 w-24"
-                />
-                <button
-                  type="button"
-                  className="bg-[#1b1e2a] hover:bg-[#242838] border border-[#2d3246] text-slate-300 text-xs font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  Enter Coupon
-                </button>
-              </div>
-              <button
-                type="button"
-                className="bg-[#111422] hover:bg-[#181d30] border border-[#1e253a] text-slate-400 hover:text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
-              >
-                Update cart
-              </button>
-            </div>
 
             {/* Calculations Area */}
             <div className="pt-4 border-t border-[#161b2c] space-y-3">

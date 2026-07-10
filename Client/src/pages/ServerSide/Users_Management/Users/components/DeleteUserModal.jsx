@@ -4,7 +4,11 @@ import {
   useLoaderData,
   useSubmit,
   useNavigation,
+  useActionData,
 } from "react-router-dom";
+import { useEffect } from "react";
+import { toast } from "sonner";
+import { XCircle, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,13 +22,15 @@ import {
   fetchUserById,
   deleteUser,
   queryClient,
-} from "../../../../../api/http.js"; // add queryClient
+} from "../../../../../api/http.js";
+
 // ---- Loader ----
 
 export function Component() {
   const navigate = useNavigate();
   const submit = useSubmit();
   const navigation = useNavigation();
+  const actionData = useActionData();
   const { user_id } = useParams();
   const user = useLoaderData();
   const isDeleting = navigation.state === "submitting";
@@ -33,9 +39,36 @@ export function Component() {
     navigate("..");
   };
 
+  useEffect(() => {
+    if (!actionData) return;
+
+    if (actionData.ok) {
+      toast.success("User deleted", {
+        className:
+          "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: `"${user?.user_name ?? `User #${user_id}`}" has been removed.`,
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 3000,
+        icon: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
+      });
+      closeModal();
+    } else {
+      toast.error("Error", {
+        className:
+          "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description:
+          actionData.error || "Something went wrong while deleting this user.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 3000,
+        icon: <XCircle className="h-5 w-5 text-destructive" />,
+      });
+    }
+  }, [actionData]);
+
   const handleDelete = () => {
     submit(null, { method: "PUT" });
-    closeModal();
+    // Modal closing is now handled by the actionData effect above,
+    // once we know whether the delete actually succeeded.
   };
 
   return (
@@ -78,8 +111,11 @@ export async function deleteUserLoader({ params, request }) {
 
 // ---- Action ----
 export async function deleteUserAction({ params }) {
-  await deleteUser(params.user_id);
-  await queryClient.invalidateQueries({ queryKey: ["usersdata"] }); // add this
-
-  return { ok: true };
+  try {
+    await deleteUser(params.user_id);
+    await queryClient.invalidateQueries({ queryKey: ["usersdata"] });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 }

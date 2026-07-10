@@ -2,10 +2,10 @@ import UsersModel from "./Users_Model.js";
 
 const userModel = new UsersModel();
 export default class UsersService {
-  async getUsers() {
+  async getUsers({ page, limit } = {}) {
     try {
-      const users = await userModel.getUsers();
-      return users;
+      const result = await userModel.getUsers({ page, limit });
+      return result;
     } catch (error) {
       console.error(error);
       throw error;

@@ -1,13 +1,17 @@
 import pool from "../../../config/db.js";
+import { paginateQuery } from "../../../../utils/paginateQuery.js";
 export default class UserLevelModel {
-  async getUserLevel() {
+  async getUserLevel({ page = 1, limit = 10 } = {}) {
     const client = await pool.connect();
 
     try {
-      const result = await client.query(
-        `SELECT * FROM tbl_user_level WHERE is_deleted = 'false'`,
-      );
-      return result.rows;
+      return await paginateQuery(client, {
+        baseQuery:
+          "SELECT * FROM tbl_user_level WHERE is_deleted = false ORDER BY user_level_id",
+        countQuery: "SELECT COUNT(*) AS total FROM tbl_user_level",
+        page,
+        limit,
+      });
     } catch (error) {
       console.log("Error on Model Role", error);
       throw error;
