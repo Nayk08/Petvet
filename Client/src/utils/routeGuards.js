@@ -61,3 +61,12 @@ export function requirePermission(moduleCode, action = "can_view") {
     return user;
   };
 }
+export async function loader() {
+  const user = await getCurrentUser();
+
+  if (user) {
+    throw redirect("/dashboard");
+  }
+
+  return null;
+}

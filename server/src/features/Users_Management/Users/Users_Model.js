@@ -1,15 +1,57 @@
 import pool from "../../../config/db.js";
 
 import { paginateQuery } from "../../../../utils/paginateQuery.js";
-
+const ALLOWED_FILTER_COLUMNS = ["user_level_id", "user_level", "is_active"];
+const ALLOWED_SEARCH_COLUMNS = ["user_name", "user_email"];
 export default class UsersModel {
-  async getUsers({ page = 1, limit = 10 } = {}) {
+  async getUsers({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
     try {
+      const values = [];
+      const conditions = ["is_deleted = false"];
+
+      for (const [key, value] of Object.entries(filters)) {
+        if (
+          !ALLOWED_FILTER_COLUMNS.includes(key) ||
+          value === undefined ||
+          value === ""
+        )
+          continue;
+
+        if (key === "is_active") {
+          // is_active is boolean — incoming query param is a string ("true"/"false")
+          values.push(value === "true" || value === true);
+          conditions.push(`is_active = $${values.length}`);
+          continue;
+        }
+
+        if (key === "user_level_id") {
+          // integer column — cast explicitly to avoid type mismatch errors
+          values.push(value);
+          conditions.push(`user_level_id = $${values.length}::int`);
+          continue;
+        }
+
+        // user_level (varchar) — plain equality
+        values.push(value);
+        conditions.push(`${key} = $${values.length}`);
+      }
+
+      if (search && search.trim()) {
+        values.push(`%${search.trim()}%`);
+        const idx = values.length;
+        const searchClause = ALLOWED_SEARCH_COLUMNS.map(
+          (col) => `${col} ILIKE $${idx}`,
+        ).join(" OR ");
+        conditions.push(`(${searchClause})`);
+      }
+
+      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+
       return await paginateQuery(client, {
-        baseQuery:
-          "SELECT * FROM v_users WHERE is_deleted = false ORDER BY users_id",
-        countQuery: "SELECT COUNT(*) AS total FROM v_users",
+        baseQuery: `SELECT * FROM v_users ${whereClause} ORDER BY users_id`,
+        countQuery: `SELECT COUNT(*) AS total FROM v_users ${whereClause}`,
+        values,
         page,
         limit,
       });

@@ -34,37 +34,23 @@ export default function DynamicGrid({
   limit,
   onLimitChange,
   limitOptions = [10, 20, 50, "all"],
+
+  search = "",
+  onSearchChange,
+  filters = {},
+  onFiltersChange,
 }) {
-  const [globalSearch, setGlobalSearch] = useState("");
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
-  const [columnFilters, setColumnFilters] = useState({});
   const [deletingId, setDeletingId] = useState(null);
 
   const visibleColumns = useMemo(() => {
     return columnsConfig.filter((col) => !hiddenColumns.has(col.key));
   }, [columnsConfig, hiddenColumns]);
 
-  const processedRows = useMemo(() => {
-    return data.filter((row) => {
-      const passesDropdowns = Object.entries(columnFilters).every(
-        ([colKey, selectedValue]) => {
-          if (!selectedValue) return true;
-          const rowValue = row[colKey];
-          return String(rowValue) === String(selectedValue);
-        },
-      );
-
-      if (!passesDropdowns) return false;
-
-      if (!globalSearch.trim()) return true;
-      const lowerSearch = globalSearch.toLowerCase();
-      return visibleColumns.some((col) => {
-        const cellValue = String(row[col.key] || "").toLowerCase();
-        return cellValue.includes(lowerSearch);
-      });
-    });
-  }, [data, globalSearch, columnFilters, visibleColumns]);
+  // ❌ REMOVED: the old `processedRows` useMemo that filtered client-side.
+  // Data is now already filtered/searched/paginated by the backend —
+  // `data` is rendered as-is.
 
   const toggleColumnVisibility = (columnKey) => {
     setHiddenColumns((prev) => {
@@ -79,16 +65,14 @@ export default function DynamicGrid({
   };
 
   const clearAllFilters = () => {
-    setColumnFilters({});
-    setGlobalSearch("");
+    onFiltersChange?.({});
+    onSearchChange?.("");
   };
 
-  const hasActiveFilters =
-    Object.values(columnFilters).some(Boolean) || globalSearch;
+  const hasActiveFilters = Object.values(filters).some(Boolean) || search;
 
   const navigation = useNavigate();
 
-  // Built-in Edit/Delete get merged with any custom actions passed in
   const resolvedActions = useMemo(() => {
     const builtIn = [];
 
@@ -96,8 +80,7 @@ export default function DynamicGrid({
       builtIn.push({
         label: "Edit",
         icon: Pencil,
-        className:
-          "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10",
+        className: "text-blue-400 hover:text-blue-300 hover:bg-blue-500/10",
         onClick: (row) => onEdit(row),
       });
     }
@@ -106,7 +89,7 @@ export default function DynamicGrid({
       builtIn.push({
         label: "Delete",
         icon: Trash2,
-        className: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10",
+        className: "text-red-400 hover:text-red-300 hover:bg-red-500/10",
         onClick: (row) => onDelete(row),
       });
     }
@@ -121,9 +104,7 @@ export default function DynamicGrid({
     <div className="space-y-4 w-full">
       {/* --- Top Header Bar --- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
-        <h1 className="text-2xl font-semibold text-slate-100 tracking-tight">
-          {title}
-        </h1>
+        <h1 className="text-2xl font-bold text-white tracking-wide">{title}</h1>
         <div className="ms-5">
           <Button asChild variant="neon" size="default">
             <Link to={buttonLink} className="flex items-center">
@@ -135,16 +116,16 @@ export default function DynamicGrid({
       </div>
 
       {/* --- Action Toolbar --- */}
-      <div className="flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between bg-slate-900/40 p-3 rounded-xl border border-slate-900 w-full relative z-10">
+      <div className="flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between bg-[#0b0e17] p-3 rounded-xl border border-[#1e253a] w-full relative z-10">
         <div className="flex flex-col md:flex-row flex-1 items-stretch md:items-center gap-3">
           <div className="relative w-full md:w-64 shrink-0">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <input
               type="text"
               placeholder="Search records..."
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-500"
+              value={search}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-[#070911] border border-[#1e253a] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder:text-slate-500"
             />
           </div>
 
@@ -156,17 +137,17 @@ export default function DynamicGrid({
               .map((col) => (
                 <select
                   key={col.key}
-                  value={columnFilters[col.key] || ""}
+                  value={filters[col.key] || ""}
                   onChange={(e) =>
-                    setColumnFilters({
-                      ...columnFilters,
+                    onFiltersChange?.({
+                      ...filters,
                       [col.key]: e.target.value,
                     })
                   }
-                  className={`text-xs px-2.5 py-2 bg-slate-950 border rounded-lg text-slate-300 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate ${
-                    columnFilters[col.key]
-                      ? "border-indigo-500 bg-indigo-950/20 text-indigo-400"
-                      : "border-slate-800 hover:border-slate-700"
+                  className={`text-xs px-2.5 py-2 bg-[#070911] border rounded-lg text-slate-300 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate ${
+                    filters[col.key]
+                      ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                      : "border-[#1e253a] hover:border-[#2a3350]"
                   }`}
                 >
                   <option value="">All {col.label}</option>
@@ -174,9 +155,9 @@ export default function DynamicGrid({
                     <option
                       key={opt.key}
                       value={opt.value}
-                      className="bg-slate-950 text-white"
+                      className="bg-[#070911] text-white"
                     >
-                      {opt.value}
+                      {opt.label ?? opt.value}
                     </option>
                   ))}
                 </select>
@@ -185,7 +166,7 @@ export default function DynamicGrid({
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 px-2 py-1.5 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
               >
                 <X size={14} />
                 <span>Reset</span>
@@ -201,7 +182,7 @@ export default function DynamicGrid({
                 const value = e.target.value;
                 onLimitChange(value === "all" ? "all" : Number(value));
               }}
-              className="text-sm px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+              className="text-sm px-3 py-2 bg-[#070911] border border-[#1e253a] rounded-lg text-slate-300 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
             >
               {limitOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -214,7 +195,7 @@ export default function DynamicGrid({
         <div className="relative shrink-0">
           <button
             onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-            className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 rounded-lg cursor-pointer w-full"
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-[#070911] hover:bg-[#121627] border border-[#1e253a] text-slate-300 hover:text-white rounded-lg cursor-pointer w-full transition-colors"
           >
             <Filter size={16} />
             <span>Columns</span>
@@ -226,21 +207,21 @@ export default function DynamicGrid({
                 className="fixed inset-0 z-40"
                 onClick={() => setShowColumnDropdown(false)}
               />
-              <div className="absolute right-0 mt-2 w-56 bg-slate-950 border border-slate-800 rounded-xl p-2 z-50 max-h-64 overflow-y-auto shadow-2xl">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1 border-b border-slate-900 mb-1">
+              <div className="absolute right-0 mt-2 w-56 bg-[#070911] border border-[#1e253a] rounded-xl p-2 z-50 max-h-64 overflow-y-auto shadow-2xl">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1 border-b border-[#1e253a] mb-1">
                   Toggle Fields
                 </div>
                 {columnsConfig.map((col) => (
                   <button
                     key={col.key}
                     onClick={() => toggleColumnVisibility(col.key)}
-                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-900 transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-[#121627] transition-colors cursor-pointer"
                   >
                     <span>{col.label}</span>
                     {hiddenColumns.has(col.key) ? (
                       <EyeOff size={14} className="text-slate-600" />
                     ) : (
-                      <Eye size={14} className="text-indigo-400" />
+                      <Eye size={14} className="text-blue-400" />
                     )}
                   </button>
                 ))}
@@ -251,38 +232,38 @@ export default function DynamicGrid({
       </div>
 
       {/* --- Main Table Layout --- */}
-      <div className="w-full rounded-xl border border-slate-800 bg-slate-900/50 backdrop-blur-md overflow-hidden relative z-0">
+      <div className="w-full rounded-xl border border-[#1e253a] bg-[#0b0e17] overflow-hidden relative z-0">
         <div className="overflow-x-auto w-full">
           <Table>
-            <TableHeader className="bg-slate-900/80 border-b border-slate-800">
+            <TableHeader className="bg-[#070911]/50 border-b border-[#1e253a]">
               <TableRow>
                 {visibleColumns.map((col) => (
                   <TableHead
                     key={col.key}
-                    className="py-3 text-sm text-slate-300 font-semibold min-w-[140px]"
+                    className="py-4 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider min-w-[140px]"
                   >
                     {col.label}
                   </TableHead>
                 ))}
 
                 {resolvedActions.length > 0 && (
-                  <TableHead className="py-3 text-sm text-slate-300 font-semibold min-w-[120px]">
+                  <TableHead className="py-4 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider min-w-[120px]">
                     Actions
                   </TableHead>
                 )}
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {processedRows.length > 0 ? (
-                processedRows.map((row, index) => (
+            <TableBody className="divide-y divide-[#1e253a]/70">
+              {data.length > 0 ? (
+                data.map((row, index) => (
                   <TableRow
                     key={row.id || index}
-                    className="border-b border-slate-900 hover:bg-slate-900/40 transition-colors"
+                    className="hover:bg-[#111627]/40 transition-colors group"
                   >
                     {visibleColumns.map((col) => (
                       <TableCell
                         key={col.key}
-                        className="text-sm text-slate-300 py-3.5"
+                        className="text-sm text-slate-300 py-3.5 px-4"
                       >
                         {col.render
                           ? col.render(row[col.key], row)
@@ -293,7 +274,7 @@ export default function DynamicGrid({
                     ))}
 
                     {resolvedActions.length > 0 && (
-                      <TableCell className="py-3.5">
+                      <TableCell className="py-3.5 px-4">
                         <div className="flex items-center gap-1">
                           {resolvedActions.map((action, i) => {
                             const Icon = action.icon;
@@ -319,7 +300,7 @@ export default function DynamicGrid({
                 <TableRow>
                   <TableCell
                     colSpan={totalColumnsCount}
-                    className="text-center py-12 text-sm text-slate-500"
+                    className="text-center py-12 text-sm text-slate-500 italic"
                   >
                     No matching records found.
                   </TableCell>

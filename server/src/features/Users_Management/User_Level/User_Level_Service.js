@@ -3,9 +3,14 @@ import UserLevelModel from "./User_Level_Model.js";
 const userLevelModel = new UserLevelModel();
 
 export default class UserLevelService {
-  async getUserLevel({ page, limit } = {}) {
+  async getUserLevel({ page, limit, search, filters } = {}) {
     try {
-      const data = await userLevelModel.getUserLevel({ page, limit });
+      const data = await userLevelModel.getUserLevel({
+        page,
+        limit,
+        search,
+        filters,
+      });
       return data;
     } catch (error) {
       console.error("Error in UserLevelService", error); // ✅ error not err

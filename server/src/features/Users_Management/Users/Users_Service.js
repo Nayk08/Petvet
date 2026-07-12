@@ -2,12 +2,11 @@ import UsersModel from "./Users_Model.js";
 
 const userModel = new UsersModel();
 export default class UsersService {
-  async getUsers({ page, limit } = {}) {
+  async getUsers({ page, limit, search, filters } = {}) {
     try {
-      const result = await userModel.getUsers({ page, limit });
-      return result;
+      return await userModel.getUsers({ page, limit, search, filters });
     } catch (error) {
-      console.error(error);
+      console.error("Error in UserService", error);
       throw error;
     }
   }

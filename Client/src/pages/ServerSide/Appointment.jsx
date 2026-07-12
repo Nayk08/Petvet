@@ -205,8 +205,8 @@ export default function Appointment() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-8 font-sans flex justify-center items-start">
-      <div className="w-full max-w-6xl bg-[#0b0e17] border border-[#161b2c] rounded-xl p-10 mt-4">
+    <div className="text-slate-100 p-8 font-sans flex justify-center items-start">
+      <div className="w-full max-w-6xl bg-[#0b0e17] border border-[#1e253a] rounded-xl p-10 mt-4">
         <h2 className="text-2xl font-bold text-white tracking-wide mb-8">
           Book an Appointment
         </h2>
@@ -412,7 +412,7 @@ export default function Appointment() {
                   {appointments.map((app) => (
                     <div
                       key={app.id}
-                      className="flex items-center space-x-4 p-4 bg-[#111627]/50 border border-[#161b2c] rounded-xl"
+                      className="flex items-center space-x-4 p-4 bg-[#111627]/50 border border-[#1e253a] rounded-xl"
                     >
                       <div
                         className={`w-1.5 h-12 rounded-full ${app.service.color}`}

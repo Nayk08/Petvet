@@ -1,42 +1,38 @@
-import {
-  usersLevelColumns,
-  usersLevelActions,
-} from "../../../../utils/COLUMNS.jsx";
+import { useEffect, useState } from "react";
+import { usersLevelColumns } from "../../../../utils/COLUMNS.jsx";
 import DynamicGrid from "../../../../components/ui/DynamicGrid.jsx";
 import { useQuery } from "@tanstack/react-query";
-import { fetchUserLevel } from "../../../../api/http.js";
+import { fetchUserLevel, queryClient } from "../../../../api/http.js";
 import { Outlet, useNavigate } from "react-router-dom";
-import { queryClient } from "../../../../api/http.js";
 import { usePagination } from "@/hooks/usePagination.jsx";
 import { Pagination } from "@/components/ui/Pagination.jsx";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue.jsx";
 
 export function Component() {
   const navigate = useNavigate();
-
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
 
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({});
+  const debouncedSearch = useDebouncedValue(search, 400);
+
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, JSON.stringify(filters)]);
+
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["usersLeveldata", page, limit],
-    queryFn: ({ signal }) => fetchUserLevel({ page, limit, signal }),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    queryKey: ["usersLeveldata", page, limit, debouncedSearch, filters],
+    queryFn: ({ signal }) =>
+      fetchUserLevel({ page, limit, search: debouncedSearch, filters, signal }),
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
 
-  if (isPending)
-    return (
-      <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
-        Loading users...
-      </div>
-    );
-
-  if (isError)
-    return (
-      <div className="flex items-center justify-center py-20 text-rose-400 text-sm">
-        Error: {error.message}
-      </div>
-    );
+  // if (isPending) return (<p>Loadiing</p>;
+  // if (isError) return (/* ... */);
 
   return (
     <>
@@ -51,8 +47,11 @@ export function Component() {
         rowKey="user_level_id"
         limit={limit}
         onLimitChange={setLimit}
+        search={search}
+        onSearchChange={setSearch}
+        filters={filters}
+        onFiltersChange={setFilters}
       />
-
       <Pagination
         page={page}
         totalPages={limit === "all" ? 1 : (data?.pagination?.totalPages ?? 1)}
@@ -62,11 +61,4 @@ export function Component() {
       <Outlet />
     </>
   );
-}
-
-export function loader() {
-  return queryClient.fetchQuery({
-    queryKey: ["usersLeveldata"],
-    queryFn: ({ signal }) => fetchUserLevel({ signal }),
-  });
 }

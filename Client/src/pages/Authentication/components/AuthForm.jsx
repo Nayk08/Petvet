@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getCurrentUser } from "@/api/auth";
 import {
   Card,
   CardContent,
@@ -208,6 +209,11 @@ export default function AuthForm() {
   );
 }
 export async function loader({ request }) {
+  const user = await getCurrentUser();
+  if (user) {
+    throw redirect("/dashboard");
+  }
+
   const url = new URL(request.url);
   if (!url.searchParams.has("mode")) {
     url.searchParams.set("mode", "login");

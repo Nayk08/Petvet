@@ -17,6 +17,7 @@ import Grooming_Appointment from "./pages/ServerSide/Grooming_Appointment.jsx";
 import Consultation_Appointment from "./pages/ServerSide/Consultation_Appointment.jsx";
 import LandingPage from "./pages/LandingPage";
 import Client_Record from "./pages/ServerSide/Clients_Record.jsx";
+import { loader as LandingLoader } from "../src/pages/LandingPage.jsx";
 import {
   action as loginAction,
   loader as loginLoader,
@@ -28,7 +29,12 @@ import { queryClient } from "./api/http";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
 
 const router = createBrowserRouter([
-  { index: true, element: <LandingPage />, errorElement: <ErrorPage /> },
+  {
+    index: true,
+    element: <LandingPage />,
+    errorElement: <ErrorPage />,
+    loader: LandingLoader,
+  },
 
   {
     path: "/login",

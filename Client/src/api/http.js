@@ -85,13 +85,37 @@ export async function getCategoryUserLevel({ signal }) {
 // Users
 // ─────────────────────────────
 
-export async function fetchUsers({ page, limit, signal }) {
+export async function fetchUsers({
+  page,
+  limit,
+  search = "",
+  filters = {},
+  signal,
+}) {
   const effectiveLimit = limit === "all" ? 999999 : limit;
   const effectivePage = limit === "all" ? 1 : page;
-  const response = await fetch(
-    `${baseUrl}/users?page=${effectivePage}&limit=${effectiveLimit}`,
-    { signal, credentials: "include" },
+
+  // Map frontend display keys -> backend column names, if they differ
+  const keyMap = {
+    role: "user_level",
+    user_level: "user_level_id",
+    status: "is_active",
+  };
+  const mappedFilters = Object.fromEntries(
+    Object.entries(filters).map(([k, v]) => [keyMap[k] || k, v]),
   );
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+    ...Object.fromEntries(Object.entries(mappedFilters).filter(([, v]) => v)),
+  });
+
+  const response = await fetch(`${baseUrl}/users?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
   return handleResponse(response, "Failed to fetch users");
 }
 
@@ -135,9 +159,25 @@ export async function deleteUser(id) {
 // User Levels
 // ─────────────────────────────
 
-export async function fetchUserLevel({ page, limit, signal }) {
+export async function fetchUserLevel({
+  page,
+  limit,
+  search = "",
+  filters = {},
+  signal,
+}) {
   const effectiveLimit = limit === "all" ? 999999 : limit;
   const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+    ...Object.fromEntries(
+      Object.entries(filters).filter(([, v]) => v), // drop empty filter values
+    ),
+  });
+
   const response = await fetch(
     `${baseUrl}/usersLevel?page=${effectivePage}&limit=${effectiveLimit}`,
     {

@@ -5,6 +5,10 @@ export const usersColumns = [
   {
     key: "is_active",
     label: "STATUS",
+    filterOptions: [
+      { key: "active", value: "true", label: "Active" },
+      { key: "inactive", value: "false", label: "Inactive" },
+    ],
     render: (value) =>
       value === true || value === "true" ? (
         <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-500 text-green-400 bg-green-500/10">
@@ -34,9 +38,14 @@ export const usersActions = [
 export const usersLevelColumns = [
   { key: "user_level", label: "ROLE" },
   { key: "description", label: "DESCRIPTION" },
+
   {
     key: "is_active",
     label: "STATUS",
+    filterOptions: [
+      { key: "active", value: "true", label: "Active" },
+      { key: "inactive", value: "false", label: "Inactive" },
+    ],
     render: (value) =>
       value === true || value === "true" ? (
         <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-500 text-green-400 bg-green-500/10">

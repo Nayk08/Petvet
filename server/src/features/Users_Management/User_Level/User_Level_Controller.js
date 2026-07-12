@@ -4,11 +4,16 @@ const userLevelService = new UserLevelService();
 export default class UserLevelController {
   async getUserLevel(req, res) {
     try {
-      const { page, limit } = req.query;
+      const { page, limit, search, user_level_id, user_level } = req.query;
 
       const { rows, pagination } = await userLevelService.getUserLevel({
         page,
         limit,
+        search,
+        filters: {
+          user_level_id,
+          user_level,
+        },
       });
       res.json({ data: rows, pagination });
     } catch (error) {

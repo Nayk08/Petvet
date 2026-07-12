@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { redirect } from "react-router-dom";
+import { getCurrentUser } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -603,4 +605,14 @@ export default function LandingPage() {
       </footer>
     </div>
   );
+}
+
+export async function loader() {
+  const user = await getCurrentUser();
+
+  if (user) {
+    throw redirect("/dashboard");
+  }
+
+  return null;
 }

@@ -1,31 +1,33 @@
 // utils/paginateQuery.js
 
-
 export async function paginateQuery(
   client,
-  { baseQuery, countQuery, params = [], page = 1, limit = 10 },
+  { baseQuery, countQuery, values = [], page = 1, limit = 10 },
 ) {
-  const safePage = Math.max(1, parseInt(page) || 1);
-  const safeLimit = Math.max(1, parseInt(limit) || 10);
-  const offset = (safePage - 1) * safeLimit;
+  const isAll = limit === "all" || limit >= 999999;
+  let dataQuery = baseQuery;
+  const dataValues = [...values];
 
-  const paginatedQuery = `${baseQuery} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-  const dataResult = await client.query(paginatedQuery, [
-    ...params,
-    safeLimit,
-    offset,
+  if (!isAll) {
+    const offset = (page - 1) * limit;
+    dataValues.push(limit, offset);
+    dataQuery += ` LIMIT $${dataValues.length - 1} OFFSET $${dataValues.length}`;
+  }
+
+  const [dataResult, countResult] = await Promise.all([
+    client.query(dataQuery, dataValues),
+    client.query(countQuery, values), // count uses only the WHERE values, no limit/offset
   ]);
 
-  const countResult = await client.query(countQuery, params);
   const total = parseInt(countResult.rows[0].total, 10);
 
   return {
     rows: dataResult.rows,
     pagination: {
-      page: safePage,
-      limit: safeLimit,
+      page: Number(page),
+      limit: isAll ? total : limit,
       total,
-      totalPages: Math.ceil(total / safeLimit),
+      totalPages: isAll ? 1 : Math.ceil(total / limit),
     },
   };
 }

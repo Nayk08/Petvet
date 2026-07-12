@@ -80,7 +80,7 @@ export default function Dashboard() {
       : RECENT_PATIENTS.filter((p) => p.status === filterStatus);
 
   return (
-    <div className="min-h-screen bg-[#070911] text-slate-100 font-sans flex">
+    <div className="text-slate-100 font-sans flex">
       {/* Main Content Area */}
       <div className="flex-1 p-8 max-w-7xl mx-auto space-y-8 w-full">
         {/* Header section */}
@@ -175,7 +175,7 @@ export default function Dashboard() {
                   <tr>
                     <td
                       colSpan="6"
-                      className="py-8 text-center text-slate-500 italic"
+                      className="py-12 text-center text-sm text-slate-500 italic"
                     >
                       No matching records found.
                     </td>
@@ -186,24 +186,24 @@ export default function Dashboard() {
                       key={patient.id}
                       className="hover:bg-[#111627]/40 transition-colors group"
                     >
-                      <td className="py-4 px-4 font-mono text-xs text-slate-400 font-bold">
+                      <td className="py-3.5 px-4 font-mono text-xs text-slate-400 font-bold">
                         {patient.id}
                       </td>
-                      <td className="py-4 px-4 font-semibold text-white group-hover:text-blue-400 transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-white group-hover:text-blue-400 transition-colors">
                         {patient.name}
                       </td>
-                      <td className="py-4 px-4 text-slate-300">
+                      <td className="py-3.5 px-4 text-slate-300">
                         {patient.owner}
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 px-4">
                         <span className="px-2.5 py-1 text-xs rounded-md bg-[#161b2c] text-slate-300 font-medium">
                           {patient.service}
                         </span>
                       </td>
-                      <td className="py-4 px-4 text-slate-400">
+                      <td className="py-3.5 px-4 text-slate-400">
                         {patient.time}
                       </td>
-                      <td className="py-4 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right">
                         <span
                           className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide ${
                             patient.status === "Completed"
