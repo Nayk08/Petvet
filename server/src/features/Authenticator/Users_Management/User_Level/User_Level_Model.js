@@ -1,5 +1,5 @@
-import pool from "../../../config/db.js";
-import { paginateQuery } from "../../../../utils/paginateQuery.js";
+import pool from "../../../../config/db.js";
+import { paginateQuery } from "../../../../../utils/paginateQuery.js";
 
 const ALLOWED_FILTER_COLUMNS = ["level_name", "status"];
 const ALLOWED_SEARCH_COLUMNS = ["level_name"];

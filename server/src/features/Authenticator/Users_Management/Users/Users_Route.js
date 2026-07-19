@@ -1,7 +1,8 @@
 // Users_Routes.js
-import isAuth from "../../../middleware/is-auth.js";
-import hasRole from "../../../middleware/has-role.js";
-import hasPermission from "../../../middleware/has-permission.js";
+import isAuth from "../../../../middleware/is-auth.js";
+import hasRole from "../../../../middleware/has-role.js";
+import hasPermission from "../../../../middleware/has-permission.js";
+
 import UserController from "./Users_Controller.js";
 import express from "express";
 const router = express.Router();

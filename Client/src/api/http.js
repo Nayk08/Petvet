@@ -95,21 +95,18 @@ export async function fetchUsers({
   const effectiveLimit = limit === "all" ? 999999 : limit;
   const effectivePage = limit === "all" ? 1 : page;
 
-  // Map frontend display keys -> backend column names, if they differ
-  const keyMap = {
-    role: "user_level",
-    user_level: "user_level_id",
-    status: "is_active",
-  };
-  const mappedFilters = Object.fromEntries(
-    Object.entries(filters).map(([k, v]) => [keyMap[k] || k, v]),
-  );
-
   const params = new URLSearchParams({
     page: effectivePage,
     limit: effectiveLimit,
     ...(search && { search }),
-    ...Object.fromEntries(Object.entries(mappedFilters).filter(([, v]) => v)),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
   });
 
   const response = await fetch(`${baseUrl}/users?${params.toString()}`, {
@@ -256,4 +253,72 @@ export async function updatePermissionField({
   });
   const result = await handleResponse(response, "Failed to update permission");
   return result.data;
+}
+
+// ─────────────────────────────
+// Inventory
+// ─────────────────────────────
+
+export async function fetchInventory({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+
+  const response = await fetch(`${baseUrl}/inventory?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch inventory");
+}
+
+export async function fetchInventoryById({ product_id, signal } = {}) {
+  const response = await fetch(`${baseUrl}/inventory/${product_id}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch inventory");
+}
+
+export async function addProduct(formData) {
+  const response = await fetch(`${baseUrl}/inventory/add-product`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "failed to add Products");
+}
+
+export async function updateProduct(id, formData) {
+  const response = await fetch(`${baseUrl}/inventory/edit-product/${id}`, {
+    method: "PUT",
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "failed to update Products");
+}
+export async function deleteProduct(id) {
+  const response = await fetch(`${baseUrl}/inventory/delete-product/${id}`, {
+    method: "PUT",
+    credentials: "include",
+  });
+  return handleResponse(response, "failed to delete Products");
 }

@@ -22,19 +22,6 @@ export const usersColumns = [
   },
 ];
 
-export const usersActions = [
-  {
-    label: "Edit",
-    className: "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10",
-    onClick: (row) => console.log("Edit", row),
-  },
-  {
-    label: "Delete",
-    className: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10",
-    onClick: (row) => console.log("Delete", row),
-  },
-];
-
 export const usersLevelColumns = [
   { key: "user_level", label: "ROLE" },
   { key: "description", label: "DESCRIPTION" },
@@ -59,15 +46,69 @@ export const usersLevelColumns = [
   },
 ];
 
-export const usersLevelActions = [
+export const InventoryColumns = [
+  { key: "product_id", label: "PRODUCT ID" },
+  { key: "product_name", label: "PRODUCT NAME" },
   {
-    label: "Edit",
-    className: "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10",
-    onClick: (row) => console.log("Edit role", row),
+    key: "product_image",
+    label: "PRODUCT IMAGE",
+    render: (value) =>
+      value ? (
+        <img
+          src={value}
+          alt="Product"
+          className="w-10 h-10 object-cover rounded-md border border-[#1e253a]"
+        />
+      ) : (
+        <span className="text-slate-500 italic text-xs">No image</span>
+      ),
+  },
+  { key: "product_quantity", label: "PRODUCT QUANTITY" },
+  { key: "product_price", label: "PRODUCT PRICE" },
+  {
+    key: "status_name",
+    label: "Status",
+    multiSelect: true,
+    filterOptions: [
+      { key: "high", value: "High stock", label: "High stock" },
+      { key: "average", value: "Average stock", label: "Average stock" },
+      { key: "low", value: "Low Stock", label: "Low Stock" },
+      { key: "out", value: "Out of Stock", label: "Out of Stock" },
+    ],
+    render: (value) => {
+      const styles = {
+        "High stock": "border-green-600 text-green-400 bg-green-800/50",
+        "Average stock": "border-blue-500 text-blue-400 bg-blue-500/10",
+        "Low Stock": "border-yellow-500 text-yellow-400 bg-yellow-500/10",
+        "Out of Stock": "border-red-500 text-red-400 bg-red-500/10",
+      };
+      return (
+        <span
+          className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
+            styles[value] ?? "border-slate-600 text-slate-400 bg-slate-800/50"
+          }`}
+        >
+          {value ?? "Unknown"}
+        </span>
+      );
+    },
   },
   {
-    label: "Delete",
-    className: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10",
-    onClick: (row) => console.log("Delete role", row),
+    key: "is_expired",
+    label: "Expired",
+    filterOptions: [
+      { key: "expired", value: "true", label: "Expired" },
+      { key: "not_expired", value: "false", label: "Not Expired" },
+    ],
+    render: (value) =>
+      value === true || value === "true" ? (
+        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-red-500 text-red-400 bg-red-500/10">
+          Expired
+        </span>
+      ) : (
+        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-600 text-green-400 bg-green-800/50">
+          Not Expired
+        </span>
+      ),
   },
 ];

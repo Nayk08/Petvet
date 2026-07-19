@@ -1,8 +1,8 @@
 import express from "express";
 import UserLevelController from "./User_Level_Controller.js";
-import isAuth from "../../../middleware/is-auth.js";
-import hasPermission from "../../../middleware/has-permission.js";
-import hasRole from "../../../middleware/has-role.js";
+import isAuth from "../../../../middleware/is-auth.js";
+import hasRole from "../../../../middleware/has-role.js";
+import hasPermission from "../../../../middleware/has-permission.js";
 
 const router = express.Router();
 const userLevelController = new UserLevelController();

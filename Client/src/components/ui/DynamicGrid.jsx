@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "./table";
 import { Button } from "./button.jsx";
+import { MultiSelectFilter } from "./MultiSelectFilter";
 
 export default function DynamicGrid({
   data = [],
@@ -48,10 +49,6 @@ export default function DynamicGrid({
     return columnsConfig.filter((col) => !hiddenColumns.has(col.key));
   }, [columnsConfig, hiddenColumns]);
 
-  // ❌ REMOVED: the old `processedRows` useMemo that filtered client-side.
-  // Data is now already filtered/searched/paginated by the backend —
-  // `data` is rendered as-is.
-
   const toggleColumnVisibility = (columnKey) => {
     setHiddenColumns((prev) => {
       const next = new Set(prev);
@@ -69,7 +66,10 @@ export default function DynamicGrid({
     onSearchChange?.("");
   };
 
-  const hasActiveFilters = Object.values(filters).some(Boolean) || search;
+  const hasActiveFilters =
+    Object.values(filters).some((v) =>
+      Array.isArray(v) ? v.length > 0 : Boolean(v),
+    ) || search;
 
   const navigation = useNavigate();
 
@@ -134,34 +134,46 @@ export default function DynamicGrid({
               .filter(
                 (col) => col.filterOptions && col.filterOptions.length > 0,
               )
-              .map((col) => (
-                <select
-                  key={col.key}
-                  value={filters[col.key] || ""}
-                  onChange={(e) =>
-                    onFiltersChange?.({
-                      ...filters,
-                      [col.key]: e.target.value,
-                    })
-                  }
-                  className={`text-xs px-2.5 py-2 bg-[#070911] border rounded-lg text-slate-300 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate ${
-                    filters[col.key]
-                      ? "border-blue-500 bg-blue-500/10 text-blue-400"
-                      : "border-[#1e253a] hover:border-[#2a3350]"
-                  }`}
-                >
-                  <option value="">All {col.label}</option>
-                  {col.filterOptions.map((opt) => (
-                    <option
-                      key={opt.key}
-                      value={opt.value}
-                      className="bg-[#070911] text-white"
-                    >
-                      {opt.label ?? opt.value}
-                    </option>
-                  ))}
-                </select>
-              ))}
+              .map((col) =>
+                col.multiSelect ? (
+                  <MultiSelectFilter
+                    key={col.key}
+                    label={col.label}
+                    options={col.filterOptions}
+                    selected={filters[col.key] || []}
+                    onChange={(values) =>
+                      onFiltersChange?.({ ...filters, [col.key]: values })
+                    }
+                  />
+                ) : (
+                  <select
+                    key={col.key}
+                    value={filters[col.key] || ""}
+                    onChange={(e) =>
+                      onFiltersChange?.({
+                        ...filters,
+                        [col.key]: e.target.value,
+                      })
+                    }
+                    className={`text-xs px-2.5 py-2 bg-[#070911] border rounded-lg text-slate-300 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate ${
+                      filters[col.key]
+                        ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                        : "border-[#1e253a] hover:border-[#2a3350]"
+                    }`}
+                  >
+                    <option value="">All {col.label}</option>
+                    {col.filterOptions.map((opt) => (
+                      <option
+                        key={opt.key}
+                        value={opt.value}
+                        className="bg-[#070911] text-white"
+                      >
+                        {opt.label ?? opt.value}
+                      </option>
+                    ))}
+                  </select>
+                ),
+              )}
 
             {hasActiveFilters && (
               <button

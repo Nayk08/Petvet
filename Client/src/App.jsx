@@ -8,7 +8,7 @@ import { requireAuth, requirePermission } from "./utils/routeGuards.js";
 import Layout from "./components/layout/Layout";
 import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/ServerSide/Dashboard";
-import Inventory from "./pages/ServerSide/Inventory";
+import Inventory from "./pages/ServerSide/Inventory/Inventory.jsx";
 import Cart from "./pages/ServerSide/Cart";
 import Payments from "./pages/ServerSide/Payment";
 import Appointments from "./pages/ServerSide/Appointment";
@@ -27,7 +27,6 @@ import Login from "./pages/Authentication/Login";
 
 import { queryClient } from "./api/http";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
-
 const router = createBrowserRouter([
   {
     index: true,
@@ -73,6 +72,23 @@ const router = createBrowserRouter([
         path: "inventory",
         element: <Inventory />,
         loader: requirePermission("INVENTORY"),
+        children: [
+          {
+            path: "edit-product/:product_id",
+            lazy: () =>
+              import("./pages/ServerSide/Inventory/components/AddProductModal.jsx"),
+          },
+          {
+            path: "delete-product/:product_id",
+            lazy: () =>
+              import("./pages/ServerSide/Inventory/components/DeleteProductModal.jsx"),
+          },
+          {
+            path: "add-product",
+            lazy: () =>
+              import("./pages/ServerSide/Inventory/components/AddProductModal.jsx"),
+          },
+        ],
       },
       {
         path: "cart",
@@ -117,7 +133,7 @@ const router = createBrowserRouter([
             path: "users",
             loader: requirePermission("USER_MGMT_USERS"),
             lazy: () =>
-              import("./pages/ServerSide/Users_Management/Users/Users.jsx"),
+              import("./pages/Authentication/Users_Management/Users/Users.jsx"),
 
             children: [
               {
@@ -125,7 +141,7 @@ const router = createBrowserRouter([
                 loader: requirePermission("USER_MGMT_USERS", "can_create"),
                 lazy: async () => {
                   const mod =
-                    await import("./pages/ServerSide/Users_Management/Users/components/AddUsersModal.jsx");
+                    await import("./pages/Authentication/Users_Management/Users/components/AddUsersModal.jsx");
                   return { ...mod, action: mod.addUserAction };
                 },
               },
@@ -134,7 +150,7 @@ const router = createBrowserRouter([
                 loader: requirePermission("USER_MGMT_USERS", "can_edit"),
                 lazy: async () => {
                   const mod =
-                    await import("@/pages/ServerSide/Users_Management/Users/components/AddUsersModal.jsx");
+                    await import("@/pages/Authentication/Users_Management/Users/components/AddUsersModal.jsx");
                   return { ...mod, action: mod.editUserAction }; // loader removed, no longer needed
                 },
               },
@@ -143,7 +159,7 @@ const router = createBrowserRouter([
                 loader: requirePermission("USER_MGMT_USERS", "can_delete"),
                 lazy: async () => {
                   const mod =
-                    await import("./pages/ServerSide/Users_Management/Users/components/DeleteUserModal.jsx");
+                    await import("./pages/Authentication/Users_Management/Users/components/DeleteUserModal.jsx");
                   return {
                     ...mod,
                     loader: mod.deleteUserLoader,
@@ -157,7 +173,7 @@ const router = createBrowserRouter([
             path: "roles",
             loader: requirePermission("USER_MGMT_ROLES"),
             lazy: () =>
-              import("./pages/ServerSide/Users_Management/Roles/Roles.jsx"),
+              import("./pages/Authentication/Users_Management/Roles/Roles.jsx"),
 
             children: [
               {
@@ -165,7 +181,7 @@ const router = createBrowserRouter([
                 loader: requirePermission("USER_MGMT_ROLES", "can_create"),
                 lazy: async () => {
                   const mod =
-                    await import("./pages/ServerSide/Users_Management/Roles/components/AddRolesModal.jsx");
+                    await import("./pages/Authentication/Users_Management/Roles/components/AddRolesModal.jsx");
                   return { ...mod, action: mod.action };
                 },
               },
@@ -173,13 +189,13 @@ const router = createBrowserRouter([
                 path: "edit-role/:user_level_id",
                 loader: requirePermission("USER_MGMT_ROLES", "can_edit"),
                 lazy: () =>
-                  import("@/pages/ServerSide/Users_Management/Roles/components/EditRolesModal.jsx"),
+                  import("@/pages/Authentication/Users_Management/Roles/components/EditRolesModal.jsx"),
               },
               {
                 path: "delete-role/:user_level_id",
                 loader: requirePermission("USER_MGMT_ROLES", "can_delete"),
                 lazy: () =>
-                  import("./pages/ServerSide/Users_Management/Roles/components/DeleteRolesModal.jsx"),
+                  import("./pages/Authentication/Users_Management/Roles/components/DeleteRolesModal.jsx"),
               },
             ],
           },
@@ -187,7 +203,7 @@ const router = createBrowserRouter([
             path: "permissions",
             loader: requirePermission("USER_MGMT_PERMS"),
             lazy: () =>
-              import("./pages/ServerSide/Users_Management/Permissions/Permission.jsx"),
+              import("./pages/Authentication/Users_Management/Permissions/Permission.jsx"),
           },
         ],
       },

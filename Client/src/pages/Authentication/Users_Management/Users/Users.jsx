@@ -12,7 +12,6 @@ import { usePagination } from "@/hooks/usePagination.jsx";
 import { Pagination } from "@/components/ui/Pagination.jsx";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue.jsx";
 
-
 export function Component() {
   const navigate = useNavigate();
 
@@ -36,22 +35,24 @@ export function Component() {
     gcTime: 1000 * 60 * 10,
   });
 
-  // 🔽 NEW: build the actual columnsConfig by merging live role options
-  // into the static usersColumns definition
+  // Build the actual columnsConfig by merging live role options
+  // into the static usersColumns definition. Filter values use the
+  // role NAME (not ID), since UsersModel filters user_level as varchar.
   const mergedColumns = useMemo(() => {
     const roleOptions =
       CategoryUserLevel?.map((role) => ({
         key: role.user_level_id,
-        value: role.user_level_id,
+        value: role.user_level,
         label: role.user_level,
       })) ?? [];
 
     return usersColumns.map((col) =>
       col.key === "user_level"
-        ? { ...col, filterOptions: roleOptions }
+        ? { ...col, multiSelect: true, filterOptions: roleOptions }
         : col.key === "is_active"
           ? {
               ...col,
+              multiSelect: true,
               filterOptions: [
                 { key: "active", value: "true", label: "Active" },
                 { key: "inactive", value: "false", label: "Inactive" },
@@ -83,14 +84,10 @@ export function Component() {
       </div>
     );
 
-  {
-    console.log("CategoryUserLevel raw response:", CategoryUserLevel);
-  }
-
   return (
     <>
       <DynamicGrid
-        data={data?.data ?? []}
+        data={data?.rows ?? []}
         columnsConfig={mergedColumns}
         title="Users Management"
         buttonText="Add User"
@@ -110,7 +107,9 @@ export function Component() {
         page={page}
         totalPages={limit === "all" ? 1 : (data?.pagination?.totalPages ?? 1)}
         onPageChange={setPage}
-        disabled={isPending || isPlaceholderData}
+        disabled={isPending}
+        total={data?.pagination?.total}
+        limit={limit === "all" ? data?.pagination?.total : limit}
       />
       <Outlet />
     </>

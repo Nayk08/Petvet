@@ -7,51 +7,64 @@ export function Pagination({
   totalPages,
   onPageChange,
   disabled = false,
+  total,
+  limit,
 }) {
   if (!totalPages || totalPages <= 1) return null;
 
   const pages = getPageWindow(page, totalPages);
 
-  return (
-    <div className="flex items-center justify-center gap-1 pt-4">
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={disabled || page === 1}
-        onClick={() => onPageChange(page - 1)}
-      >
-        <ChevronLeft size={14} />
-      </Button>
+  const rangeStart = total && limit ? (page - 1) * limit + 1 : null;
+  const rangeEnd = total && limit ? Math.min(page * limit, total) : null;
 
-      {pages.map((p, i) =>
-        p === "..." ? (
-          <span
-            key={`ellipsis-${i}`}
-            className="px-2 text-slate-500 text-sm select-none"
-          >
-            …
-          </span>
-        ) : (
-          <Button
-            key={p}
-            variant={p === page ? "neon" : "ghost"}
-            size="sm"
-            disabled={disabled}
-            onClick={() => onPageChange(p)}
-          >
-            {p}
-          </Button>
-        ),
+  return (
+    <div className="flex flex-col items-center gap-2 pt-4">
+      {total != null && limit != null && (
+        <div className="text-xs text-slate-500">
+          Showing {rangeStart}–{rangeEnd} of {total} rows
+        </div>
       )}
 
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={disabled || page === totalPages}
-        onClick={() => onPageChange(page + 1)}
-      >
-        <ChevronRight size={14} />
-      </Button>
+      <div className="flex items-center justify-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled || page === 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <ChevronLeft size={14} />
+        </Button>
+
+        {pages.map((p, i) =>
+          p === "..." ? (
+            <span
+              key={`ellipsis-${i}`}
+              className="px-2 text-slate-500 text-sm select-none"
+            >
+              …
+            </span>
+          ) : (
+            <Button
+              key={p}
+              variant={p === page ? "neon" : "ghost"}
+              size="sm"
+              disabled={disabled}
+              onClick={() => onPageChange(p)}
+            >
+              {p}
+            </Button>
+          ),
+        )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled || page === totalPages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          <ChevronRight size={14} />
+        </Button>
+      </div>
     </div>
   );
 }

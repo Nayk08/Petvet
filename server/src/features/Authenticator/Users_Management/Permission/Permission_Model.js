@@ -1,4 +1,4 @@
-import pool from "../../../config/db.js";
+import pool from "../../../../config/db.js";
 export default class PermissionModel {
   /**
    * Returns every active module, LEFT JOINed against tbl_module_access

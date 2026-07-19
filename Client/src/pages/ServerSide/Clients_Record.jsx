@@ -1,4 +1,4 @@
-import { Component } from "../ServerSide/Users_Management/Roles/Roles.jsx";
+import { Component } from "../Authentication/Users_Management/Roles/Roles.jsx";
 export default function Dashboard() {
   return (
     <>

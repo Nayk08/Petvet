@@ -99,7 +99,7 @@ export function Component() {
   // Failure -> toast with the backend's real error, keep modal open so the user can fix it.
   useEffect(() => {
     if (!actionData) return;
-
+    
     if (actionData.ok) {
       toast.success(isEditMode ? "User updated" : "User added", {
         className:

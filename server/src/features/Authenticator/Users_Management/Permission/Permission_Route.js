@@ -1,13 +1,11 @@
 import express from "express";
 const router = express.Router();
 import PermissionController from "./Permission_Controller.js";
-import isAuth from "../../../middleware/is-auth.js";
-import hasPermission from "../../../middleware/has-permission.js";
+import isAuth from "../../../../middleware/is-auth.js";
+import hasRole from "../../../../middleware/has-role.js";
+import hasPermission from "../../../../middleware/has-permission.js";
 
 const permissionController = new PermissionController();
-
-
-
 
 router.get(
   "/user-levels",

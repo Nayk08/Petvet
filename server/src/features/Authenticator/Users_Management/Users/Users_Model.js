@@ -1,7 +1,7 @@
-import pool from "../../../config/db.js";
+import pool from "../../../../config/db.js";
 
-import { paginateQuery } from "../../../../utils/paginateQuery.js";
-const ALLOWED_FILTER_COLUMNS = ["user_level_id", "user_level", "is_active"];
+import { paginateQuery } from "../../../../../utils/paginateQuery.js";
+const ALLOWED_FILTER_COLUMNS = ["user_level", "is_active"];
 const ALLOWED_SEARCH_COLUMNS = ["user_name", "user_email"];
 export default class UsersModel {
   async getUsers({ page = 1, limit = 10, search = "", filters = {} } = {}) {
@@ -11,32 +11,21 @@ export default class UsersModel {
       const conditions = ["is_deleted = false"];
 
       for (const [key, value] of Object.entries(filters)) {
-        if (
-          !ALLOWED_FILTER_COLUMNS.includes(key) ||
-          value === undefined ||
-          value === ""
-        )
-          continue;
+        if (!ALLOWED_FILTER_COLUMNS.includes(key) || !value) continue;
 
         if (key === "is_active") {
-          // is_active is boolean — incoming query param is a string ("true"/"false")
-          values.push(value === "true" || value === true);
-          conditions.push(`is_active = $${values.length}`);
+          const valueList = value.split(",").map((v) => v === "true");
+          values.push(valueList);
+          conditions.push(`is_active = ANY($${values.length})`);
           continue;
         }
 
-        if (key === "user_level_id") {
-          // integer column — cast explicitly to avoid type mismatch errors
-          values.push(value);
-          conditions.push(`user_level_id = $${values.length}::int`);
-          continue;
-        }
-
-        // user_level (varchar) — plain equality
-        values.push(value);
-        conditions.push(`${key} = $${values.length}`);
+        // user_level (varchar, multi-select)
+        const valueList = value.split(",").filter(Boolean);
+        if (valueList.length === 0) continue;
+        values.push(valueList);
+        conditions.push(`${key} = ANY($${values.length})`);
       }
-
       if (search && search.trim()) {
         values.push(`%${search.trim()}%`);
         const idx = values.length;
