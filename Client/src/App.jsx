@@ -9,7 +9,7 @@ import Layout from "./components/layout/Layout";
 import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/ServerSide/Dashboard";
 import Inventory from "./pages/ServerSide/Inventory/Inventory.jsx";
-import Cart from "./pages/ServerSide/Cart";
+import Cart from "./pages/ServerSide/Inventory/Cart/Cart.jsx";
 import Payments from "./pages/ServerSide/Payment";
 import Appointments from "./pages/ServerSide/Appointment";
 import Settings from "./pages/ServerSide/Settings";

@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchInventory } from "@/api/http";
 import { Pagination } from "@/components/ui/Pagination";
-import petVet from "../../assets/petVet/icons8-no-image-80.png";
-export default function Cart({ bookedItems = [] }) {
+import petVet from "../../../../assets/petVet/icons8-no-image-80.png";
+
+import { Button } from "@/components/ui/button.jsx";
+export default function Cart() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
-  const [cartItems, setCartItems] = useState([]);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["inventoryProducts", page, limit],
@@ -39,6 +40,12 @@ export default function Cart({ bookedItems = [] }) {
         <h2 className="text-3xl font-normal text-white tracking-wide mb-6">
           Items For Sale
         </h2>
+        <Button
+          className="bg-cyan-500 text-black font-semibold shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-all duration-300 hover:bg-cyan-400 hover:shadow-[0_0_25px_rgba(6,182,212,0.8)] hover:scale-105"
+          variant="neon"
+        >
+          Cart
+        </Button>
 
         {isPending ? (
           <p className="text-slate-500 text-sm">Loading products...</p>
