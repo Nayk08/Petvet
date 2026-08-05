@@ -36,7 +36,7 @@ export default function AuthForm() {
   const isLogin = searchParams.get("mode") !== "register";
 
   return (
-    <Card className="w-full max-w-md bg-card/60 backdrop-blur-xl border-border shadow-2xl relative overflow-hidden transition-all duration-300">
+    <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden transition-all duration-300">
       {/* Brand Top Accent Line (PetVet Green) */}
       <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
 
@@ -51,10 +51,10 @@ export default function AuthForm() {
             )}
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
+        <CardTitle className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           {isLogin ? "PetVet Portal Sign In" : "Create PetVet Account"}
         </CardTitle>
-        <p className="text-xs text-muted-foreground max-w-[280px] mx-auto">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[280px] mx-auto">
           {isLogin
             ? "Access your digital medical files, updates, and upcoming grooming slots."
             : "Register to skip long clinic queues and check live stock updates."}
@@ -69,18 +69,18 @@ export default function AuthForm() {
               <div className="space-y-1.5">
                 <label
                   htmlFor="firstName"
-                  className="text-xs font-semibold text-muted-foreground tracking-wide"
+                  className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tracking-wide"
                 >
                   First Name
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                   <Input
                     id="firstName"
                     name="firstName"
                     type="text"
                     placeholder="John"
-                    className="pl-9 bg-background/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-emerald-500 transition-all duration-200"
+                    className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
                   />
                 </div>
               </div>
@@ -88,18 +88,18 @@ export default function AuthForm() {
               <div className="space-y-1.5">
                 <label
                   htmlFor="lastName"
-                  className="text-xs font-semibold text-muted-foreground tracking-wide"
+                  className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tracking-wide"
                 >
                   Last Name
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                   <Input
                     id="lastName"
                     name="lastName"
                     type="text"
                     placeholder="Doe"
-                    className="pl-9 bg-background/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-emerald-500 transition-all duration-200"
+                    className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
                   />
                 </div>
               </div>
@@ -110,18 +110,18 @@ export default function AuthForm() {
           <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="text-xs font-semibold text-muted-foreground tracking-wide"
+              className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tracking-wide"
             >
               Email Address
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input
                 id="email"
                 name="email"
                 type="email"
                 placeholder="name@example.com"
-                className="pl-9 bg-background/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-emerald-500 transition-all duration-200"
+                className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
               />
             </div>
           </div>
@@ -131,7 +131,7 @@ export default function AuthForm() {
             <div className="flex items-center justify-between">
               <label
                 htmlFor="password"
-                className="text-xs font-semibold text-muted-foreground tracking-wide"
+                className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tracking-wide"
               >
                 Password
               </label>
@@ -145,13 +145,13 @@ export default function AuthForm() {
               )}
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input
                 id="password"
                 name="password"
                 type="password"
                 placeholder="••••••••"
-                className="pl-9 bg-background/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-emerald-500 transition-all duration-200"
+                className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
               />
             </div>
           </div>
@@ -161,18 +161,18 @@ export default function AuthForm() {
             <div className="space-y-1.5 animate-in fade-in-50 slide-in-from-top-2 duration-200">
               <label
                 htmlFor="confirmPassword"
-                className="text-xs font-semibold text-muted-foreground tracking-wide"
+                className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tracking-wide"
               >
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <Input
                   id="confirmPassword"
                   name="confirmPassword"
                   type="password"
                   placeholder="••••••••"
-                  className="pl-9 bg-background/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-emerald-500 transition-all duration-200"
+                  className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
                 />
               </div>
             </div>
@@ -180,7 +180,7 @@ export default function AuthForm() {
 
           {/* Error Message Box */}
           {(actionData?.error || actionData?.message) && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-in shake-1 duration-200">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm animate-in shake-1 duration-200">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <p className="font-medium leading-tight">
                 {actionData.error || actionData.message}
@@ -206,8 +206,8 @@ export default function AuthForm() {
       </CardContent>
 
       {/* Footer Nav Links */}
-      <CardFooter className="justify-center border-t border-border pt-4 pb-6 bg-muted/40">
-        <p className="text-sm text-muted-foreground">
+      <CardFooter className="justify-center border-t border-zinc-100 dark:border-zinc-800/80 pt-4 pb-6 bg-zinc-50/50 dark:bg-zinc-900/40">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {isLogin ? "New to PetVet? " : "Already registered? "}
           <Link
             to={`?mode=${isLogin ? "register" : "login"}`}
