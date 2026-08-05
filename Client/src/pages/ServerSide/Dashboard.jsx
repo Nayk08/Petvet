@@ -7,32 +7,32 @@ const STATS = [
     name: "Total Appointments",
     value: "142",
     change: "+12% this week",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
+    color: "text-blue-600",
+    dotBg: "bg-blue-500",
   },
   {
     id: 2,
     name: "Active Consultations",
     value: "12",
     change: "3 currently in queue",
-    color: "text-amber-500",
-    bg: "bg-amber-500/10",
+    color: "text-amber-600",
+    dotBg: "bg-amber-500",
   },
   {
     id: 3,
     name: "Completed Grooming",
     value: "68",
     change: "Target 80% reached",
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
+    color: "text-emerald-600",
+    dotBg: "bg-emerald-500",
   },
   {
     id: 4,
     name: "Critical Operations",
     value: "3",
     change: "Scheduled for today",
-    color: "text-red-500",
-    bg: "bg-red-500/10",
+    color: "text-rose-600",
+    dotBg: "bg-rose-500",
   },
 ];
 
@@ -80,24 +80,24 @@ export default function Dashboard() {
       : RECENT_PATIENTS.filter((p) => p.status === filterStatus);
 
   return (
-    <div className="text-slate-100 font-sans flex">
+    <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex">
       {/* Main Content Area */}
       <div className="flex-1 p-8 max-w-7xl mx-auto space-y-8 w-full">
         {/* Header section */}
-        <div className="flex justify-between items-center border-b border-[#161b2c] pb-6">
+        <div className="flex justify-between items-center border-b border-slate-200 pb-6">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-wide">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-wide">
               Welcome Back, Admin
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Here is what's happening at PetVet clinic today.
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold text-teal-400">
+            <p className="text-sm font-semibold text-teal-600">
               Clinic Status: Open
             </p>
-            <p className="text-xs text-slate-500">Hours: 09:00 AM - 06:00 PM</p>
+            <p className="text-xs text-slate-400">Hours: 09:00 AM - 06:00 PM</p>
           </div>
         </div>
 
@@ -106,17 +106,15 @@ export default function Dashboard() {
           {STATS.map((stat) => (
             <div
               key={stat.id}
-              className="bg-[#0b0e17] border border-[#161b2c] rounded-xl p-6 transition-all hover:border-[#1e253a]"
+              className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm transition-all hover:shadow-md hover:border-slate-300"
             >
               <div className="flex justify-between items-start">
-                <p className="text-sm font-medium text-slate-400">
+                <p className="text-sm font-medium text-slate-500">
                   {stat.name}
                 </p>
-                <span
-                  className={`w-2.5 h-2.5 rounded-full ${stat.color.replace("text", "bg")}`}
-                />
+                <span className={`w-2.5 h-2.5 rounded-full ${stat.dotBg}`} />
               </div>
-              <p className="text-3xl font-extrabold text-white mt-4 tracking-tight">
+              <p className="text-3xl font-extrabold text-slate-900 mt-4 tracking-tight">
                 {stat.value}
               </p>
               <p className="text-xs text-slate-500 mt-2 font-medium">
@@ -127,10 +125,10 @@ export default function Dashboard() {
         </div>
 
         {/* Dynamic Grid Section */}
-        <div className="bg-[#0b0e17] border border-[#161b2c] rounded-xl p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-[#161b2c] gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4">
             <div>
-              <h3 className="text-xl font-bold text-white">
+              <h3 className="text-xl font-bold text-slate-900">
                 Today's Live Queue
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -138,7 +136,7 @@ export default function Dashboard() {
               </p>
             </div>
 
-            {/* Control Filters matching your Dynamic Grid style */}
+            {/* Control Filters */}
             <div className="flex items-center space-x-2">
               {["All", "Pending", "In Progress", "Completed"].map((status) => (
                 <button
@@ -147,8 +145,8 @@ export default function Dashboard() {
                   onClick={() => setFilterStatus(status)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                     filterStatus === status
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-[#070911] text-slate-400 border-[#1e253a] hover:bg-[#121627] hover:text-white"
+                      ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   {status}
@@ -161,7 +159,7 @@ export default function Dashboard() {
           <div className="overflow-x-auto mt-4">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#161b2c] text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-[#070911]/50">
+                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
                   <th className="py-4 px-4">Pet ID</th>
                   <th className="py-4 px-4">Patient Name</th>
                   <th className="py-4 px-4">Owner</th>
@@ -170,12 +168,12 @@ export default function Dashboard() {
                   <th className="py-4 px-4 text-right">Live Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#161b2c]/60 text-sm">
+              <tbody className="divide-y divide-slate-100 text-sm">
                 {filteredPatients.length === 0 ? (
                   <tr>
                     <td
                       colSpan="6"
-                      className="py-12 text-center text-sm text-slate-500 italic"
+                      className="py-12 text-center text-sm text-slate-400 italic"
                     >
                       No matching records found.
                     </td>
@@ -184,33 +182,33 @@ export default function Dashboard() {
                   filteredPatients.map((patient) => (
                     <tr
                       key={patient.id}
-                      className="hover:bg-[#111627]/40 transition-colors group"
+                      className="hover:bg-slate-50/80 transition-colors group"
                     >
-                      <td className="py-3.5 px-4 font-mono text-xs text-slate-400 font-bold">
+                      <td className="py-3.5 px-4 font-mono text-xs text-slate-500 font-bold">
                         {patient.id}
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-white group-hover:text-blue-400 transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-teal-600 transition-colors">
                         {patient.name}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-300">
+                      <td className="py-3.5 px-4 text-slate-600">
                         {patient.owner}
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 text-xs rounded-md bg-[#161b2c] text-slate-300 font-medium">
+                        <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200">
                           {patient.service}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400">
+                      <td className="py-3.5 px-4 text-slate-500">
                         {patient.time}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <span
-                          className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide ${
+                          className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded tracking-wide border ${
                             patient.status === "Completed"
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : patient.status === "In Progress"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
                           }`}
                         >
                           {patient.status}

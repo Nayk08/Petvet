@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 const SERVICES = [
   { id: "grooming", name: "Grooming", color: "bg-blue-600" },
-  { id: "consultation", name: "Consultation", color: "bg-slate-800" },
+  { id: "consultation", name: "Consultation", color: "bg-slate-500" },
   { id: "operation", name: "Operation", color: "bg-red-600" },
 ];
 
@@ -205,9 +205,9 @@ export default function Appointment() {
   };
 
   return (
-    <div className="text-slate-100 p-8 font-sans flex justify-center items-start">
-      <div className="w-full max-w-6xl bg-[#0b0e17] border border-[#1e253a] rounded-xl p-10 mt-4">
-        <h2 className="text-2xl font-bold text-white tracking-wide mb-8">
+    <div className="text-slate-900 p-8 font-sans flex justify-center items-start">
+      <div className="w-full max-w-6xl bg-white border border-slate-200 rounded-xl p-10 mt-4 shadow-sm">
+        <h2 className="text-2xl font-bold text-slate-950 tracking-wide mb-8">
           Book an Appointment
         </h2>
 
@@ -216,7 +216,7 @@ export default function Appointment() {
             <form onSubmit={handleBooking} className="space-y-8">
               {/* 1. Select Service Type */}
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-3">
+                <label className="block text-sm font-medium text-slate-600 mb-3">
                   1. Select Service Type
                 </label>
                 <div className="grid grid-cols-3 gap-4">
@@ -228,7 +228,7 @@ export default function Appointment() {
                       className={`py-3.5 px-4 rounded-lg border text-center font-medium text-base transition-all ${
                         selectedService.id === service.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-[#070911] text-slate-300 border-[#1e253a] hover:bg-[#121627]"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                       }`}
                     >
                       {service.name}
@@ -240,18 +240,18 @@ export default function Appointment() {
               {/* 2. Select Date */}
               <div>
                 <div className="flex justify-between items-center mb-4">
-                  <label className="text-sm font-medium text-slate-400">
+                  <label className="text-sm font-medium text-slate-600">
                     2. Select Date
                   </label>
-                  <div className="flex items-center space-x-3 bg-[#070911] p-1 border border-[#1e253a] rounded-lg">
+                  <div className="flex items-center space-x-3 bg-slate-50 p-1 border border-slate-200 rounded-lg">
                     <button
                       type="button"
                       onClick={handlePrevMonth}
-                      className="px-2.5 py-1 text-slate-400 hover:text-white transition-colors"
+                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors"
                     >
                       &larr;
                     </button>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200 min-w-[100px] text-center">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800 min-w-[100px] text-center">
                       {currentMonthDate.toLocaleDateString("en-US", {
                         month: "long",
                         year: "numeric",
@@ -260,7 +260,7 @@ export default function Appointment() {
                     <button
                       type="button"
                       onClick={handleNextMonth}
-                      className="px-2.5 py-1 text-slate-400 hover:text-white transition-colors"
+                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors"
                     >
                       &rarr;
                     </button>
@@ -302,7 +302,7 @@ export default function Appointment() {
                             ? "bg-red-950/20 border-red-900/40 text-red-700/60 cursor-not-allowed line-through"
                             : isSelected
                               ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                              : "bg-[#070911] text-slate-300 border-[#1e253a] hover:bg-[#121627]"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                         }`}
                       >
                         <span className="text-base font-bold w-full text-center mt-0.5">
@@ -315,7 +315,7 @@ export default function Appointment() {
                             className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold tracking-wide uppercase ${
                               isSelected
                                 ? "bg-white text-blue-600"
-                                : "bg-teal-500/20 text-teal-400 border border-teal-500/20"
+                              : "bg-teal-50 text-teal-700 border border-teal-200"
                             }`}
                           >
                             {dayBookingsCount} Booked
@@ -330,7 +330,7 @@ export default function Appointment() {
               {/* 3. Available Time Slots */}
               <div>
                 <div className="mb-3">
-                  <label className="block text-sm font-medium text-slate-400">
+                  <label className="block text-sm font-medium text-slate-600">
                     3. Available Time Slots (Operating Hours: 09:00 AM - 06:00
                     PM)
                   </label>
@@ -351,14 +351,14 @@ export default function Appointment() {
                         onClick={() => handleTimeSlotClick(slot)}
                         className={`py-3 px-4 rounded-lg border text-sm transition-all flex justify-between items-center ${
                           !selectedDate
-                            ? "bg-[#070911]/40 border-[#1e253a]/40 text-slate-600 cursor-not-allowed"
+                            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
                             : past
                               ? "bg-red-950/20 border-red-900/40 text-red-700/60 cursor-not-allowed line-through"
                               : isFull
                                 ? "bg-red-950/30 border-red-900/60 text-red-400 cursor-not-allowed"
                                 : isSelected
                                   ? "bg-blue-600 text-white border-blue-600 shadow-sm font-bold"
-                                  : "bg-[#070911] text-slate-300 border-[#1e253a] hover:bg-[#121627]"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                         }`}
                       >
                         <span className="font-medium">{slot.label}</span>
@@ -370,8 +370,8 @@ export default function Appointment() {
                               isFull
                                 ? "bg-red-500 text-white"
                                 : count > 0
-                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                  : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             }`}
                           >
                             {isFull
@@ -390,7 +390,7 @@ export default function Appointment() {
               <button
                 type="submit"
                 disabled={!selectedDate || selectedSlots.length === 0}
-                className="w-full bg-[#0d9488] hover:bg-teal-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-base transition-colors mt-4 tracking-wide shadow-sm"
+                className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-base transition-colors mt-4 tracking-wide shadow-sm"
               >
                 Confirm Appointment
               </button>
@@ -399,8 +399,8 @@ export default function Appointment() {
 
           {/* Right Column: Schedule Container Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-[#070911] border border-[#1e253a] p-6 rounded-xl space-y-4">
-              <h3 className="text-xl font-bold text-white mb-4">
+            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4">
+              <h3 className="text-xl font-bold text-slate-950 mb-4">
                 Your Schedule
               </h3>
               {appointments.length === 0 ? (
@@ -412,16 +412,16 @@ export default function Appointment() {
                   {appointments.map((app) => (
                     <div
                       key={app.id}
-                      className="flex items-center space-x-4 p-4 bg-[#111627]/50 border border-[#1e253a] rounded-xl"
+                      className="flex items-center space-x-4 p-4 bg-white border border-slate-200 rounded-xl"
                     >
                       <div
                         className={`w-1.5 h-12 rounded-full ${app.service.color}`}
                       />
                       <div>
-                        <h4 className="font-bold text-base text-white">
+                        <h4 className="font-bold text-base text-slate-950">
                           {app.service.name}
                         </h4>
-                        <p className="text-sm text-slate-400 font-medium">
+                        <p className="text-sm text-slate-600 font-medium">
                           {app.date}
                         </p>
                         <p className="text-sm text-slate-500 font-medium">

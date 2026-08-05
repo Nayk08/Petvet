@@ -9,16 +9,19 @@ export default class AuthenticatorModel {
     return result.rows[0];
   }
 
-  async findUserProfile(usersId) {  
-    const result = await pool.query("SELECT * FROM v_users WHERE users_id = $1", [
-      usersId,
-    ]);
+  async findUserProfile(usersId) {
+    const result = await pool.query(
+      "SELECT * FROM v_users WHERE users_id = $1",
+      [usersId],
+    );
     return result.rows[0];
   }
 
   async findUserLevelId(userLevel) {
     const result = await pool.query(
-      "SELECT user_level_id FROM tbl_user_level WHERE LOWER(user_level) = LOWER($1) LIMIT 1",
+      `SELECT user_level_id FROM tbl_user_level 
+WHERE LOWER(TRIM(user_level)) = LOWER(TRIM($1)) 
+LIMIT 1`,
       [userLevel],
     );
     return result.rows[0]?.user_level_id;

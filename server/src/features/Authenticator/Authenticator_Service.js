@@ -45,7 +45,7 @@ export default class AuthenticatorService {
       throw new Error("Email already exists");
     }
 
-    const defaultUserLevelId = await authModel.findUserLevelId("Cashier");
+    const defaultUserLevelId = await authModel.findUserLevelId("Client");
 
     if (!defaultUserLevelId) {
       throw new Error("Default user role not found");

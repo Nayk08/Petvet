@@ -9,21 +9,21 @@ const permissionController = new PermissionController();
 
 router.get(
   "/user-levels",
-  isAuth,
+
   hasPermission("USER_MGMT_PERMS", "can_view"),
   (req, res, next) => permissionController.getUserLevels(req, res, next),
 );
 
 router.get(
   "/permissions/:userLevelId",
-  isAuth,
+
   hasPermission("USER_MGMT_PERMS", "can_view"),
   (req, res, next) => permissionController.getPermissionMatrix(req, res, next),
 );
 
 router.patch(
   "/permissions",
-  isAuth,
+
   hasPermission("USER_MGMT_PERMS", "can_edit"),
   (req, res, next) => permissionController.updatePermission(req, res, next),
 );

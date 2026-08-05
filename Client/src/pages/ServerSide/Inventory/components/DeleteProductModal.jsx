@@ -39,14 +39,14 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-slate-950 border border-slate-800 text-slate-100 sm:max-w-md">
+      <DialogContent className="bg-white border border-slate-200 text-slate-900 sm:max-w-md shadow-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-slate-100">
+          <DialogTitle className="text-xl font-semibold text-slate-950">
             Delete Product
           </DialogTitle>
-          <DialogDescription className="text-slate-400 text-sm">
+          <DialogDescription className="text-slate-500 text-sm">
             Are you sure you want to delete{" "}
-            <span className="font-medium text-slate-200">
+            <span className="font-medium text-slate-900">
               {data?.user_level}
             </span>
             ? You can restore this later if needed.
@@ -81,13 +81,14 @@ export async function loader({ params }) {
 
 export async function action({ params }) {
   try {
-    await deleteProduct(params.product_id);
+    const productId = params.product_id;
+    await deleteProduct(productId);
     await queryClient.invalidateQueries(["inventoryData"]);
 
     toast.error("Successfully Deleted", {
       className:
         "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
-      description: `This ${params.product_id} is successfully deleted!`,
+      description: `This ${productId} is successfully deleted!`,
       descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
       duration: 2000,
       icon: <Trash2 className="h-5 w-5 text-destructive" />,

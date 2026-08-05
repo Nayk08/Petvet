@@ -9,7 +9,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
         outline:
           "border-border bg-background shadow-xs hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -20,8 +20,8 @@ const buttonVariants = cva(
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
 
-        /* 🌟 NEW NEON VARIANT */
-        neon: "bg-neon/15 text-neon border border-neon/30 shadow-[0_0_15px_rgba(var(--color-neon),0.1)] hover:bg-neon hover:text-neon-foreground hover:shadow-[0_0_25px_rgba(var(--color-neon),0.55)] focus-visible:ring-neon/40",
+        /* 🌟 LIGHT-MODE NEON VARIANT */
+        neon: "bg-neon/10 text-neon-foreground border border-neon/40 shadow-[0_0_12px_rgba(var(--color-neon),0.2)] hover:bg-neon hover:text-neon-foreground hover:shadow-[0_0_20px_rgba(var(--color-neon),0.45)] focus-visible:ring-neon/40 dark:bg-neon/15 dark:text-neon dark:border-neon/30 dark:shadow-[0_0_15px_rgba(var(--color-neon),0.1)] dark:hover:bg-neon dark:hover:text-neon-foreground dark:hover:shadow-[0_0_25px_rgba(var(--color-neon),0.55)]",
       },
       size: {
         default:

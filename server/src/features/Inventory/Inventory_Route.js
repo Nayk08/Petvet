@@ -8,7 +8,7 @@ import {
   validateBody,
   validateParams,
   validateImage,
-  } from "../../middleware/validate.js";
+} from "../../middleware/validate.js";
 import {
   addProductSchema,
   updateProductSchema,
@@ -20,14 +20,14 @@ const router = express.Router();
 
 router.get(
   "/inventory",
-  isAuth,
+
   hasPermission("INVENTORY", "can_view"),
   (req, res) => inventoryController.getProducts(req, res),
 );
 
 router.get(
   "/inventory/:product_id",
-  isAuth,
+
   hasPermission("INVENTORY", "can_view", "can_edit"),
   validateParams(productIdParamSchema),
   (req, res) => inventoryController.getProductsById(req, res),
@@ -35,7 +35,7 @@ router.get(
 
 router.post(
   "/inventory/add-product",
-  isAuth,
+
   hasPermission("INVENTORY", "can_view", "can_create"),
   upload.single("product_image"),
   validateImage({ required: true }),
@@ -45,7 +45,7 @@ router.post(
 
 router.put(
   "/inventory/edit-product/:product_id",
-  isAuth,
+
   hasPermission("INVENTORY", "can_view", "can_edit"),
   upload.single("product_image"),
   validateImage({ required: false }),
@@ -56,7 +56,7 @@ router.put(
 
 router.put(
   "/inventory/delete-product/:product_id",
-  isAuth,
+
   hasPermission("INVENTORY", "can_view", "can_delete"),
   validateParams(productIdParamSchema),
   inventoryController.deleteProductById,

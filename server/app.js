@@ -7,6 +7,8 @@ import connectPgSimple from "connect-pg-simple";
 import cookieParser from "cookie-parser";
 import pool from "./src/config/db.js";
 import { generateCsrfToken } from "./src/config/csrf.js";
+import isAuth from "./src/middleware/is-auth.js";
+import { doubleCsrfProtection } from "./src/config/csrf.js";
 
 import commonRoutes from "./src/features/Common/Common_Route.js";
 import userRoutes from "./src/features/Authenticator/Users_Management/Users/Users_Route.js";
@@ -14,6 +16,8 @@ import userLevelRoutes from "./src/features/Authenticator/Users_Management/User_
 import AuthenticatorRoute from "./src/features/Authenticator/Authenticator_Route.js";
 import PermissionRoute from "./src/features/Authenticator/Users_Management/Permission/Permission_Route.js";
 import InventoryRoute from "./src/features/Inventory/Inventory_Route.js";
+import PaymentRoute from "./src/features/Payment/Payment_Route.js";
+
 const app = express();
 const PgSession = connectPgSimple(session);
 
@@ -69,18 +73,20 @@ app.get("/", (req, res) => {
 });
 
 // --- Routes ---
-app.use("/api/auth", AuthenticatorRoute);
-app.use("/api", commonRoutes);
-app.use("/api", userRoutes);
-app.use("/api", userLevelRoutes);
-app.use("/api", PermissionRoute);
-app.use("/api", InventoryRoute);
+app.use("/api/auth", AuthenticatorRoute); // stays public, has its own doubleCsrfProtection per-route already
+app.use("/api", isAuth, doubleCsrfProtection, commonRoutes);
+app.use("/api", isAuth, doubleCsrfProtection, userRoutes);
+app.use("/api", isAuth, doubleCsrfProtection, userLevelRoutes);
+app.use("/api", isAuth, doubleCsrfProtection, PermissionRoute);
+app.use("/api", isAuth, doubleCsrfProtection, InventoryRoute);
+app.use("/api", isAuth, doubleCsrfProtection, PaymentRoute);
+
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
 
-// // --- Centralized error handler (must be last) ---
+// --- Centralized error handler (must be last) ---
 // app.use((err, req, res, next) => {
 //   console.error(err);
 //   res

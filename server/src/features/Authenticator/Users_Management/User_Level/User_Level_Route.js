@@ -11,34 +11,34 @@ const userLevelController = new UserLevelController();
 
 router.get(
   "/usersLevel",
-  isAuth,
+   
   hasPermission("USER_MGMT_ROLES", "can_view"),
   (req, res) => userLevelController.getUserLevel(req, res),
 );
 
 router.get(
   "/usersLevel/:user_level_id",
-  isAuth,
+   
   hasPermission("USER_MGMT_ROLES", "can_view"),
   (req, res) => userLevelController.getUserLevelById(req, res),
 );
 router.post(
   "/addUserLevel",
-  isAuth,
+   
   hasPermission("USER_MGMT_ROLES", "can_create"),
   (req, res) => userLevelController.addUserLevel(req, res),
 );
 
 router.put(
   "/updateUserLevel/:user_level_id",
-  isAuth,
+   
   hasPermission("USER_MGMT_ROLES", "can_edit"),
   (req, res) => userLevelController.updateUserLevel(req, res),
 );
 
 router.put(
   "/deleteUserLevel/:user_level_id",
-  isAuth,
+   
   hasPermission("USER_MGMT_ROLES", "can_delete"),
   (req, res) => userLevelController.deleteUserLevel(req, res),
 );

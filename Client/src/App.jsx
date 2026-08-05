@@ -10,9 +10,8 @@ import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/ServerSide/Dashboard";
 import Inventory from "./pages/ServerSide/Inventory/Inventory.jsx";
 import Cart from "./pages/ServerSide/Inventory/Cart/Cart.jsx";
-import Payments from "./pages/ServerSide/Payment";
+
 import Appointments from "./pages/ServerSide/Appointment";
-import Settings from "./pages/ServerSide/Settings";
 import Grooming_Appointment from "./pages/ServerSide/Grooming_Appointment.jsx";
 import Consultation_Appointment from "./pages/ServerSide/Consultation_Appointment.jsx";
 import LandingPage from "./pages/LandingPage";
@@ -52,7 +51,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <Layout />,
     hydrateFallbackElement: (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 text-sm">
         Loading application...
       </div>
     ),
@@ -94,11 +93,58 @@ const router = createBrowserRouter([
         path: "cart",
         element: <Cart />,
         loader: requirePermission("CART"),
+        children: [
+          {
+            path: "view-cart",
+            lazy: () =>
+              import("../src/pages/ServerSide/Inventory/Cart/Components/CartModal.jsx"),
+          },
+        ],
       },
       {
         path: "payments",
-        element: <Payments />,
+        lazy: () => import("./pages/ServerSide/Payment/Payment.jsx"),
         loader: requirePermission("PAYMENTS"),
+        children: [
+          {
+            path: "process-payment/:payment_id",
+            lazy: () =>
+              import("./pages/ServerSide/Payment/Components/PaymentProcessModal.jsx"),
+            loader: requirePermission("PAYMENTS", "can_view"),
+          },
+          {
+            path: "view-payment/:payment_id",
+            lazy: () =>
+              import("./pages/ServerSide/Payment/Components/viewModal.jsx"),
+            loader: requirePermission("PAYMENTS", "can_view"),
+          },
+
+          {
+            path: "delete-payment/:payment_id",
+            lazy: async () => {
+              const mod = await import(
+                "./pages/ServerSide/Payment/Components/DeletePayment.jsx"
+              );
+              const permissionLoader = requirePermission(
+                "PAYMENTS",
+                "can_delete",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await permissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await permissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
+          },
+          {},
+        ],
       },
       {
         path: "appointments",

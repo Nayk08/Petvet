@@ -1,3 +1,37 @@
+import React from "react";
+
+const StatusBadge = ({ label, variant = "default" }) => {
+  const variantStyles = {
+    active:
+      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+    inactive:
+      "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+    high: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+    average:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+    low: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800",
+    out: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+    pending:
+      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+    completed:
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+    cancelled:
+      "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+    default:
+      "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+  };
+
+  return (
+    <span
+      className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full border transition-colors ${
+        variantStyles[variant] || variantStyles.default
+      }`}
+    >
+      {label}
+    </span>
+  );
+};
+
 export const usersColumns = [
   { key: "user_name", label: "NAME" },
   { key: "user_email", label: "EMAIL" },
@@ -9,23 +43,21 @@ export const usersColumns = [
       { key: "active", value: "true", label: "Active" },
       { key: "inactive", value: "false", label: "Inactive" },
     ],
-    render: (value) =>
-      value === true || value === "true" ? (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-500 text-green-400 bg-green-500/10">
-          Active
-        </span>
-      ) : (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-slate-600 text-slate-400 bg-slate-800/50">
-          Inactive
-        </span>
-      ),
+    render: (value) => {
+      const isActive = value === true || value === "true";
+      return (
+        <StatusBadge
+          label={isActive ? "Active" : "Inactive"}
+          variant={isActive ? "active" : "inactive"}
+        />
+      );
+    },
   },
 ];
 
 export const usersLevelColumns = [
   { key: "user_level", label: "ROLE" },
   { key: "description", label: "DESCRIPTION" },
-
   {
     key: "is_active",
     label: "STATUS",
@@ -33,16 +65,15 @@ export const usersLevelColumns = [
       { key: "active", value: "true", label: "Active" },
       { key: "inactive", value: "false", label: "Inactive" },
     ],
-    render: (value) =>
-      value === true || value === "true" ? (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-500 text-green-400 bg-green-500/10">
-          Active
-        </span>
-      ) : (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-slate-600 text-slate-400 bg-slate-800/50">
-          Inactive
-        </span>
-      ),
+    render: (value) => {
+      const isActive = value === true || value === "true";
+      return (
+        <StatusBadge
+          label={isActive ? "Active" : "Inactive"}
+          variant={isActive ? "active" : "inactive"}
+        />
+      );
+    },
   },
 ];
 
@@ -57,39 +88,49 @@ export const InventoryColumns = [
         <img
           src={value}
           alt="Product"
-          className="w-10 h-10 object-cover rounded-md border border-[#1e253a]"
+          className="w-10 h-10 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm"
         />
       ) : (
-        <span className="text-slate-500 italic text-xs">No image</span>
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          No image
+        </span>
       ),
   },
   { key: "product_quantity", label: "PRODUCT QUANTITY" },
-  { key: "product_price", label: "PRODUCT PRICE" },
+  {
+    key: "product_price",
+    label: "PRODUCT PRICE",
+    render: (value) =>
+      value != null ? (
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      ),
+  },
   {
     key: "status_name",
     label: "Status",
     multiSelect: true,
     filterOptions: [
-      { key: "high", value: "High stock", label: "High stock" },
-      { key: "average", value: "Average stock", label: "Average stock" },
+      { key: "high", value: "High Stock", label: "High Stock" },
+      { key: "average", value: "Average Stock", label: "Average Stock" },
       { key: "low", value: "Low Stock", label: "Low Stock" },
       { key: "out", value: "Out of Stock", label: "Out of Stock" },
     ],
     render: (value) => {
-      const styles = {
-        "High stock": "border-green-600 text-green-400 bg-green-800/50",
-        "Average stock": "border-blue-500 text-blue-400 bg-blue-500/10",
-        "Low Stock": "border-yellow-500 text-yellow-400 bg-yellow-500/10",
-        "Out of Stock": "border-red-500 text-red-400 bg-red-500/10",
+      const variantMap = {
+        "High Stock": "high",
+        "Average Stock": "average",
+        "Low Stock": "low",
+        "Out of Stock": "out",
       };
       return (
-        <span
-          className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
-            styles[value] ?? "border-slate-600 text-slate-400 bg-slate-800/50"
-          }`}
-        >
-          {value ?? "Unknown"}
-        </span>
+        <StatusBadge
+          label={value ?? "Unknown"}
+          variant={variantMap[value] || "default"}
+        />
       );
     },
   },
@@ -100,15 +141,73 @@ export const InventoryColumns = [
       { key: "expired", value: "true", label: "Expired" },
       { key: "not_expired", value: "false", label: "Not Expired" },
     ],
-    render: (value) =>
-      value === true || value === "true" ? (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-red-500 text-red-400 bg-red-500/10">
-          Expired
-        </span>
-      ) : (
-        <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-green-600 text-green-400 bg-green-800/50">
-          Not Expired
-        </span>
-      ),
+    render: (value) => {
+      const isExpired = value === true || value === "true";
+      return (
+        <StatusBadge
+          label={isExpired ? "Expired" : "Not Expired"}
+          variant={isExpired ? "out" : "active"}
+        />
+      );
+    },
   },
 ];
+
+export const PaymentColumns = [
+  { key: "payment_id", label: "PAYMENT ID" },
+  {
+    key: "date_created",
+    label: "PAYMENT DATE",
+    render: (value) => (
+      <span className="text-slate-700 dark:text-slate-300">
+        {formatDate(value)}
+      </span>
+    ),
+  },
+  {
+    key: "total_amount",
+    label: "PAYMENT AMOUNT",
+    align: "right",
+    render: (value) =>
+      value != null ? (
+        <span className="font-semibold text-slate-900 dark:text-slate-100">
+          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      ),
+  },
+  {
+    key: "payment_status_name",
+    label: "PAYMENT STATUS",
+    align: "right",
+    filterOptions: [
+      { key: "pending", value: "Pending", label: "Pending" },
+      { key: "completed", value: "Completed", label: "Completed" },
+      { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+    ],
+    render: (value) => {
+      const variantMap = {
+        Pending: "pending",
+        Completed: "completed",
+        Cancelled: "cancelled",
+      };
+      return (
+        <StatusBadge
+          label={value ?? "Unknown"}
+          variant={variantMap[value] || "default"}
+        />
+      );
+    },
+  },
+];
+
+export function formatDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}

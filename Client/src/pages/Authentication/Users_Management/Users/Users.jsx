@@ -62,7 +62,7 @@ export function Component() {
     );
   }, [CategoryUserLevel]);
 
-  const { data, isPending, isError, error, isPlaceholderData } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["usersdata", page, limit, debouncedSearch, filters],
     queryFn: ({ signal }) =>
       fetchUsers({ page, limit, search: debouncedSearch, filters, signal }),
@@ -72,14 +72,14 @@ export function Component() {
 
   if (isPending)
     return (
-      <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
+      <div className="flex items-center justify-center py-20 text-muted-foreground text-sm font-medium">
         Loading users...
       </div>
     );
 
   if (isError)
     return (
-      <div className="flex items-center justify-center py-20 text-rose-400 text-sm">
+      <div className="flex items-center justify-center py-20 text-destructive text-sm font-medium">
         Error: {error.message}
       </div>
     );

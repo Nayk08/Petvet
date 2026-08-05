@@ -58,22 +58,6 @@ export function Component() {
     }
   }, [data]);
 
-  // const {
-  //   mutate,
-  //   isPending: actionPending,
-  //   isError: isActionError,
-  //   error: actionError,
-  // } = useMutation({
-  //   mutationFn: (formData) => {
-  //     isEditMode
-  //       ? updateProduct(params.product_id, formData)
-  //       : addProduct(formData);
-  //   },
-  //   onMutate: (data) => {
-  //     queryClient.setQueryData(["product", params.product_id]);
-  //   },
-  // });
-
   function handleFileChange(event) {
     const file = event.target.files?.[0];
     if (file) {
@@ -95,12 +79,12 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-slate-950 border border-slate-900 text-slate-100 sm:max-w-md shadow-2xl rounded-xl overflow-hidden p-6">
+      <DialogContent className="bg-white border border-slate-200 text-slate-900 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6">
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-xl font-semibold tracking-tight text-slate-50">
+          <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950">
             {isEditMode ? "Edit Product" : "Add New Product"}
           </DialogTitle>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             {isEditMode
               ? "Update your product details and specifications."
               : "Fill in the details below to add an item to your inventory."}
@@ -110,7 +94,7 @@ export function Component() {
         {isPending && isEditMode ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-3">
             <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-400">Loading product data...</p>
+            <p className="text-xs text-slate-500">Loading product data...</p>
           </div>
         ) : (
           <form
@@ -120,11 +104,11 @@ export function Component() {
           >
             {/* Image Upload Area */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                 Product Image
               </label>
-              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 transition-colors relative group">
-                <div className="w-16 h-16 shrink-0 bg-slate-900 border border-slate-800 rounded-md overflow-hidden flex items-center justify-center">
+              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors relative group">
+                <div className="w-16 h-16 shrink-0 bg-white border border-slate-200 rounded-md overflow-hidden flex items-center justify-center">
                   {imagePreview ? (
                     <img
                       src={imagePreview}
@@ -133,7 +117,7 @@ export function Component() {
                     />
                   ) : (
                     <svg
-                      className="w-6 h-6 text-slate-600"
+                      className="w-6 h-6 text-slate-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -148,7 +132,7 @@ export function Component() {
                   )}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-medium text-slate-300 group-hover:text-indigo-400 transition-colors">
+                  <span className="text-xs font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">
                     {imagePreview
                       ? "Change image file"
                       : "Upload product image"}
@@ -169,7 +153,7 @@ export function Component() {
 
             {/* Product Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                 Product Name
               </label>
               <Input
@@ -178,14 +162,14 @@ export function Component() {
                 autoComplete="off"
                 required
                 defaultValue={data?.product_name}
-                className="bg-slate-900 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 h-10 rounded-lg"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 h-10 rounded-lg"
               />
             </div>
 
             {/* Split Row for Quantity & Price */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                   Quantity
                 </label>
                 <Input
@@ -195,12 +179,12 @@ export function Component() {
                   required
                   placeholder="0"
                   defaultValue={data?.product_quantity}
-                  className="bg-slate-900 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 h-10 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                   Price ($)
                 </label>
                 <Input
@@ -211,14 +195,14 @@ export function Component() {
                   required
                   placeholder="0.00"
                   defaultValue={data?.product_price}
-                  className="bg-slate-900 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 h-10 rounded-lg"
                 />
               </div>
             </div>
 
             {/* Expiry Date */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                 Expiry Date
               </label>
               <Input
@@ -229,7 +213,7 @@ export function Component() {
                     ? data.product_expiry_date.split("T")[0]
                     : ""
                 }
-                className="bg-slate-900 border-slate-800 text-slate-100 focus-visible:ring-indigo-500 h-10 rounded-lg [color-scheme:dark]"
+                className="bg-white border-slate-200 text-slate-900 focus-visible:ring-indigo-500 h-10 rounded-lg [color-scheme:light]"
               />
             </div>
 
@@ -268,7 +252,7 @@ export function Component() {
                   type="button"
                   variant="ghost"
                   onClick={closeModal}
-                  className="text-slate-400 hover:text-slate-200 hover:bg-slate-900 h-10 rounded-lg"
+                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 h-10 rounded-lg"
                 >
                   Cancel
                 </Button>
@@ -277,7 +261,7 @@ export function Component() {
               <Button
                 type="submit"
                 disabled={state === "submitting"}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-slate-900 disabled:text-slate-500 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-lg shadow-indigo-600/10"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-slate-100 disabled:text-slate-400 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-sm"
               >
                 {state === "submitting" ? (
                   <div className="flex items-center gap-2">
