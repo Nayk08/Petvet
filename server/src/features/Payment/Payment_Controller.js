@@ -1,4 +1,4 @@
-import PaymentService from "./payment_Service.js";
+import PaymentService from "./Payment_Service.js";
 
 const paymentService = new PaymentService();
 
