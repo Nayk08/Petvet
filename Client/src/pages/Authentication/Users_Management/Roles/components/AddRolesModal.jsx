@@ -25,7 +25,7 @@ export function Component() {
   const submit = useSubmit();
 
   const closeModal = () => {
-    navigate("..");
+    navigate(`..${location.search}`);
   };
 
   function handleSubmit(event) {

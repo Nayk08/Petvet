@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, ImageIcon, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,14 +36,13 @@ export function Component() {
   const isActionError = Boolean(actionData?.error);
   const actionError = actionData?.error;
 
-  // Track image preview state for a better UX
   const [imagePreview, setImagePreview] = useState(null);
 
   function closeModal() {
-    navigate("..");
+    navigate(`..${location.search}`);
   }
 
-  const { data, isPending, isError, error } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ["product", params.product_id],
     queryFn: ({ signal }) =>
       fetchInventoryById({ product_id: params.product_id, signal }),
@@ -51,7 +50,6 @@ export function Component() {
     enabled: isEditMode,
   });
 
-  // Set initial image preview if editing
   useEffect(() => {
     if (data?.product_image) {
       setImagePreview(data.product_image);
@@ -79,12 +77,12 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white border border-slate-200 text-slate-900 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6">
+      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6 transition-colors duration-200">
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950">
+          <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
             {isEditMode ? "Edit Product" : "Add New Product"}
           </DialogTitle>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isEditMode
               ? "Update your product details and specifications."
               : "Fill in the details below to add an item to your inventory."}
@@ -93,8 +91,10 @@ export function Component() {
 
         {isPending && isEditMode ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-3">
-            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-500">Loading product data...</p>
+            <div className="w-6 h-6 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Loading product data...
+            </p>
           </div>
         ) : (
           <form
@@ -104,11 +104,11 @@ export function Component() {
           >
             {/* Image Upload Area */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                 Product Image
               </label>
-              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors relative group">
-                <div className="w-16 h-16 shrink-0 bg-white border border-slate-200 rounded-md overflow-hidden flex items-center justify-center">
+              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative group">
+                <div className="w-16 h-16 shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden flex items-center justify-center">
                   {imagePreview ? (
                     <img
                       src={imagePreview}
@@ -116,28 +116,16 @@ export function Component() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <svg
-                      className="w-6 h-6 text-slate-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
+                    <ImageIcon className="w-6 h-6 text-slate-400 dark:text-slate-500" />
                   )}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {imagePreview
                       ? "Change image file"
                       : "Upload product image"}
                   </span>
-                  <span className="text-[11px] text-slate-500 mt-0.5">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     PNG, JPG or WEBP up to 5MB
                   </span>
                 </div>
@@ -153,7 +141,7 @@ export function Component() {
 
             {/* Product Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                 Product Name
               </label>
               <Input
@@ -162,14 +150,14 @@ export function Component() {
                 autoComplete="off"
                 required
                 defaultValue={data?.product_name}
-                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 h-10 rounded-lg"
+                className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 focus-visible:border-indigo-500 dark:focus-visible:border-indigo-400 h-10 rounded-lg"
               />
             </div>
 
             {/* Split Row for Quantity & Price */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Quantity
                 </label>
                 <Input
@@ -179,12 +167,12 @@ export function Component() {
                   required
                   placeholder="0"
                   defaultValue={data?.product_quantity}
-                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                  className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Price ($)
                 </label>
                 <Input
@@ -195,14 +183,14 @@ export function Component() {
                   required
                   placeholder="0.00"
                   defaultValue={data?.product_price}
-                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                  className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg"
                 />
               </div>
             </div>
 
             {/* Expiry Date */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                 Expiry Date
               </label>
               <Input
@@ -213,26 +201,14 @@ export function Component() {
                     ? data.product_expiry_date.split("T")[0]
                     : ""
                 }
-                className="bg-white border-slate-200 text-slate-900 focus-visible:ring-indigo-500 h-10 rounded-lg [color-scheme:light]"
+                className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
 
             {/* Error Message Section */}
             {isActionError && (
-              <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 text-xs leading-relaxed">
-                <svg
-                  className="w-4 h-4 shrink-0 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
+              <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 text-xs leading-relaxed">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
                 <div className="flex-1">
                   <span className="font-semibold block mb-0.5">
                     Failed to save product
@@ -252,7 +228,7 @@ export function Component() {
                   type="button"
                   variant="ghost"
                   onClick={closeModal}
-                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 h-10 rounded-lg"
+                  className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 h-10 rounded-lg"
                 >
                   Cancel
                 </Button>
@@ -261,7 +237,7 @@ export function Component() {
               <Button
                 type="submit"
                 disabled={state === "submitting"}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-slate-100 disabled:text-slate-400 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-sm"
+                className="bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-sm"
               >
                 {state === "submitting" ? (
                   <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import pool from "./src/config/db.js";
 import { generateCsrfToken } from "./src/config/csrf.js";
 import isAuth from "./src/middleware/is-auth.js";
 import { doubleCsrfProtection } from "./src/config/csrf.js";
+import authLimiter from "./src/middleware/rate-Limiter.js";
 
 import commonRoutes from "./src/features/Common/Common_Route.js";
 import userRoutes from "./src/features/Authenticator/Users_Management/Users/Users_Route.js";
@@ -17,6 +18,7 @@ import AuthenticatorRoute from "./src/features/Authenticator/Authenticator_Route
 import PermissionRoute from "./src/features/Authenticator/Users_Management/Permission/Permission_Route.js";
 import InventoryRoute from "./src/features/Inventory/Inventory_Route.js";
 import PaymentRoute from "./src/features/Payment/Payment_Route.js";
+import ClientRecordsRoute from "./src/features/Client_Records/Client_Records_Route.js";
 
 const app = express();
 const PgSession = connectPgSimple(session);
@@ -73,13 +75,15 @@ app.get("/", (req, res) => {
 });
 
 // --- Routes ---
-app.use("/api/auth", AuthenticatorRoute); // stays public, has its own doubleCsrfProtection per-route already
+app.use("/api/auth", authLimiter, AuthenticatorRoute); // stays public, has its own doubleCsrfProtection per-route already
 app.use("/api", isAuth, doubleCsrfProtection, commonRoutes);
 app.use("/api", isAuth, doubleCsrfProtection, userRoutes);
 app.use("/api", isAuth, doubleCsrfProtection, userLevelRoutes);
 app.use("/api", isAuth, doubleCsrfProtection, PermissionRoute);
 app.use("/api", isAuth, doubleCsrfProtection, InventoryRoute);
+
 app.use("/api", isAuth, doubleCsrfProtection, PaymentRoute);
+app.use("/api", isAuth, doubleCsrfProtection, ClientRecordsRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {
@@ -89,9 +93,9 @@ app.use((req, res) => {
 // --- Centralized error handler (must be last) ---
 // app.use((err, req, res, next) => {
 //   console.error(err);
-//   res
-//     .status(err.status || 500)
-//     .json({ message: err.message || "Server error" });
+//   const status = err.status || 500;
+//   const message = status < 500 ? err.message : "Something went wrong";
+//   res.status(status).json({ message });
 // });
 
 export default app;

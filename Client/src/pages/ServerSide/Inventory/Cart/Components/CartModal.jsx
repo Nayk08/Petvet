@@ -107,7 +107,7 @@ export function Component() {
   }, [startFetcher.state, startFetcher.data]);
 
   const closeModal = () => {
-    navigate(".."); // Go back to the main items catalog
+    navigate(`..${location.search}`); // Go back to the main items catalog
   };
 
   // Clamping to [1, product_quantity] lives in the store, so these

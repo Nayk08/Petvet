@@ -4,7 +4,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { requireAuth, requirePermission } from "./utils/routeGuards.js";
+import { loader, requireAuth, requirePermission } from "./utils/routeGuards.js";
 import Layout from "./components/layout/Layout";
 import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/ServerSide/Dashboard";
@@ -15,7 +15,6 @@ import Appointments from "./pages/ServerSide/Appointment";
 import Grooming_Appointment from "./pages/ServerSide/Grooming_Appointment.jsx";
 import Consultation_Appointment from "./pages/ServerSide/Consultation_Appointment.jsx";
 import LandingPage from "./pages/LandingPage";
-import Client_Record from "./pages/ServerSide/Clients_Record.jsx";
 import { loader as LandingLoader } from "../src/pages/LandingPage.jsx";
 import {
   action as loginAction,
@@ -122,9 +121,8 @@ const router = createBrowserRouter([
           {
             path: "delete-payment/:payment_id",
             lazy: async () => {
-              const mod = await import(
-                "./pages/ServerSide/Payment/Components/DeletePayment.jsx"
-              );
+              const mod =
+                await import("./pages/ServerSide/Payment/Components/DeletePayment.jsx");
               const permissionLoader = requirePermission(
                 "PAYMENTS",
                 "can_delete",
@@ -162,9 +160,56 @@ const router = createBrowserRouter([
         loader: requirePermission("C_APPOINTMENT"),
       },
       {
-        path: "client-pet-record",
-        element: <Client_Record />,
+        path: "client-record",
         loader: requirePermission("C_P_RECORDS"),
+        lazy: () =>
+          import("./pages/ServerSide/Client_Records/Clients_Record.jsx"),
+        children: [
+          {
+            path: "add-client",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx"),
+          },
+          {
+            path: "edit-client/:client_id",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx"),
+          },
+          {
+            path: "delete-client/:client_id",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/components/deleteClientModal.jsx"),
+          },
+        ],
+      },
+      {
+        path: "client-pet-record/:client_id",
+        loader: requirePermission("C_P_RECORDS"),
+        lazy: () =>
+          import("./pages/ServerSide/Client_Records/Pet_Records/Pets_Record.jsx"),
+        children: [
+          {
+            path: "add-pet",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx"),
+          },
+          {
+            path: "pets/:pets_id/edit-pet",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx"),
+          },
+          {
+            path: "pets/:pets_id/delete-pet",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx"),
+          },
+        ],
       },
 
       // NOTE: Settings is imported but has no route below. Either wire it up
@@ -203,15 +248,8 @@ const router = createBrowserRouter([
               {
                 path: "delete-user/:user_id",
                 loader: requirePermission("USER_MGMT_USERS", "can_delete"),
-                lazy: async () => {
-                  const mod =
-                    await import("./pages/Authentication/Users_Management/Users/components/DeleteUserModal.jsx");
-                  return {
-                    ...mod,
-                    loader: mod.deleteUserLoader,
-                    action: mod.deleteUserAction,
-                  };
-                },
+                lazy: async () =>
+                  import("@/pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx"),
               },
             ],
           },

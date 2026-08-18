@@ -202,6 +202,24 @@ export const PaymentColumns = [
   },
 ];
 
+export const ClientRecordsColumns = [
+  { key: "client_id", label: "CLIENT ID" },
+  { key: "name", label: "CLIENT NAME" },
+  { key: "mobile_no", label: "CONTACT NUMBER" },
+  { key: "email", label: "EMAIL" },
+];
+
+export const PetRecordsColumns = [
+  { key: "pet_name", label: "PET NAME" },
+  { key: "date_of_birth", label: "BIRTH DATE" },
+  { key: "weight_kg", label: "WEIGHT" },
+  { key: "breed", label: "BREED" },
+  { key: "microchip_number", label: "MICROCHIP NUMBER" },
+  { key: "is_spayed_neutered", label: "SPAY/NEUTERED" },
+  { key: "species_name", label: "SPECIES" },
+  { key: "gender_name", label: "GENDER" },
+];
+
 export function formatDate(value) {
   if (!value) return "";
   const d = new Date(value);

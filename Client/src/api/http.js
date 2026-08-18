@@ -137,7 +137,7 @@ export async function fetchUserById(id, { signal } = {}) {
 
 export async function addNewUser(user) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/addUser`, {
+  const response = await fetch(`${baseUrl}/users/add-user`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -148,7 +148,7 @@ export async function addNewUser(user) {
 
 export async function updateUser(id, user) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/updateUser/${id}`, {
+  const response = await fetch(`${baseUrl}/users/${id}/edit-user`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -159,8 +159,8 @@ export async function updateUser(id, user) {
 
 export async function deleteUser(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/deleteUser/${id}`, {
-    method: "PUT",
+  const response = await fetch(`${baseUrl}/users/${id}/delete-user`, {
+    method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
   });
@@ -185,18 +185,20 @@ export async function fetchUserLevel({
     page: effectivePage,
     limit: effectiveLimit,
     ...(search && { search }),
-    ...Object.fromEntries(
-      Object.entries(filters).filter(([, v]) => v), // drop empty filter values
-    ),
   });
 
-  const response = await fetch(
-    `${baseUrl}/usersLevel?page=${effectivePage}&limit=${effectiveLimit}`,
-    {
-      signal,
-      credentials: "include",
-    },
-  );
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+
+  const response = await fetch(`${baseUrl}/usersLevel?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
   return handleResponse(response, "Failed to fetch user levels");
 }
 
@@ -210,7 +212,7 @@ export async function fetchUserLevelById(id, { signal } = {}) {
 
 export async function addNewUserLevel(userlevel, description) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/addUserLevel`, {
+  const response = await fetch(`${baseUrl}/usersLevel/add-user-level`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -221,9 +223,12 @@ export async function addNewUserLevel(userlevel, description) {
 
 export async function updateUserLevel({ id, userLevel, description }) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/updateUserLevel/${id}`, {
+  const response = await fetch(`${baseUrl}/usersLevel/${id}/edit-user-level`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
     credentials: "include",
     body: JSON.stringify({ userLevel, description }),
   });
@@ -232,12 +237,14 @@ export async function updateUserLevel({ id, userLevel, description }) {
 
 export async function deleteUserLevel(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/deleteUserLevel/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
-    credentials: "include",
-    body: JSON.stringify({ id }),
-  });
+  const response = await fetch(
+    `${baseUrl}/usersLevel/${id}/delete-user-level`,
+    {
+      method: "DELETE",
+      headers: { "x-csrf-token": csrfToken },
+      credentials: "include",
+    },
+  );
   return handleResponse(response, "Failed to delete user level");
 }
 
@@ -325,28 +332,28 @@ export async function addProduct(formData) {
     body: formData,
     credentials: "include",
   });
-  return handleResponse(response, "failed to add Products");
+  return handleResponse(response, "Failed to add product");
 }
 
 export async function updateProduct(id, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/edit-product/${id}`, {
+  const response = await fetch(`${baseUrl}/inventory/${id}/edit-product`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     body: formData,
     credentials: "include",
   });
-  return handleResponse(response, "failed to update Products");
+  return handleResponse(response, "Failed to update product");
 }
 
 export async function deleteProduct(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/delete-product/${id}`, {
-    method: "PUT",
+  const response = await fetch(`${baseUrl}/inventory/${id}/delete-product`, {
+    method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
   });
-  return handleResponse(response, "failed to delete Products");
+  return handleResponse(response, "Failed to delete product");
 }
 
 // ─────────────────────────────
@@ -422,7 +429,6 @@ export async function fetchPaymentById(payment_id, { signal } = {}) {
   return handleResponse(response, "Failed to fetch payment");
 }
 
-// http.js — add this alongside fetchPaymentById
 export async function fetchCartItemsByPaymentId(payment_id, { signal } = {}) {
   const response = await fetch(`${baseUrl}/payments/${payment_id}/cart-items`, {
     signal,
@@ -439,4 +445,181 @@ export async function deletePayment(payment_id) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to cancel payment");
+}
+
+// ─────────────────────────────
+// Client Records
+// ─────────────────────────────
+
+export async function fetchClientRecords({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+
+  const response = await fetch(`${baseUrl}/client?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch Client Records");
+}
+
+export async function fetchClientById({ client_id, signal }) {
+  const response = await fetch(`${baseUrl}/client/${client_id}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch client");
+}
+
+export async function addClient(formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/add-client`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to add client");
+}
+
+export async function editClient(id, formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/${id}/edit-client`, {
+    method: "PUT",
+    headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to update client");
+}
+
+export async function deleteClient(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/${id}/delete-client`, {
+    method: "PUT",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to delete client");
+}
+
+// ─────────────────────────────
+// Pet Records
+// ─────────────────────────────
+
+export async function fetchPetRecordsByClientId(client_id, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/client/${client_id}/pets`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch pet records");
+}
+
+export async function addPet(
+  pets_name,
+  breed,
+  is_spayed_neutered,
+  date_of_birth,
+  weight_kg,
+  microchip_number,
+  pet_status_id,
+  species_id,
+  gender_id,
+  client_id,
+) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/${client_id}/pets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    body: JSON.stringify({
+      pets_name,
+      breed,
+      is_spayed_neutered,
+      date_of_birth,
+      weight_kg,
+      microchip_number,
+      pet_status_id,
+      species_id,
+      gender_id,
+    }),
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to add pet");
+}
+
+export async function fetchPetById(pets_id, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/pets/${pets_id}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch pet");
+}
+
+export async function editPet(pets_id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/pets/${pets_id}/edit-pet`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to update pet");
+}
+
+export async function deletePet(pets_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/pets/${pets_id}/delete-pet`, {
+    method: "PUT",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to delete pet");
+}
+export async function selectSpecies({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/species`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch species list");
+}
+
+export async function selectGender({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/gender`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch gender list");
+}
+
+export async function selectPetStatus({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/pet-status`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch pet status list");
 }

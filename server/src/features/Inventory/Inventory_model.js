@@ -18,7 +18,7 @@ export default class InventoryModel {
         if (valueList.length === 0) continue;
 
         values.push(valueList);
-        conditions.push(`${key} = ANY($${values.length})`);
+        conditions.push(`${key} = ANY($${values.length})`); 
       }
 
       if (search && search.trim()) {

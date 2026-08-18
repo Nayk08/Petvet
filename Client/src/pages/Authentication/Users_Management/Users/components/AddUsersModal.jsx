@@ -79,7 +79,7 @@ export function Component() {
   }, [loaderUser]);
 
   const closeModal = () => {
-    navigate("..");
+    navigate(`..${location.search}`);
   };
 
   useEffect(() => {

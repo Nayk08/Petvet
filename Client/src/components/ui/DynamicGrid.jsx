@@ -9,6 +9,7 @@ import {
   X,
   Pencil,
   Trash2,
+  DoorOpen,
 } from "lucide-react";
 import {
   Table,
@@ -32,10 +33,12 @@ export default function DynamicGrid({
   onDelete,
   onView,
   onProcess,
+  onPet,
   canEdit = () => true,
   canView = () => true,
   canProcess = () => true,
   canDelete = () => true,
+  canPet = () => true,
   limit,
   onLimitChange,
   limitOptions = [10, 20, 50, "all"],
@@ -127,6 +130,17 @@ export default function DynamicGrid({
       });
     }
 
+    if (onPet) {
+      builtIn.push({
+        label: "Pet",
+        icon: DoorOpen,
+        className:
+          "text-pink-600 hover:text-pink-700 hover:bg-greeb-50 dark:text-green-400 dark:hover:bg-green-950/50",
+        onClick: (row) => onPet(row),
+        show: canPet,
+      });
+    }
+
     return [...builtIn, ...actions];
   }, [
     onEdit,
@@ -139,6 +153,8 @@ export default function DynamicGrid({
     canProcess,
     canDelete,
     handleDelete,
+    onPet,
+    canPet,
   ]);
 
   const checkActionVisible = (action, row) => {

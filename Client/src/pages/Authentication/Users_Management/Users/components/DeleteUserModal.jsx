@@ -36,7 +36,7 @@ export function Component() {
   const isDeleting = navigation.state === "submitting";
 
   const closeModal = () => {
-    navigate("..");
+    navigate(`..${location.search}`);
   };
 
   useEffect(() => {

@@ -30,7 +30,7 @@ export function Component() {
   const data = useLoaderData();
 
   const closeModal = () => {
-    navigate("..");
+    navigate(`..${location.search}`);
   };
 
   function handleDelete() {
@@ -39,14 +39,14 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white border border-slate-200 text-slate-900 sm:max-w-md shadow-xl">
+      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl transition-colors">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-slate-950">
+          <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-50">
             Delete Product
           </DialogTitle>
-          <DialogDescription className="text-slate-500 text-sm">
+          <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
             Are you sure you want to delete{" "}
-            <span className="font-medium text-slate-900">
+            <span className="font-medium text-slate-900 dark:text-slate-200">
               {data?.user_level}
             </span>
             ? You can restore this later if needed.
@@ -54,7 +54,12 @@ export function Component() {
         </DialogHeader>
 
         <DialogFooter className="pt-2">
-          <Button type="button" variant="ghost" onClick={closeModal}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={closeModal}
+            className="text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
             No, cancel
           </Button>
           <Button

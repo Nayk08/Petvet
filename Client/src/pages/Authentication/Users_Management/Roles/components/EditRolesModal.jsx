@@ -41,7 +41,7 @@ export function Component() {
   });
 
   const closeModal = () => {
-    navigate("..");
+    navigate(`..${location.search}`);
   };
 
   function handleSubmit(event) {

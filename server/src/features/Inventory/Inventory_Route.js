@@ -1,6 +1,5 @@
 import express from "express";
 import InventoryController from "./Inventory_Controller.js";
-import isAuth from "../../middleware/is-auth.js";
 import hasPermission from "../../middleware/has-permission.js";
 import upload from "../../middleware/upload.js";
 
@@ -18,16 +17,12 @@ import {
 const inventoryController = new InventoryController();
 const router = express.Router();
 
-router.get(
-  "/inventory",
-
-  hasPermission("INVENTORY", "can_view"),
-  (req, res) => inventoryController.getProducts(req, res),
+router.get("/inventory", hasPermission("INVENTORY", "can_view"), (req, res) =>
+  inventoryController.getProducts(req, res),
 );
 
 router.get(
   "/inventory/:product_id",
-
   hasPermission("INVENTORY", "can_view", "can_edit"),
   validateParams(productIdParamSchema),
   (req, res) => inventoryController.getProductsById(req, res),
@@ -35,31 +30,28 @@ router.get(
 
 router.post(
   "/inventory/add-product",
-
   hasPermission("INVENTORY", "can_view", "can_create"),
   upload.single("product_image"),
   validateImage({ required: true }),
   validateBody(addProductSchema),
-  inventoryController.addProduct,
+  (req, res) => inventoryController.addProduct(req, res),
 );
 
 router.put(
-  "/inventory/edit-product/:product_id",
-
+  "/inventory/:product_id/edit-product",
   hasPermission("INVENTORY", "can_view", "can_edit"),
   upload.single("product_image"),
   validateImage({ required: false }),
   validateParams(productIdParamSchema),
   validateBody(updateProductSchema),
-  inventoryController.updateProduct,
+  (req, res) => inventoryController.updateProduct(req, res),
 );
 
-router.put(
-  "/inventory/delete-product/:product_id",
-
+router.delete(
+  "/inventory/:product_id/delete-product",
   hasPermission("INVENTORY", "can_view", "can_delete"),
   validateParams(productIdParamSchema),
-  inventoryController.deleteProductById,
+  (req, res) => inventoryController.deleteProductById(req, res),
 );
 
 export default router;

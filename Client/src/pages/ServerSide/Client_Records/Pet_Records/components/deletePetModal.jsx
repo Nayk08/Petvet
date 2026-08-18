@@ -7,12 +7,8 @@ import {
 } from "react-router-dom";
 import { toast } from "sonner";
 import { Trash2, XCircle } from "lucide-react";
-import {
-  deleteUserLevel,
-  queryClient,
-  fetchUserLevelById,
-} from "../../../../../api/http.js";
 
+import { queryClient, deletePet, fetchPetById } from "@/api/http.js";
 import {
   Dialog,
   DialogContent,
@@ -34,19 +30,19 @@ export function Component() {
   };
 
   function handleDelete() {
-    submit(null, { method: "PATCH" });
+    submit(null, { method: "PUT" });
   }
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-2xl transition-colors">
+      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl transition-colors">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
-            Delete Role
+          <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-50">
+            Delete Pet
           </DialogTitle>
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
             Are you sure you want to delete{" "}
-            <span className="font-semibold text-slate-900 dark:text-slate-200">
+            <span className="font-medium text-slate-900 dark:text-slate-200">
               {data?.user_level}
             </span>
             ? You can restore this later if needed.
@@ -58,7 +54,7 @@ export function Component() {
             type="button"
             variant="ghost"
             onClick={closeModal}
-            className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             No, cancel
           </Button>
@@ -67,9 +63,8 @@ export function Component() {
             variant="destructive"
             onClick={handleDelete}
             disabled={state === "submitting"}
-            className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-600/90 dark:hover:bg-red-600 transition-colors"
           >
-            {state === "submitting" ? "Deleting..." : "Yes, delete"}
+            {state === "submitting" ? "Deleting...." : "Yes, delete"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -79,38 +74,36 @@ export function Component() {
 
 export async function loader({ params }) {
   return queryClient.fetchQuery({
-    queryKey: ["userLevel", params.user_level_id],
-    queryFn: ({ signal }) =>
-      fetchUserLevelById(params.user_level_id, { signal }),
+    queryKey: ["inventory", params.pets_id],
+    queryFn: ({ signal }) => fetchPetById({ pets_id: params.pets_id, signal }),
   });
 }
 
 export async function action({ params }) {
   try {
-    await deleteUserLevel(params.user_level_id);
-    await queryClient.invalidateQueries(["usersLeveldata"]);
+    const petId = params.pets_id;
+    await deletePet(petId);
+    await queryClient.invalidateQueries(["pet-records"]);
 
     toast.error("Successfully Deleted", {
       className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/30 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm",
-      description: "This role is successfully deleted!",
-      descriptionClassName:
-        "text-slate-500 dark:text-slate-400 text-sm font-normal mt-1",
+        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg dark:border-destructive/30",
+      description: `This ${petId} is successfully deleted!`,
+      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
       duration: 2000,
-      icon: <Trash2 className="h-5 w-5 text-destructive shrink-0" />,
+      icon: <Trash2 className="h-5 w-5 text-destructive" />,
     });
 
     return redirect("..");
   } catch (err) {
     toast.error("Delete failed", {
       className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/30 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm",
+        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg dark:border-destructive/30",
       description:
         err.message || "Something went wrong while deleting this role.",
-      descriptionClassName:
-        "text-slate-500 dark:text-slate-400 text-sm font-normal mt-1",
+      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
       duration: 3000,
-      icon: <XCircle className="h-5 w-5 text-destructive shrink-0" />,
+      icon: <XCircle className="h-5 w-5 text-destructive" />,
     });
 
     return redirect("..");
