@@ -143,12 +143,12 @@ export default class InventoryModel {
     }
   }
 
-  async deleteProductById({ product_id }) {
+  async deleteProductById({ product_id, deleted_by }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `UPDATE tbl_products SET is_deleted = true WHERE product_id = $1 RETURNING *`,
-        [product_id],
+        `UPDATE tbl_products SET is_deleted = true, deleted_by = $2 WHERE product_id = $1 RETURNING *`,
+        [product_id, deleted_by],
       );
       return res.rows[0];
     } catch (error) {

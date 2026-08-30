@@ -47,6 +47,7 @@ export default class ClientRecordsController {
         client_name,
         client_email,
         contact_no,
+        created_by: req.session.user.name,
       });
       return res.status(201).json(newClient);
     } catch (error) {
@@ -71,6 +72,7 @@ export default class ClientRecordsController {
         client_name,
         client_email,
         contact_no,
+        updated_by: req.session.user.name,
       });
 
       return res.status(200).json(updateClient);
@@ -93,6 +95,7 @@ export default class ClientRecordsController {
 
       const deletedClient = await clientRecordsService.deleteClient({
         client_id,
+        deleted_by: req.session.user.name,
       });
       return res.status(200).json(deletedClient);
     } catch (error) {
@@ -106,7 +109,13 @@ export default class ClientRecordsController {
   async getClienPetById(req, res) {
     try {
       const { client_id } = req.params;
-      const client = await clientRecordsService.getClienPetById(client_id);
+      const { page, limit, search } = req.query;
+      const client = await clientRecordsService.getClienPetById({
+        client_id,
+        page,
+        limit,
+        search,
+      });
       return res.status(200).json(client);
     } catch (error) {
       console.error(error);
@@ -144,6 +153,8 @@ export default class ClientRecordsController {
         pet_status_id,
         species_id,
         gender_id,
+        pet_image: req.file ? req.file.path : null,
+        created_by: req.session.user.name,
       });
 
       return res.status(201).json(newPet);
@@ -183,6 +194,12 @@ export default class ClientRecordsController {
         gender_id,
       } = req.body;
 
+      let pet_image = req.file?.path;
+      if (!pet_image) {
+        const existing = await clientRecordsService.getPetById(pets_id);
+        pet_image = existing?.pet_image ?? null;
+      }
+
       const updatedPet = await clientRecordsService.editPet({
         pets_id: pets_id,
         pets_name,
@@ -193,6 +210,8 @@ export default class ClientRecordsController {
         pet_status_id,
         species_id,
         gender_id,
+        pet_image,
+        updated_by: req.session.user.name,
       });
 
       return res.status(200).json(updatedPet);
@@ -207,7 +226,10 @@ export default class ClientRecordsController {
   async deletePet(req, res) {
     try {
       const { pets_id } = req.params;
-      const response = await clientRecordsService.deletePet({ pets_id });
+      const response = await clientRecordsService.deletePet({
+        pets_id,
+        deleted_by: req.session.user.name,
+      });
       return res.status(200).json(response);
     } catch (error) {
       const status = error.status || 500;

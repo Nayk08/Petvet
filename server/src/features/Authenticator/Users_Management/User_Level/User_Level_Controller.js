@@ -46,7 +46,11 @@ export default class UserLevelController {
           .json({ error: "userLevel and description are required" });
       }
 
-      const data = await userLevelService.addUserLevel(userLevel, description);
+      const data = await userLevelService.addUserLevel(
+        userLevel,
+        description,
+        req.session.user.name,
+      );
       if (!data) {
         return res.status(500).json({ error: "Failed to create user level" });
       }
@@ -76,6 +80,7 @@ export default class UserLevelController {
         user_level_id,
         userLevel,
         description,
+        req.session.user.name,
       );
 
       if (!data || data.length === 0) {
@@ -95,7 +100,10 @@ export default class UserLevelController {
   async deleteUserLevel(req, res) {
     try {
       const { user_level_id } = req.params;
-      const data = await userLevelService.deleteUserLevel(user_level_id);
+      const data = await userLevelService.deleteUserLevel(
+        user_level_id,
+        req.session.user.name,
+      );
       res.status(200).json(data[0]);
     } catch (error) {
       console.error(error);

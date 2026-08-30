@@ -80,146 +80,145 @@ export default function Dashboard() {
       : RECENT_PATIENTS.filter((p) => p.status === filterStatus);
 
   return (
-    <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex">
-      {/* Main Content Area */}
-      <div className="flex-1 p-8 max-w-7xl mx-auto space-y-8 w-full">
-        {/* Header section */}
-        <div className="flex justify-between items-center border-b border-slate-200 pb-6">
+    <div className="w-full space-y-8 py-8">
+      {/* Header section */}
+      <div className="flex justify-between items-center border-b border-slate-200 pb-6 dark:border-slate-800">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
+            Welcome Back, Admin
+          </h1>
+          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
+            Here is what's happening at PetVet clinic today.
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            Clinic Status: Open
+          </p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Hours: 09:00 AM - 06:00 PM
+          </p>
+        </div>
+      </div>
+
+      {/* Analytics/Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {STATS.map((stat) => (
+          <div
+            key={stat.id}
+            className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700"
+          >
+            <div className="flex justify-between items-start">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                {stat.name}
+              </p>
+              <span className={`w-2.5 h-2.5 rounded-full ${stat.dotBg}`} />
+            </div>
+            <p className="text-3xl font-extrabold text-slate-900 mt-4 tracking-tight dark:text-white">
+              {stat.value}
+            </p>
+            <p className="text-xs text-slate-500 mt-2 font-medium dark:text-slate-400">
+              {stat.change}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Dynamic Grid Section */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4 dark:border-slate-800">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-wide">
-              Welcome Back, Admin
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Here is what's happening at PetVet clinic today.
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+              Today's Live Queue
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
+              Real-time status tracking for checked-in patients.
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-teal-600">
-              Clinic Status: Open
-            </p>
-            <p className="text-xs text-slate-400">Hours: 09:00 AM - 06:00 PM</p>
+
+          {/* Control Filters */}
+          <div className="flex items-center space-x-2">
+            {["All", "Pending", "In Progress", "Completed"].map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setFilterStatus(status)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                  filterStatus === status
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Analytics/Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {STATS.map((stat) => (
-            <div
-              key={stat.id}
-              className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm transition-all hover:shadow-md hover:border-slate-300"
-            >
-              <div className="flex justify-between items-start">
-                <p className="text-sm font-medium text-slate-500">
-                  {stat.name}
-                </p>
-                <span className={`w-2.5 h-2.5 rounded-full ${stat.dotBg}`} />
-              </div>
-              <p className="text-3xl font-extrabold text-slate-900 mt-4 tracking-tight">
-                {stat.value}
-              </p>
-              <p className="text-xs text-slate-500 mt-2 font-medium">
-                {stat.change}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Dynamic Grid Section */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Today's Live Queue
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Real-time status tracking for checked-in patients.
-              </p>
-            </div>
-
-            {/* Control Filters */}
-            <div className="flex items-center space-x-2">
-              {["All", "Pending", "In Progress", "Completed"].map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                    filterStatus === status
-                      ? "bg-teal-600 text-white border-teal-600 shadow-sm"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Data Table */}
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
-                  <th className="py-4 px-4">Pet ID</th>
-                  <th className="py-4 px-4">Patient Name</th>
-                  <th className="py-4 px-4">Owner</th>
-                  <th className="py-4 px-4">Service Type</th>
-                  <th className="py-4 px-4">Appointment Time</th>
-                  <th className="py-4 px-4 text-right">Live Status</th>
+        {/* Data Table */}
+        <div className="overflow-x-auto mt-4">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
+                <th className="py-4 px-4">Pet ID</th>
+                <th className="py-4 px-4">Patient Name</th>
+                <th className="py-4 px-4">Owner</th>
+                <th className="py-4 px-4">Service Type</th>
+                <th className="py-4 px-4">Appointment Time</th>
+                <th className="py-4 px-4 text-right">Live Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              {filteredPatients.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="py-12 text-center text-sm text-slate-400 italic dark:text-slate-500"
+                  >
+                    No matching records found.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredPatients.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan="6"
-                      className="py-12 text-center text-sm text-slate-400 italic"
-                    >
-                      No matching records found.
+              ) : (
+                filteredPatients.map((patient) => (
+                  <tr
+                    key={patient.id}
+                    className="hover:bg-slate-50/80 transition-colors group dark:hover:bg-slate-800/60"
+                  >
+                    <td className="py-3.5 px-4 font-mono text-xs text-slate-500 font-bold dark:text-slate-400">
+                      {patient.id}
+                    </td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors dark:text-slate-100 dark:group-hover:text-indigo-300">
+                      {patient.name}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
+                      {patient.owner}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
+                        {patient.service}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">
+                      {patient.time}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <span
+                        className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded tracking-wide border ${
+                          patient.status === "Completed"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800"
+                            : patient.status === "In Progress"
+                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
+                              : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800"
+                        }`}
+                      >
+                        {patient.status}
+                      </span>
                     </td>
                   </tr>
-                ) : (
-                  filteredPatients.map((patient) => (
-                    <tr
-                      key={patient.id}
-                      className="hover:bg-slate-50/80 transition-colors group"
-                    >
-                      <td className="py-3.5 px-4 font-mono text-xs text-slate-500 font-bold">
-                        {patient.id}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-teal-600 transition-colors">
-                        {patient.name}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600">
-                        {patient.owner}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200">
-                          {patient.service}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500">
-                        {patient.time}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <span
-                          className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded tracking-wide border ${
-                            patient.status === "Completed"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : patient.status === "In Progress"
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : "bg-blue-50 text-blue-700 border-blue-200"
-                          }`}
-                        >
-                          {patient.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -27,9 +27,7 @@ export default class PermissionController {
   async updatePermission(req, res, next) {
     try {
       const { userLevelId, userModuleId, field, value } = req.body;
-      const updatedBy = req.user?.users_id ?? null; // TODO: wire to your auth middleware
-
-
+      const updatedBy = req.session.user?.name ?? null;
 
       const updated = await permissionService.updatePermission({
         userLevelId,

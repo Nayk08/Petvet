@@ -1,7 +1,23 @@
 // middleware/has-permission.js
 import pool from "../config/db.js"; // adjust path to your actual pool
 
-export default function hasPermission(moduleCode, action = "can_view") {
+const ALLOWED_ACTIONS = new Set([
+  "can_view",
+  "can_create",
+  "can_edit",
+  "can_delete",
+  "can_export",
+]);
+
+export default function hasPermission(moduleCode, ...actions) {
+  if (actions.length === 0) actions = ["can_view"];
+  for (const action of actions) {
+    if (!ALLOWED_ACTIONS.has(action)) {
+      throw new Error(`hasPermission: invalid action "${action}"`);
+    }
+  }
+  const conditions = actions.map((action) => `${action} = true`).join(" AND ");
+
   return async (req, res, next) => {
     if (!req.session?.user?.level_ids?.length) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -11,7 +27,7 @@ export default function hasPermission(moduleCode, action = "can_view") {
       const { rows } = await pool.query(
         `SELECT 1 FROM v_user_permissions
          WHERE user_level_id = ANY($1::int[]) AND module_code = $2
-         AND ${action} = true
+         AND ${conditions}
          LIMIT 1`,
         [req.session.user.level_ids, moduleCode],
       );

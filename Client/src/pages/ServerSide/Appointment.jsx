@@ -205,9 +205,9 @@ export default function Appointment() {
   };
 
   return (
-    <div className="text-slate-900 p-8 font-sans flex justify-center items-start">
-      <div className="w-full max-w-6xl bg-white border border-slate-200 rounded-xl p-10 mt-4 shadow-sm">
-        <h2 className="text-2xl font-bold text-slate-950 tracking-wide mb-8">
+    <div className="w-full flex justify-center items-start">
+      <div className="w-full max-w-6xl bg-white border border-slate-200 rounded-xl p-10 mt-4 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <h2 className="text-2xl font-bold text-slate-950 tracking-wide mb-8 dark:text-white">
           Book an Appointment
         </h2>
 
@@ -216,7 +216,7 @@ export default function Appointment() {
             <form onSubmit={handleBooking} className="space-y-8">
               {/* 1. Select Service Type */}
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-3">
+                <label className="block text-sm font-medium text-slate-600 mb-3 dark:text-slate-400">
                   1. Select Service Type
                 </label>
                 <div className="grid grid-cols-3 gap-4">
@@ -227,8 +227,8 @@ export default function Appointment() {
                       onClick={() => setSelectedService(service)}
                       className={`py-3.5 px-4 rounded-lg border text-center font-medium text-base transition-all ${
                         selectedService.id === service.id
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
                       }`}
                     >
                       {service.name}
@@ -240,18 +240,18 @@ export default function Appointment() {
               {/* 2. Select Date */}
               <div>
                 <div className="flex justify-between items-center mb-4">
-                  <label className="text-sm font-medium text-slate-600">
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">
                     2. Select Date
                   </label>
-                  <div className="flex items-center space-x-3 bg-slate-50 p-1 border border-slate-200 rounded-lg">
+                  <div className="flex items-center space-x-3 bg-slate-50 p-1 border border-slate-200 rounded-lg dark:bg-slate-950 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={handlePrevMonth}
-                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors"
+                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors dark:text-slate-400 dark:hover:text-white"
                     >
                       &larr;
                     </button>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800 min-w-[100px] text-center">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800 min-w-[100px] text-center dark:text-slate-200">
                       {currentMonthDate.toLocaleDateString("en-US", {
                         month: "long",
                         year: "numeric",
@@ -260,14 +260,14 @@ export default function Appointment() {
                     <button
                       type="button"
                       onClick={handleNextMonth}
-                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors"
+                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors dark:text-slate-400 dark:hover:text-white"
                     >
                       &rarr;
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">
                   <div>Sun</div>
                   <div>Mon</div>
                   <div>Tue</div>
@@ -299,10 +299,10 @@ export default function Appointment() {
                         }}
                         className={`flex flex-col items-center justify-between p-2 rounded-lg border transition-all h-16 relative ${
                           past
-                            ? "bg-red-950/20 border-red-900/40 text-red-700/60 cursor-not-allowed line-through"
+                            ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed line-through dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-700/60"
                             : isSelected
-                              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
                         }`}
                       >
                         <span className="text-base font-bold w-full text-center mt-0.5">
@@ -314,8 +314,8 @@ export default function Appointment() {
                           <span
                             className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold tracking-wide uppercase ${
                               isSelected
-                                ? "bg-white text-blue-600"
-                              : "bg-teal-50 text-teal-700 border border-teal-200"
+                                ? "bg-white text-indigo-600"
+                                : "bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-800"
                             }`}
                           >
                             {dayBookingsCount} Booked
@@ -330,7 +330,7 @@ export default function Appointment() {
               {/* 3. Available Time Slots */}
               <div>
                 <div className="mb-3">
-                  <label className="block text-sm font-medium text-slate-600">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
                     3. Available Time Slots (Operating Hours: 09:00 AM - 06:00
                     PM)
                   </label>
@@ -351,14 +351,14 @@ export default function Appointment() {
                         onClick={() => handleTimeSlotClick(slot)}
                         className={`py-3 px-4 rounded-lg border text-sm transition-all flex justify-between items-center ${
                           !selectedDate
-                            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+                            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-950 dark:border-slate-800 dark:text-slate-600"
                             : past
-                              ? "bg-red-950/20 border-red-900/40 text-red-700/60 cursor-not-allowed line-through"
+                              ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed line-through dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-700/60"
                               : isFull
-                                ? "bg-red-950/30 border-red-900/60 text-red-400 cursor-not-allowed"
+                                ? "bg-red-50 border-red-300 text-red-500 cursor-not-allowed dark:bg-red-950/30 dark:border-red-900/60 dark:text-red-400"
                                 : isSelected
-                                  ? "bg-blue-600 text-white border-blue-600 shadow-sm font-bold"
-                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm font-bold"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
                         }`}
                       >
                         <span className="font-medium">{slot.label}</span>
@@ -370,8 +370,8 @@ export default function Appointment() {
                               isFull
                                 ? "bg-red-500 text-white"
                                 : count > 0
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800"
                             }`}
                           >
                             {isFull
@@ -390,7 +390,7 @@ export default function Appointment() {
               <button
                 type="submit"
                 disabled={!selectedDate || selectedSlots.length === 0}
-                className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-base transition-colors mt-4 tracking-wide shadow-sm"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-base transition-colors mt-4 tracking-wide shadow-sm dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
               >
                 Confirm Appointment
               </button>
@@ -399,12 +399,12 @@ export default function Appointment() {
 
           {/* Right Column: Schedule Container Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4">
-              <h3 className="text-xl font-bold text-slate-950 mb-4">
+            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 dark:bg-slate-950 dark:border-slate-800">
+              <h3 className="text-xl font-bold text-slate-950 mb-4 dark:text-white">
                 Your Schedule
               </h3>
               {appointments.length === 0 ? (
-                <p className="text-sm text-slate-500 italic">
+                <p className="text-sm text-slate-500 italic dark:text-slate-400">
                   No appointments booked yet.
                 </p>
               ) : (
@@ -412,19 +412,19 @@ export default function Appointment() {
                   {appointments.map((app) => (
                     <div
                       key={app.id}
-                      className="flex items-center space-x-4 p-4 bg-white border border-slate-200 rounded-xl"
+                      className="flex items-center space-x-4 p-4 bg-white border border-slate-200 rounded-xl dark:bg-slate-900 dark:border-slate-800"
                     >
                       <div
                         className={`w-1.5 h-12 rounded-full ${app.service.color}`}
                       />
                       <div>
-                        <h4 className="font-bold text-base text-slate-950">
+                        <h4 className="font-bold text-base text-slate-950 dark:text-white">
                           {app.service.name}
                         </h4>
-                        <p className="text-sm text-slate-600 font-medium">
+                        <p className="text-sm text-slate-600 font-medium dark:text-slate-300">
                           {app.date}
                         </p>
-                        <p className="text-sm text-slate-500 font-medium">
+                        <p className="text-sm text-slate-500 font-medium dark:text-slate-400">
                           {app.time}{" "}
                           {/* Displays unified blocks like "01:00 PM - 04:00 PM" as a single card entry */}
                         </p>

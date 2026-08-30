@@ -1,16 +1,38 @@
+import { useEffect, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { fetchPetRecordsByClientId } from "@/api/http";
 import { PetRecordsColumns } from "@/utils/COLUMNS";
 import { ArrowLeft, User, PawPrint } from "lucide-react";
+import { usePagination } from "@/hooks/usePagination";
+import { Pagination } from "@/components/ui/Pagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import QueryState from "@/components/ui/QueryState";
 
 export function Component() {
   const { client_id } = useParams();
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["pet-records", client_id],
-    queryFn: ({ signal }) => fetchPetRecordsByClientId(client_id, { signal }),
+  const { page, limit, setPage, setLimit } = usePagination({
+    defaultLimit: 10,
+  });
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 400);
+
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["pet-records", client_id, page, limit, debouncedSearch],
+    queryFn: ({ signal }) =>
+      fetchPetRecordsByClientId(client_id, {
+        page,
+        limit,
+        search: debouncedSearch,
+        signal,
+      }),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
@@ -39,8 +61,8 @@ export function Component() {
                 {data?.client_name ?? "Unknown Client"}
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/60">
                   <PawPrint className="w-3 h-3" />
-                  {data?.pets?.length ?? 0}{" "}
-                  {data?.pets?.length === 1 ? "Pet" : "Pets"}
+                  {data?.pagination?.total ?? 0}{" "}
+                  {data?.pagination?.total === 1 ? "Pet" : "Pets"}
                 </span>
               </h1>
             )}
@@ -49,16 +71,40 @@ export function Component() {
       </div>
 
       {/* Grid Content */}
-      <DynamicGrid
-        title="Pet Records"
-        columnsConfig={PetRecordsColumns}
-        data={data?.pets ?? []}
+      <QueryState
         isLoading={isLoading}
-        buttonText="Add Pet"
-        buttonLink="add-pet"
-        onEdit={(row) => navigate(`pets/${row.pet_id}/edit-pet`)}
-        onDelete={(row) => navigate(`pets/${row.pet_id}/delete-pet`)}
+        isError={isError}
+        error={error}
+        loadingLabel="Loading pet records..."
+        errorLabel="Error loading pet records"
       />
+      {!isLoading && !isError && (
+        <>
+          <DynamicGrid
+            title="Pet Records"
+            columnsConfig={PetRecordsColumns}
+            data={data?.rows ?? []}
+            buttonText="Add Pet"
+            buttonLink="add-pet"
+            onEdit={(row) => navigate(`pets/${row.pet_id}/edit-pet`)}
+            onDelete={(row) => navigate(`pets/${row.pet_id}/delete-pet`)}
+            limit={limit}
+            onLimitChange={setLimit}
+            search={search}
+            onSearchChange={setSearch}
+          />
+          <Pagination
+            page={page}
+            totalPages={
+              limit === "all" ? 1 : (data?.pagination?.totalPages ?? 1)
+            }
+            onPageChange={setPage}
+            disabled={isLoading}
+            total={data?.pagination?.total}
+            limit={limit === "all" ? data?.pagination?.total : limit}
+          />
+        </>
+      )}
 
       <Outlet />
     </div>

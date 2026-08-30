@@ -210,7 +210,7 @@ export function Component() {
               value={formData.name}
               onChange={handleChange}
               placeholder="e.g. Maria Santos"
-              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-cyan-500"
+              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
             />
           </div>
 
@@ -225,7 +225,7 @@ export function Component() {
               value={formData.email}
               onChange={handleChange}
               placeholder="maria@example.com"
-              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-cyan-500"
+              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
             />
           </div>
 
@@ -244,7 +244,7 @@ export function Component() {
                   ? "Leave blank to keep current password"
                   : "Min. 8 characters"
               }
-              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-cyan-500"
+              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
             />
           </div>
 
@@ -285,14 +285,14 @@ export function Component() {
                       }
                       className={`relative flex items-center gap-2 rounded-md border p-2.5 text-xs font-medium transition-all ${
                         isSelected
-                          ? "bg-cyan-600 text-white border-cyan-500 shadow-sm"
+                          ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
                           : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       <span
                         className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border transition-colors ${
                           isSelected
-                            ? "bg-white border-white text-cyan-600"
+                            ? "bg-white border-white text-indigo-600"
                             : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900"
                         }`}
                       >
@@ -342,11 +342,7 @@ export function Component() {
               Cancel
             </Button>
 
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-medium transition-colors"
-            >
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
                 ? "Saving..."
                 : isEditMode

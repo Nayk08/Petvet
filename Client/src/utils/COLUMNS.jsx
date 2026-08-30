@@ -210,6 +210,22 @@ export const ClientRecordsColumns = [
 ];
 
 export const PetRecordsColumns = [
+  {
+    key: "pet_image",
+    label: "PET IMAGE",
+    render: (value) =>
+      value ? (
+        <img
+          src={value}
+          alt="Pet"
+          className="w-10 h-10 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm"
+        />
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          No image
+        </span>
+      ),
+  },
   { key: "pet_name", label: "PET NAME" },
   { key: "date_of_birth", label: "BIRTH DATE" },
   { key: "weight_kg", label: "WEIGHT" },

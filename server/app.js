@@ -91,11 +91,11 @@ app.use((req, res) => {
 });
 
 // --- Centralized error handler (must be last) ---
-// app.use((err, req, res, next) => {
-//   console.error(err);
-//   const status = err.status || 500;
-//   const message = status < 500 ? err.message : "Something went wrong";
-//   res.status(status).json({ message });
-// });
+app.use((err, req, res, next) => {
+  console.error(err);
+  const status = err.statusCode || err.status || 500;
+  const message = status < 500 ? err.message : "Something went wrong";
+  res.status(status).json({ message });
+});
 
 export default app;

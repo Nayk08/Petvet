@@ -11,6 +11,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { usePagination } from "@/hooks/usePagination.jsx";
 import { Pagination } from "@/components/ui/Pagination.jsx";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue.jsx";
+import QueryState from "@/components/ui/QueryState.jsx";
 
 export function Component() {
   const navigate = useNavigate();
@@ -70,18 +71,15 @@ export function Component() {
     gcTime: 1000 * 60 * 10,
   });
 
-  if (isPending)
+  if (isPending || isError)
     return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground text-sm font-medium">
-        Loading users...
-      </div>
-    );
-
-  if (isError)
-    return (
-      <div className="flex items-center justify-center py-20 text-destructive text-sm font-medium">
-        Error: {error.message}
-      </div>
+      <QueryState
+        isLoading={isPending}
+        isError={isError}
+        error={error}
+        loadingLabel="Loading users..."
+        errorLabel="Error loading users"
+      />
     );
 
   return (

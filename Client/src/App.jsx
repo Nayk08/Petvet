@@ -212,10 +212,6 @@ const router = createBrowserRouter([
         ],
       },
 
-      // NOTE: Settings is imported but has no route below. Either wire it up
-      // (e.g. path: "settings", loader: requirePermission("SETTINGS")) or
-      // remove the unused import — left as-is pending your confirmation.
-
       {
         path: "user-management",
         loader: requirePermission("USER_MGMT"),
@@ -249,7 +245,7 @@ const router = createBrowserRouter([
                 path: "delete-user/:user_id",
                 loader: requirePermission("USER_MGMT_USERS", "can_delete"),
                 lazy: async () =>
-                  import("@/pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx"),
+                  import("@/pages/Authentication/Users_Management/Users/components/DeleteUserModal.jsx"),
               },
             ],
           },

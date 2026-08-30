@@ -113,12 +113,12 @@ export function Component() {
   );
 }
 
-export async function deleteUserLoader({ params, request }) {
+export async function loader({ params, request }) {
   return fetchUserById(params.user_id, { signal: request.signal });
 }
 
 // ---- Action ----
-export async function deleteUserAction({ params }) {
+export async function action({ params }) {
   try {
     await deleteUser(params.user_id);
     await queryClient.invalidateQueries({ queryKey: ["usersdata"] });

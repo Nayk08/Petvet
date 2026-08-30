@@ -17,9 +17,15 @@ router.patch(
   (req, res) => paymentController.cancelPayment(req, res),
 );
 
-router.post("/checkout", (req, res) => paymentController.checkout(req, res));
-router.patch("/checkout/:id/complete", (req, res) =>
-  paymentController.completePayment(req, res),
+router.post(
+  "/checkout",
+  hasPermission("PAYMENTS", "can_create"),
+  (req, res) => paymentController.checkout(req, res),
+);
+router.patch(
+  "/checkout/:id/complete",
+  hasPermission("PAYMENTS", "can_edit"),
+  (req, res) => paymentController.completePayment(req, res),
 );
 
 export default router;

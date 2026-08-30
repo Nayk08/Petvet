@@ -38,7 +38,7 @@ export function MultiSelectFilter({ label, options, selected = [], onChange }) {
         onClick={() => setOpen(!open)}
         className={`flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border focus:outline-none transition-all cursor-pointer min-w-[130px] max-w-[160px] ${
           hasSelection
-            ? "border-teal-600 bg-teal-50 text-teal-700 font-semibold dark:bg-teal-500/10 dark:text-teal-300 dark:border-teal-500"
+            ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500"
             : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         }`}
       >
@@ -49,7 +49,7 @@ export function MultiSelectFilter({ label, options, selected = [], onChange }) {
             open ? "rotate-180" : ""
           } ${
             hasSelection
-              ? "text-teal-600 dark:text-teal-300"
+              ? "text-indigo-600 dark:text-indigo-300"
               : "text-slate-400 dark:text-slate-500"
           }`}
         />
@@ -70,7 +70,7 @@ export function MultiSelectFilter({ label, options, selected = [], onChange }) {
                 {isChecked && (
                   <Check
                     size={14}
-                    className="text-teal-600 dark:text-teal-400 shrink-0"
+                    className="text-indigo-600 dark:text-indigo-400 shrink-0"
                   />
                 )}
               </button>

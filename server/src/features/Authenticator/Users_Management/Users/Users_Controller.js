@@ -41,7 +41,10 @@ export default class UsersController {
 
   async addUser(req, res) {
     try {
-      const user = await userService.addUser(req.body);
+      const user = await userService.addUser(
+        req.body,
+        req.session.user.name,
+      );
       return res.status(201).json(user);
     } catch (error) {
       const status = error.status || 500;
@@ -55,7 +58,11 @@ export default class UsersController {
     try {
       const userId = req.params.user_id;
       const updatedData = req.body;
-      const user = await userService.updateUser(userId, updatedData);
+      const user = await userService.updateUser(
+        userId,
+        updatedData,
+        req.session.user.name,
+      );
       res.json(user);
     } catch (error) {
       console.error(error);
@@ -66,7 +73,7 @@ export default class UsersController {
   async deleteUser(req, res) {
     try {
       const userId = req.params.user_id;
-      await userService.deleteUser(userId);
+      await userService.deleteUser(userId, req.session.user.name);
       res.json({ ok: true, message: "User deactivated" });
     } catch (error) {
       console.error(error);

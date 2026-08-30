@@ -76,10 +76,11 @@ export default class InventoryService {
     }
   }
 
-  async deleteProductById({ product_id }) {
+  async deleteProductById({ product_id, deleted_by }) {
     try {
       const deleteProductById = await inventoryModel.deleteProductById({
         product_id,
+        deleted_by,
       });
       return deleteProductById;
     } catch (error) {

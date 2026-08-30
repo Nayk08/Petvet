@@ -80,12 +80,12 @@ export default class ClientRecordsModel {
     }
   }
 
-  async addClient({ client_name, client_email, contact_no }) {
+  async addClient({ client_name, client_email, contact_no, created_by }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `INSERT INTO tbl_clients (name, email, mobile_no) VALUES ($1, $2, $3) RETURNING *`,
-        [client_name, client_email, contact_no],
+        `INSERT INTO tbl_clients (name, email, mobile_no, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+        [client_name, client_email, contact_no, created_by],
       );
       return res.rows[0];
     } catch (error) {
@@ -96,13 +96,20 @@ export default class ClientRecordsModel {
     }
   }
 
-  async editClient({ client_id, client_name, client_email, contact_no }) {
+  async editClient({
+    client_id,
+    client_name,
+    client_email,
+    contact_no,
+    updated_by,
+  }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `UPDATE tbl_clients  
-        SET name = $1, email = $2, mobile_no = $3  WHERE client_id = $4 RETURNING *`,
-        [client_name, client_email, contact_no, client_id],
+        `UPDATE tbl_clients
+        SET name = $1, email = $2, mobile_no = $3, updated_by = $4, date_updated = NOW()
+        WHERE client_id = $5 RETURNING *`,
+        [client_name, client_email, contact_no, updated_by, client_id],
       );
 
       if (res.rows.length === 0) {
@@ -117,13 +124,13 @@ export default class ClientRecordsModel {
     }
   }
 
-  async deleteClient({ client_id }) {
+  async deleteClient({ client_id, deleted_by }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `UPDATE tbl_clients  
-        SET is_deleted = true WHERE client_id = $1 RETURNING *`,
-        [client_id],
+        `UPDATE tbl_clients
+        SET is_deleted = true, deleted_by = $2 WHERE client_id = $1 RETURNING *`,
+        [client_id, deleted_by],
       );
 
       if (res.rows.length === 0) {
@@ -138,12 +145,17 @@ export default class ClientRecordsModel {
     }
   }
 
-  async getClienPetById(client_id) {
+  async getClienPetById({
+    client_id,
+    page = 1,
+    limit = 10,
+    search = "",
+  } = {}) {
     const client = await pool.connect();
 
     try {
       const res = await client.query(
-        `SELECT * FROM v_client_pets WHERE client_id = $1 `,
+        `SELECT * FROM v_client_pets WHERE client_id = $1`,
         [client_id],
       );
 
@@ -151,7 +163,38 @@ export default class ClientRecordsModel {
         throw new Error("Client Pet record not found.");
       }
 
-      return res.rows[0];
+      const { client_name, pets } = res.rows[0];
+
+      let filtered = pets;
+      if (search && search.trim()) {
+        const term = search.trim().toLowerCase();
+        filtered = pets.filter((p) =>
+          [p.pet_name, p.breed, p.microchip_number]
+            .filter(Boolean)
+            .some((val) => String(val).toLowerCase().includes(term)),
+        );
+      }
+
+      const total = filtered.length;
+      const isAll = limit === "all" || limit >= 999999;
+      const effectiveLimit = isAll ? total || 1 : Number(limit);
+      const totalPages = isAll
+        ? 1
+        : Math.max(1, Math.ceil(total / effectiveLimit));
+      const currentPage = isAll ? 1 : Number(page);
+      const start = isAll ? 0 : (currentPage - 1) * effectiveLimit;
+      const rows = isAll ? filtered : filtered.slice(start, start + effectiveLimit);
+
+      return {
+        client_name,
+        rows,
+        pagination: {
+          page: currentPage,
+          limit: isAll ? total : effectiveLimit,
+          total,
+          totalPages,
+        },
+      };
     } catch (error) {
       console.log(`Error on Model getClienPetById function: ${error}`);
       throw error;
@@ -170,6 +213,8 @@ export default class ClientRecordsModel {
     pet_status_id,
     species_id,
     gender_id,
+    pet_image,
+    created_by,
   }) {
     const client = await pool.connect();
     const MAX_ATTEMPTS = 5;
@@ -182,9 +227,9 @@ export default class ClientRecordsModel {
           const res = await client.query(
             `INSERT INTO tbl_pets
               (pets_name, breed, is_spayed_neutered, date_of_birth, weight_kg,
-               microchip_number, pet_status_id, species_id, gender_id, client_id)
+               microchip_number, pet_status_id, species_id, gender_id, client_id, pet_image, created_by)
              VALUES
-              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              RETURNING *`,
             [
               pets_name,
@@ -197,6 +242,8 @@ export default class ClientRecordsModel {
               species_id,
               gender_id,
               client_id,
+              pet_image,
+              created_by,
             ],
           );
           return res.rows[0];
@@ -248,6 +295,8 @@ export default class ClientRecordsModel {
     pet_status_id,
     species_id,
     gender_id,
+    pet_image,
+    updated_by,
   }) {
     const client = await pool.connect();
     try {
@@ -255,8 +304,9 @@ export default class ClientRecordsModel {
         `UPDATE tbl_pets
         SET pets_name = $1, breed = $2, is_spayed_neutered = $3,
             date_of_birth = $4, weight_kg = $5, pet_status_id = $6,
-            species_id = $7, gender_id = $8
-        WHERE pets_id = $9
+            species_id = $7, gender_id = $8, pet_image = $9,
+            updated_by = $10, date_updated = NOW()
+        WHERE pets_id = $11
         RETURNING *`,
         [
           pets_name,
@@ -267,6 +317,8 @@ export default class ClientRecordsModel {
           pet_status_id,
           species_id,
           gender_id,
+          pet_image,
+          updated_by,
           pets_id,
         ],
       );
@@ -282,13 +334,13 @@ export default class ClientRecordsModel {
     }
   }
 
-  async deletePet({ pets_id }) {
+  async deletePet({ pets_id, deleted_by }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `UPDATE tbl_pets  
-        SET is_deleted = true WHERE pets_id = $1 RETURNING *`,
-        [pets_id],
+        `UPDATE tbl_pets
+        SET is_deleted = true, deleted_by = $2 WHERE pets_id = $1 RETURNING *`,
+        [pets_id, deleted_by],
       );
 
       if (res.rows.length === 0) {

@@ -27,12 +27,13 @@ export default class ClientRecordsService {
     }
   }
 
-  async addClient({ client_name, client_email, contact_no }) {
+  async addClient({ client_name, client_email, contact_no, created_by }) {
     try {
       const res = await clientRecordModel.addClient({
         client_name,
         client_email,
         contact_no,
+        created_by,
       });
 
       return res;
@@ -42,13 +43,20 @@ export default class ClientRecordsService {
     }
   }
 
-  async editClient({ client_id, client_name, client_email, contact_no }) {
+  async editClient({
+    client_id,
+    client_name,
+    client_email,
+    contact_no,
+    updated_by,
+  }) {
     try {
       const res = await clientRecordModel.editClient({
         client_id,
         client_name,
         client_email,
         contact_no,
+        updated_by,
       });
       return res;
     } catch (error) {
@@ -57,10 +65,11 @@ export default class ClientRecordsService {
     }
   }
 
-  async deleteClient({ client_id }) {
+  async deleteClient({ client_id, deleted_by }) {
     try {
       const res = await clientRecordModel.deleteClient({
         client_id,
+        deleted_by,
       });
       return res;
     } catch (error) {
@@ -69,10 +78,14 @@ export default class ClientRecordsService {
     }
   }
 
-  async getClienPetById(client_id) {
+  async getClienPetById({ client_id, page = 1, limit = 10, search = "" } = {}) {
     try {
-      const client = await clientRecordModel.getClienPetById(client_id);
-      return client;
+      return await clientRecordModel.getClienPetById({
+        client_id,
+        page,
+        limit,
+        search,
+      });
     } catch (error) {
       console.log("Error in ClientRecordsService getClienPetById:", error);
       throw error;
@@ -90,6 +103,8 @@ export default class ClientRecordsService {
     pet_status_id,
     species_id,
     gender_id,
+    pet_image,
+    created_by,
   }) {
     try {
       const res = await clientRecordModel.addPet({
@@ -103,6 +118,8 @@ export default class ClientRecordsService {
         pet_status_id,
         species_id,
         gender_id,
+        pet_image,
+        created_by,
       });
       return res;
     } catch (error) {
@@ -129,9 +146,9 @@ export default class ClientRecordsService {
     }
   }
 
-  async deletePet({ pets_id }) {
+  async deletePet({ pets_id, deleted_by }) {
     try {
-      const res = await clientRecordModel.deletePet({ pets_id });
+      const res = await clientRecordModel.deletePet({ pets_id, deleted_by });
       return res;
     } catch (error) {
       console.log("Error in ClientRecordsService getPetById:", error);

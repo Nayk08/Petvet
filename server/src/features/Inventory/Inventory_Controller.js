@@ -85,6 +85,7 @@ export default class InventoryController {
     try {
       const deleteProductById = await inventoryService.deleteProductById({
         product_id: req.params.product_id,
+        deleted_by: req.session.user.name,
       });
       if (!deleteProductById) {
         return res.status(404).json({ message: "Product not found" });

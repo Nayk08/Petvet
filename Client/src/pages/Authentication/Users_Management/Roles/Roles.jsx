@@ -7,6 +7,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { usePagination } from "@/hooks/usePagination.jsx";
 import { Pagination } from "@/components/ui/Pagination.jsx";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue.jsx";
+import QueryState from "@/components/ui/QueryState.jsx";
 
 export function Component() {
   const navigate = useNavigate();
@@ -31,8 +32,16 @@ export function Component() {
     gcTime: 1000 * 60 * 10,
   });
 
-  // if (isPending) return (<p>Loadiing</p>;
-  // if (isError) return (/* ... */);
+  if (isPending || isError)
+    return (
+      <QueryState
+        isLoading={isPending}
+        isError={isError}
+        error={error}
+        loadingLabel="Loading roles..."
+        errorLabel="Error loading roles"
+      />
+    );
 
   return (
     <>

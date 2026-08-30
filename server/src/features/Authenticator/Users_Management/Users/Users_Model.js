@@ -69,7 +69,7 @@ export default class UsersModel {
   }
 
   // Users_Model.js
-  async addUser(userData) {
+  async addUser(userData, createdBy) {
     const client = await pool.connect();
     try {
       const result = await client.query(
@@ -82,6 +82,12 @@ export default class UsersModel {
           userData.level_ids, // matches frontend's "level_ids" key
           null, // p_primary_level_id — unused now, function derives it from role_ids[1]
         ],
+      );
+      const { users_id } = result.rows[0];
+      // The stored proc doesn't set created_by, so stamp it separately.
+      await client.query(
+        `UPDATE tbl_users SET created_by = $1 WHERE users_id = $2`,
+        [createdBy, users_id],
       );
       return result.rows[0];
     } catch (error) {
@@ -97,13 +103,18 @@ export default class UsersModel {
     }
   }
 
-  async updateUser(userId, updatedData) {
+  async updateUser(userId, updatedData, updatedBy) {
     const { user_email, user_name, user_password, level_ids } = updatedData;
     const client = await pool.connect();
     try {
       const result = await client.query(
         "SELECT sp_upsert_user_with_roles($1,$2,$3,$4,$5,$6) AS users_id",
         [userId, user_name, user_email, user_password || null, level_ids, null],
+      );
+      // The stored proc doesn't set updated_by, so stamp it separately.
+      await client.query(
+        `UPDATE tbl_users SET updated_by = $1, date_updated = NOW() WHERE users_id = $2`,
+        [updatedBy, userId],
       );
       return { ...updatedData, users_id: result.rows[0].users_id };
     } catch (error) {
@@ -114,13 +125,13 @@ export default class UsersModel {
     }
   }
 
-  async deleteUser(userId) {
+  async deleteUser(userId, deletedBy) {
     const client = await pool.connect();
     try {
       await client.query(
-        `UPDATE tbl_users 
-      SET is_deleted = true WHERE users_id = $1 RETURNING *`,
-        [userId],
+        `UPDATE tbl_users
+      SET is_deleted = true, deleted_by = $2 WHERE users_id = $1 RETURNING *`,
+        [userId, deletedBy],
       );
     } catch (error) {
       console.log(`error occurred in Users Model: ${error}`);

@@ -1,8 +1,21 @@
 node_modules/
 .env
+.env.*
+!.env.example
 dist/
 build/
 *.log
 *.dump
 *.sql
 *.backup
+coverage/
+.vercel/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code local session/settings
+.claude/

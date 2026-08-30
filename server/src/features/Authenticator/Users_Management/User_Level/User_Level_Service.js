@@ -27,9 +27,13 @@ export default class UserLevelService {
     }
   }
 
-  async addUserLevel(userLevel, description) {
+  async addUserLevel(userLevel, description, createdBy) {
     try {
-      const data = await userLevelModel.addUserLevel(userLevel, description);
+      const data = await userLevelModel.addUserLevel(
+        userLevel,
+        description,
+        createdBy,
+      );
       return data;
     } catch (error) {
       console.error("Error in UserLevelService", error); // ✅ error not err
@@ -37,12 +41,13 @@ export default class UserLevelService {
     }
   }
 
-  async updateUserLevel(userLevelId, userLevel, description) {
+  async updateUserLevel(userLevelId, userLevel, description, updatedBy) {
     try {
       const data = await userLevelModel.updateUserLevel(
         userLevelId,
         userLevel,
         description,
+        updatedBy,
       );
       return data;
     } catch (error) {
@@ -51,9 +56,12 @@ export default class UserLevelService {
     }
   }
 
-  async deleteUserLevel(userLevelId) {
+  async deleteUserLevel(userLevelId, deletedBy) {
     try {
-      const data = await userLevelModel.deleteUserLevel(userLevelId);
+      const data = await userLevelModel.deleteUserLevel(
+        userLevelId,
+        deletedBy,
+      );
       return data;
     } catch (error) {
       console.error("Error in UserLevelService", error);

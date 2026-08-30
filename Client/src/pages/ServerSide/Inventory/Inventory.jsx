@@ -7,7 +7,7 @@ import { fetchInventory } from "@/api/http";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { Loader2 } from "lucide-react";
+import QueryState from "@/components/ui/QueryState";
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -34,18 +34,14 @@ export default function Inventory() {
 
   return (
     <div className="w-full space-y-4">
-      {isPending ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <Loader2 className="h-6 w-6 text-blue-600 animate-spin mb-2" />
-          <span className="text-xs font-medium text-slate-500">
-            Loading inventory records...
-          </span>
-        </div>
-      ) : isError ? (
-        <div className="flex items-center justify-center py-16 bg-red-50/50 border border-red-200 rounded-xl text-red-600 text-xs font-medium">
-          <span>Error loading inventory: {error.message}</span>
-        </div>
-      ) : (
+      <QueryState
+        isLoading={isPending}
+        isError={isError}
+        error={error}
+        loadingLabel="Loading inventory records..."
+        errorLabel="Error loading inventory"
+      />
+      {!isPending && !isError && (
         <>
           <DynamicGrid
             data={data?.rows ?? []}

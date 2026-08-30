@@ -60,12 +60,12 @@ export default class UserLevelModel {
     }
   }
 
-  async addUserLevel(userLevel, description) {
+  async addUserLevel(userLevel, description, createdBy) {
     const client = await pool.connect();
     try {
       const result = await client.query(
-        `INSERT INTO tbl_user_level (user_level, description) VALUES($1,$2) RETURNING *`,
-        [userLevel, description],
+        `INSERT INTO tbl_user_level (user_level, description, created_by) VALUES($1,$2,$3) RETURNING *`,
+        [userLevel, description, createdBy],
       );
       return result.rows;
     } catch (error) {
@@ -76,15 +76,15 @@ export default class UserLevelModel {
     }
   }
 
-  async updateUserLevel(userLevelId, userLevel, description) {
+  async updateUserLevel(userLevelId, userLevel, description, updatedBy) {
     const client = await pool.connect();
     try {
       const result = await client.query(
         `UPDATE tbl_user_level
-       SET user_level = $1, description = $2 , date_updated = NOW()
-       WHERE user_level_id = $3
+       SET user_level = $1, description = $2, updated_by = $3, date_updated = NOW()
+       WHERE user_level_id = $4
        RETURNING *`,
-        [userLevel, description, userLevelId],
+        [userLevel, description, updatedBy, userLevelId],
       );
       return result.rows;
     } catch (error) {
@@ -95,14 +95,14 @@ export default class UserLevelModel {
     }
   }
 
-  async deleteUserLevel(userLevelId) {
+  async deleteUserLevel(userLevelId, deletedBy) {
     const client = await pool.connect();
     try {
       const result = await client.query(
         `UPDATE tbl_user_level
-          SET is_deleted = 'true' WHERE user_level_id = $1 
+          SET is_deleted = 'true', deleted_by = $2 WHERE user_level_id = $1
             RETURNING *`,
-        [userLevelId],
+        [userLevelId, deletedBy],
       );
       return result.rows;
     } catch (error) {

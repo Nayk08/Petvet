@@ -14,8 +14,8 @@
   --color-popover-foreground: oklch(0.145 0.018 254.498);
 
   /* Maps to bg-primary and text-primary-foreground */
-  --color-primary: oklch(0.205 0.014 254.254);
-  --color-primary-foreground: oklch(0.985 0 0);
+  --color-primary: var(--color-indigo-600);
+  --color-primary-foreground: var(--color-indigo-50);
 
   /* Maps to bg-secondary and text-secondary-foreground */
   --color-secondary: oklch(0.97 0.001 106.624);
@@ -36,9 +36,8 @@
   /* Utility borders & inputs */
   --color-border: oklch(0.922 0 0);
   --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.708 0.012 253.947);
+  --color-ring: var(--color-indigo-500);
 
   --color-neon: oklch(0.75 0.25 190);
   --color-neon-foreground: oklch(0.1 0.05 190);
-  --color-ring: oklch(0.75 0.25 190);
 }

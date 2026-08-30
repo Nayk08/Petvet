@@ -21,9 +21,9 @@ export default class UsersService {
     }
   }
 
-  async addUser(userData) {
+  async addUser(userData, createdBy) {
     try {
-      const newUser = await userModel.addUser(userData);
+      const newUser = await userModel.addUser(userData, createdBy);
       return newUser;
     } catch (error) {
       console.error(error);
@@ -31,9 +31,13 @@ export default class UsersService {
     }
   }
 
-  async updateUser(userId, updatedData) {
+  async updateUser(userId, updatedData, updatedBy) {
     try {
-      const updatedUser = await userModel.updateUser(userId, updatedData);
+      const updatedUser = await userModel.updateUser(
+        userId,
+        updatedData,
+        updatedBy,
+      );
       return updatedUser;
     } catch (error) {
       console.error(error);
@@ -41,9 +45,9 @@ export default class UsersService {
     }
   }
 
-  async deleteUser(userId) {
+  async deleteUser(userId, deletedBy) {
     try {
-      await userModel.deleteUser(userId);
+      await userModel.deleteUser(userId, deletedBy);
     } catch (error) {
       console.error(error);
       throw error;

@@ -7,6 +7,7 @@ import {
   validateBody,
   validateParams,
   validateImage,
+  validateFileImage,
 } from "../../middleware/validate.js";
 import {
   addClientSchema,
@@ -18,6 +19,7 @@ import {
   addPetSchema,
   editPetSchema,
   petIdParamSchema,
+  petImageSchema,
 } from "../../validators/petSchema.js";
 
 const router = express.Router();
@@ -69,6 +71,8 @@ router.post(
   "/client/:client_id/pets",
   hasPermission("C_P_RECORDS", "can_create"),
   validateParams(clientIdParamSchema),
+  upload.single("pet_image"),
+  validateFileImage(petImageSchema, { fieldName: "pet_image" }),
   validateBody(addPetSchema),
   (req, res) => clientRecordsController.addPet(req, res),
 );
@@ -98,6 +102,8 @@ router.put(
   "/pets/:pets_id/edit-pet",
   hasPermission("C_P_RECORDS", "can_edit"),
   validateParams(petIdParamSchema),
+  upload.single("pet_image"),
+  validateFileImage(petImageSchema, { fieldName: "pet_image" }),
   validateBody(editPetSchema),
   (req, res) => clientRecordsController.editPet(req, res),
 );

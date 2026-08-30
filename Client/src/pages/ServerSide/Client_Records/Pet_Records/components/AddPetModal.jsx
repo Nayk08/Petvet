@@ -1,5 +1,10 @@
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ImageIcon,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +22,7 @@ import {
   useNavigation,
   useActionData,
 } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   queryClient,
@@ -38,6 +44,19 @@ export function Component() {
   const isActionError = Boolean(actionData?.error);
   const actionError = actionData?.error;
 
+  const [imagePreview, setImagePreview] = useState(null);
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
   const { data: gender } = useQuery({
     queryKey: ["gender"],
     queryFn: ({ signal }) => selectGender({ signal }),
@@ -56,13 +75,22 @@ export function Component() {
     enabled: isEditMode,
   });
 
+  useEffect(() => {
+    if (petData?.pet_image) {
+      setImagePreview(petData.pet_image);
+    }
+  }, [petData]);
+
   function closeModal() {
     navigate(`..${location.search}`);
   }
 
   function handleSubmit(event) {
     event.preventDefault();
-    submit(event.currentTarget, { method: isEditMode ? "PUT" : "POST" });
+    submit(event.currentTarget, {
+      method: isEditMode ? "PUT" : "POST",
+      encType: "multipart/form-data",
+    });
   }
 
   return (
@@ -87,7 +115,46 @@ export function Component() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={handleSubmit}
+            encType="multipart/form-data"
+            className="space-y-5"
+          >
+            {/* Image Upload Area */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                Pet Image
+              </label>
+              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative group">
+                <div className="w-16 h-16 shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden flex items-center justify-center">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-6 h-6 text-slate-400 dark:text-slate-500" />
+                  )}
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {imagePreview ? "Change image file" : "Upload pet image"}
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    PNG, JPG or WEBP up to 5MB
+                  </span>
+                </div>
+                <input
+                  name="pet_image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </div>
+            </div>
+
             {/* Pet Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
@@ -145,6 +212,7 @@ export function Component() {
                   type="number"
                   step="0.01"
                   min="0"
+                  max="999.99"
                   required
                   placeholder="0.00"
                   defaultValue={petData?.weight_kg}
@@ -288,40 +356,20 @@ export async function action({ request, params }) {
   const formData = await request.formData();
   const client_id = params.client_id;
   const isEditMode = Boolean(params.pets_id);
-
   const pets_name = formData.get("pets_name");
-  const breed = formData.get("breed");
-  const is_spayed_neutered = formData.get("is_spayed_neutered") === "true";
-  const date_of_birth = formData.get("date_of_birth");
-  const weight_kg = formData.get("weight_kg");
-  const pet_status_id = formData.get("pet_status_id");
-  const species_id = formData.get("species_id");
-  const gender_id = formData.get("gender_id");
+
+  // Unchecked checkboxes are omitted from FormData entirely, so make sure
+  // the field is always present as an explicit "true"/"false" string.
+  formData.set(
+    "is_spayed_neutered",
+    formData.get("is_spayed_neutered") === "true" ? "true" : "false",
+  );
 
   try {
     if (isEditMode) {
-      await editPet(params.pets_id, {
-        pets_name,
-        breed,
-        is_spayed_neutered,
-        date_of_birth,
-        weight_kg,
-        pet_status_id,
-        species_id,
-        gender_id,
-      });
+      await editPet(params.pets_id, formData);
     } else {
-      await addPet(
-        pets_name,
-        breed,
-        is_spayed_neutered,
-        date_of_birth,
-        weight_kg,
-        pet_status_id,
-        species_id,
-        gender_id,
-        client_id,
-      );
+      await addPet(client_id, formData);
     }
   } catch (error) {
     const errorMessage = error.message || "Failed to save pet.";

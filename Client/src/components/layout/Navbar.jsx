@@ -16,7 +16,6 @@ import {
   ShoppingCart,
   CreditCard,
   Package,
-  Settings,
   Users,
   User,
   Shield,
@@ -218,17 +217,21 @@ export default function Navbar({ onLogout }) {
                       key={module.module_code}
                       className="relative group flex items-center h-full shrink-0"
                     >
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 group-hover:text-slate-900 bg-transparent cursor-pointer border-none transition-colors whitespace-nowrap dark:text-slate-300 dark:group-hover:text-white">
+                      <button
+                        type="button"
+                        aria-haspopup="true"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 group-hover:text-slate-900 group-focus-within:text-slate-900 bg-transparent cursor-pointer border-none transition-colors whitespace-nowrap dark:text-slate-300 dark:group-hover:text-white dark:group-focus-within:text-white"
+                      >
                         <IconComponent size={16} />
                         {module.module_name}
                         <ChevronDown
                           size={14}
-                          className="ml-0.5 text-slate-400 transition-transform group-hover:rotate-180"
+                          className="ml-0.5 text-slate-400 transition-transform group-hover:rotate-180 group-focus-within:rotate-180"
                         />
                       </button>
 
                       {/* Dropdown Panel */}
-                      <div className="absolute top-[100%] right-0 pt-1 w-48 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="absolute top-full right-0 pt-1 w-48 hidden group-hover:block group-focus-within:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                         <div className="bg-white border border-slate-200 rounded-xl p-1 shadow-lg ring-1 ring-black/5 dark:bg-slate-900 dark:border-slate-800">
                           {subItems.map((child) => {
                             const ChildIcon =
@@ -300,17 +303,21 @@ export default function Navbar({ onLogout }) {
                   {userRole}
                 </span>
                 <div className="relative group flex items-center h-full">
-                  <button className="flex items-center gap-1.5 bg-transparent p-1 rounded-full cursor-pointer border-none">
+                  <button
+                    type="button"
+                    aria-haspopup="true"
+                    className="flex items-center gap-1.5 bg-transparent p-1 rounded-full cursor-pointer border-none"
+                  >
                     <div className="w-8 h-8 bg-indigo-600 rounded-full text-xs font-semibold text-white flex items-center justify-center shadow-sm">
                       {userInitials}
                     </div>
                     <ChevronDown
                       size={12}
-                      className="text-slate-400 group-hover:text-slate-600 transition-transform group-hover:rotate-180"
+                      className="text-slate-400 group-hover:text-slate-600 group-focus-within:text-slate-600 transition-transform group-hover:rotate-180 group-focus-within:rotate-180"
                     />
                   </button>
 
-                  <div className="absolute top-[100%] right-0 pt-1 w-48 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="absolute top-full right-0 pt-1 w-48 hidden group-hover:block group-focus-within:block z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="bg-white border border-slate-200 rounded-xl p-1 shadow-lg ring-1 ring-black/5 dark:bg-slate-900 dark:border-slate-800">
                       <div className="px-3 py-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 mb-1 dark:border-slate-800 dark:text-slate-500">
                         Account Operations

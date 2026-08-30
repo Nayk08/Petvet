@@ -59,17 +59,9 @@ export default class PaymentModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `SELECT ci.cart_item_id,
-                ci.product_id,
-                p.product_name,
-                ci.quantity,
-                ci.item_price,
-                ci.subtotal,
-                ci.date_created
-         FROM tbl_cart_items ci
-         LEFT JOIN tbl_products p ON p.product_id = ci.product_id
-         WHERE ci.payment_id = $1
-         ORDER BY ci.cart_item_id`,
+        `SELECT * FROM v_payment_cart_items
+         WHERE payment_id = $1
+         ORDER BY cart_item_id`,
         [payment_id],
       );
       return res.rows;
@@ -233,6 +225,7 @@ export default class PaymentModel {
            is_deleted = true,
            payment_status_id = $2,
            updated_by = $3,
+           deleted_by = $3,
            date_updated = NOW()
          WHERE payment_id = $1
          RETURNING *`,

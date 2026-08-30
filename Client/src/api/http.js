@@ -526,44 +526,32 @@ export async function deleteClient(id) {
 // Pet Records
 // ─────────────────────────────
 
-export async function fetchPetRecordsByClientId(client_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/client/${client_id}/pets`, {
-    signal,
-    credentials: "include",
+export async function fetchPetRecordsByClientId(
+  client_id,
+  { page = 1, limit = 10, search = "", signal } = {},
+) {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...(search && { search }),
   });
+
+  const response = await fetch(
+    `${baseUrl}/client/${client_id}/pets?${params}`,
+    {
+      signal,
+      credentials: "include",
+    },
+  );
   return handleResponse(response, "Failed to fetch pet records");
 }
 
-export async function addPet(
-  pets_name,
-  breed,
-  is_spayed_neutered,
-  date_of_birth,
-  weight_kg,
-  microchip_number,
-  pet_status_id,
-  species_id,
-  gender_id,
-  client_id,
-) {
+export async function addPet(client_id, formData) {
   const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/client/${client_id}/pets`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": csrfToken,
-    },
-    body: JSON.stringify({
-      pets_name,
-      breed,
-      is_spayed_neutered,
-      date_of_birth,
-      weight_kg,
-      microchip_number,
-      pet_status_id,
-      species_id,
-      gender_id,
-    }),
+    headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
+    body: formData,
     credentials: "include",
   });
   return handleResponse(response, "Failed to add pet");
@@ -577,15 +565,12 @@ export async function fetchPetById(pets_id, { signal } = {}) {
   return handleResponse(response, "Failed to fetch pet");
 }
 
-export async function editPet(pets_id, payload) {
+export async function editPet(pets_id, formData) {
   const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/pets/${pets_id}/edit-pet`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": csrfToken,
-    },
-    body: JSON.stringify(payload),
+    headers: { "x-csrf-token": csrfToken },
+    body: formData,
     credentials: "include",
   });
   return handleResponse(response, "Failed to update pet");

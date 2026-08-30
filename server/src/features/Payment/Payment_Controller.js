@@ -26,7 +26,7 @@ export default class PaymentController {
 
   async checkout(req, res) {
     try {
-      const created_by = req.user?.username ?? null; // adjust to your auth middleware
+      const created_by = req.session.user?.name ?? null;
       const { cartItems } = req.body;
       const payment = await paymentService.checkout({ created_by, cartItems });
       res.status(201).json(payment);
@@ -38,7 +38,7 @@ export default class PaymentController {
 
   async completePayment(req, res) {
     try {
-      const updated_by = req.user?.username ?? null;
+      const updated_by = req.session.user?.name ?? null;
       const payment = await paymentService.completePayment(
         req.params.id,
         updated_by,
@@ -51,7 +51,7 @@ export default class PaymentController {
   }
   async cancelPayment(req, res) {
     try {
-      const updated_by = req.user?.username ?? null;
+      const updated_by = req.session.user?.name ?? null;
       const payment = await paymentService.cancelPayment(
         req.params.id,
         updated_by,

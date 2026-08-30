@@ -217,7 +217,7 @@ export default function DynamicGrid({
               placeholder="Search records..."
               value={search}
               onChange={(e) => onSearchChange?.(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-teal-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
             />
           </div>
 
@@ -249,7 +249,7 @@ export default function DynamicGrid({
                     }
                     className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate dark:bg-slate-950 dark:text-slate-300 ${
                       filters[col.key]
-                        ? "border-teal-600 bg-teal-50 text-teal-700 font-semibold dark:bg-teal-500/10 dark:text-teal-300"
+                        ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
                         : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
                     }`}
                   >
@@ -289,7 +289,7 @@ export default function DynamicGrid({
                   const value = e.target.value;
                   onLimitChange(value === "all" ? "all" : Number(value));
                 }}
-                className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-teal-500 transition-colors cursor-pointer font-semibold hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer font-semibold hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
               >
                 {limitOptions.map((opt) => (
                   <option key={opt} value={opt}>
@@ -397,7 +397,7 @@ export default function DynamicGrid({
                           ) : col.key === "name" ||
                             col.key === "product_name" ||
                             col.key === "patient" ? (
-                            <span className="font-semibold text-slate-900 group-hover:text-teal-600 transition-colors dark:text-slate-100 dark:group-hover:text-teal-300">
+                            <span className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors dark:text-slate-100 dark:group-hover:text-indigo-300">
                               {row[col.key]}
                             </span>
                           ) : col.key === "status" || col.key === "expired" ? (
