@@ -50,9 +50,16 @@ export default function DynamicGrid({
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
+  // filterOnly columns contribute a filter control (e.g. filtering by a
+  // unique staff ID) without being a real, toggleable table column.
+  const tableColumnsConfig = useMemo(
+    () => columnsConfig.filter((col) => !col.filterOnly),
+    [columnsConfig],
+  );
+
   const visibleColumns = useMemo(() => {
-    return columnsConfig.filter((col) => !hiddenColumns.has(col.key));
-  }, [columnsConfig, hiddenColumns]);
+    return tableColumnsConfig.filter((col) => !hiddenColumns.has(col.key));
+  }, [tableColumnsConfig, hiddenColumns]);
 
   const toggleColumnVisibility = (columnKey) => {
     setHiddenColumns((prev) => {
@@ -60,7 +67,7 @@ export default function DynamicGrid({
       if (next.has(columnKey)) {
         next.delete(columnKey);
       } else {
-        if (next.size < columnsConfig.length - 1) next.add(columnKey);
+        if (next.size < tableColumnsConfig.length - 1) next.add(columnKey);
       }
       return next;
     });
@@ -224,10 +231,30 @@ export default function DynamicGrid({
           <div className="flex flex-wrap items-center gap-2 flex-1">
             {columnsConfig
               .filter(
-                (col) => col.filterOptions && col.filterOptions.length > 0,
+                (col) =>
+                  col.filterType === "date" ||
+                  (col.filterOptions && col.filterOptions.length > 0),
               )
               .map((col) =>
-                col.multiSelect ? (
+                col.filterType === "date" ? (
+                  <input
+                    key={col.key}
+                    type="date"
+                    value={filters[col.key] || ""}
+                    onChange={(e) =>
+                      onFiltersChange?.({
+                        ...filters,
+                        [col.key]: e.target.value,
+                      })
+                    }
+                    title={col.label}
+                    className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                      filters[col.key]
+                        ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
+                        : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
+                    }`}
+                  />
+                ) : col.multiSelect ? (
                   <MultiSelectFilter
                     key={col.key}
                     label={col.label}
@@ -320,7 +347,7 @@ export default function DynamicGrid({
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-100 mb-1 dark:border-slate-800 dark:text-slate-500">
                     Toggle Fields
                   </div>
-                  {columnsConfig.map((col) => (
+                  {tableColumnsConfig.map((col) => (
                     <button
                       key={col.key}
                       type="button"

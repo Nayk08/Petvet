@@ -1,66 +1,72 @@
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Outlet, useNavigate, Link } from "react-router-dom";
+import { fetchAppointments } from "@/api/http";
+import QueryState from "@/components/ui/QueryState";
+import { Button } from "@/components/ui/button";
+import { Plus, ChevronLeft, ChevronRight, Pencil, XCircle } from "lucide-react";
 
-const SERVICES = [
-  { id: "grooming", name: "Grooming", color: "bg-blue-600" },
-  { id: "consultation", name: "Consultation", color: "bg-slate-500" },
-  { id: "operation", name: "Operation", color: "bg-red-600" },
-];
+const SERVICE_DOT = {
+  Grooming: "bg-indigo-500",
+  Consultation: "bg-emerald-500",
+  Operation: "bg-rose-500",
+};
 
-function generateTimeSlots({
-  startHour = 9,
-  endHour = 18, // Clinic closes at 6:00 PM
-} = {}) {
-  const slots = [];
-  for (let hour = startHour; hour < endHour; hour++) {
-    const nextHour = hour + 1;
+const STATUS_BADGE = {
+  Pending: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+  Confirmed: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800",
+  Completed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+  Cancelled: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+};
 
-    const startPeriod = hour < 12 ? "AM" : "PM";
-    const startDisplayHour = hour % 12 === 0 ? 12 : hour % 12;
-    const startLabel = `${String(startDisplayHour).padStart(2, "0")}:00 ${startPeriod}`;
-
-    const endPeriod = nextHour < 12 ? "AM" : "PM";
-    const endDisplayHour = nextHour % 12 === 0 ? 12 : nextHour % 12;
-    const endLabel = `${String(endDisplayHour).padStart(2, "0")}:00 ${endPeriod}`;
-
-    slots.push({
-      id: hour,
-      label: `${startLabel} - ${endLabel}`,
-      hour,
-      minute: 0,
-    });
-  }
-  return slots;
+function formatTime(value) {
+  return value
+    ? new Date(value).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
 }
 
-const TIME_SLOTS = generateTimeSlots();
+function dateKey(value) {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
 
-export default function Appointment() {
-  const [selectedService, setSelectedService] = useState(SERVICES[0]);
-  const [currentMonthDate, setCurrentMonthDate] = useState(
-    new Date(2026, 6, 1),
-  );
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedSlots, setSelectedSlots] = useState([]);
+const BOOKING_CLOSE_HOUR = 18; // 6 PM — last slot (5-6 PM) has already started by then
 
-  // Database store with single transaction blocks
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      service: SERVICES[0],
-      date: "Jul 9, 2026",
-      time: "09:00 AM - 10:00 AM",
-      slotIds: [9],
-    },
-    {
-      id: 2,
-      service: SERVICES[1],
-      date: "Jul 9, 2026",
-      time: "01:00 PM - 04:00 PM", // Saved as single transaction block
-      slotIds: [13, 14, 15], // Spans 1pm, 2pm, and 3pm hours
-    },
-  ]);
+function isPastDay(date) {
+  const now = new Date();
+  if (dateKey(date) < dateKey(now)) return true;
+  // Today counts as unbookable too once every slot (9 AM-6 PM) has passed.
+  return dateKey(date) === dateKey(now) && now.getHours() >= BOOKING_CLOSE_HOUR;
+}
 
-  const now = new Date(2026, 6, 9, 15, 43);
+export function Component() {
+  const navigate = useNavigate();
+  const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["appointments", "calendar"],
+    queryFn: ({ signal }) => fetchAppointments({ limit: "all", signal }),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+  });
+
+  const appointments = data?.rows ?? [];
+
+  const appointmentsByDay = useMemo(() => {
+    const map = new Map();
+    for (const appt of appointments) {
+      const key = dateKey(appt.appointment_date);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(appt);
+    }
+    return map;
+  }, [appointments]);
 
   const year = currentMonthDate.getFullYear();
   const month = currentMonthDate.getMonth();
@@ -68,375 +74,221 @@ export default function Appointment() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const daysArray = [];
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    daysArray.push(null);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    daysArray.push(new Date(year, month, d));
-  }
+  for (let i = 0; i < firstDayOfMonth; i++) daysArray.push(null);
+  for (let d = 1; d <= daysInMonth; d++) daysArray.push(new Date(year, month, d));
 
-  const handlePrevMonth = () =>
-    setCurrentMonthDate(new Date(year, month - 1, 1));
-  const handleNextMonth = () =>
-    setCurrentMonthDate(new Date(year, month + 1, 1));
+  const handlePrevMonth = () => setCurrentMonthDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentMonthDate(new Date(year, month + 1, 1));
 
-  const isDatePast = (date) => {
-    if (!date) return true;
-    const compareDate = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      23,
-      59,
-      59,
-    );
-    return compareDate < now;
-  };
+  const selectedKey = selectedDate ? dateKey(selectedDate) : null;
+  const selectedDayAppointments = (selectedKey && appointmentsByDay.get(selectedKey)) || [];
 
-  const isTimeSlotPast = (timeSlot) => {
-    if (!selectedDate) return false;
-    const slotDateTime = new Date(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth(),
-      selectedDate.getDate(),
-      timeSlot.hour,
-      timeSlot.minute,
-    );
-    return slotDateTime < now;
-  };
-
-  // Counts total number of unique transactions booked on a specific date calendar day
-  const getDayBookingCount = (date) => {
-    if (!date) return 0;
-    const formattedDate = date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    return appointments.filter((app) => app.date === formattedDate).length;
-  };
-
-  // Checks how many services are booked during a specific hour ID
-  const getSlotBookingStats = (slot) => {
-    if (!selectedDate) return { count: 0, isFull: false };
-
-    const formattedTargetDate = selectedDate.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-
-    // Check if the individual slot hour ID falls inside any transaction's slotIds block
-    const matches = appointments.filter(
-      (app) =>
-        app.date === formattedTargetDate && app.slotIds.includes(slot.id),
-    );
-
-    return {
-      count: matches.length,
-      isFull: matches.length >= SERVICES.length,
-    };
-  };
-
-  const handleTimeSlotClick = (slot) => {
-    const { isFull } = getSlotBookingStats(slot);
-    if (isFull) return;
-
-    if (selectedSlots.length === 0) {
-      setSelectedSlots([slot]);
-      return;
-    }
-
-    const slotIds = selectedSlots.map((s) => s.id);
-    const minId = Math.min(...slotIds);
-    const maxId = Math.max(...slotIds);
-
-    if (slotIds.includes(slot.id)) {
-      if (slot.id === minId || slot.id === maxId) {
-        setSelectedSlots(selectedSlots.filter((s) => s.id !== slot.id));
-      } else {
-        setSelectedSlots([slot]);
-      }
-      return;
-    }
-
-    if (slot.id === minId - 1 || slot.id === maxId + 1) {
-      const newSelection = [...selectedSlots, slot].sort((a, b) => a.id - b.id);
-      setSelectedSlots(newSelection);
-    } else {
-      setSelectedSlots([slot]);
-    }
-  };
-
-  const handleBooking = (e) => {
-    e.preventDefault();
-    if (!selectedDate || selectedSlots.length === 0) return;
-
-    // 1. Calculate the clean combined time label string
-    let finalTimeLabel = "";
-    if (selectedSlots.length === 1) {
-      finalTimeLabel = selectedSlots[0].label;
-    } else {
-      const startLabelPart = selectedSlots[0].label.split(" - ")[0];
-      const endLabelPart =
-        selectedSlots[selectedSlots.length - 1].label.split(" - ")[1];
-      finalTimeLabel = `${startLabelPart} - ${endLabelPart}`;
-    }
-
-    // 2. Map all targeted slot raw IDs to check against later for capacity calculations
-    const assignedSlotIds = selectedSlots.map((slot) => slot.id);
-
-    // 3. Save exactly ONE single item object (1 transaction)
-    const newSingleTransaction = {
-      id: Date.now(),
-      service: selectedService,
-      date: selectedDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      time: finalTimeLabel,
-      slotIds: assignedSlotIds, // [13, 14, 15] saved inside a single record entry
-    };
-
-    setAppointments([...appointments, newSingleTransaction]);
-    setSelectedDate(null);
-    setSelectedSlots([]);
-  };
+  const bookLink = selectedDate
+    ? `add-appointment?date=${dateKey(selectedDate)}`
+    : "add-appointment";
 
   return (
-    <div className="w-full flex justify-center items-start">
-      <div className="w-full max-w-6xl bg-white border border-slate-200 rounded-xl p-10 mt-4 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-        <h2 className="text-2xl font-bold text-slate-950 tracking-wide mb-8 dark:text-white">
-          Book an Appointment
-        </h2>
+    <div className="w-full py-6 space-y-4">
+      <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-wide">
+            Appointments
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Click a day to view or book appointments.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to={bookLink} className="flex items-center gap-1.5 font-medium">
+            <Plus size={16} />
+            <span>Book Appointment</span>
+          </Link>
+        </Button>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-2 space-y-8">
-            <form onSubmit={handleBooking} className="space-y-8">
-              {/* 1. Select Service Type */}
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-3 dark:text-slate-400">
-                  1. Select Service Type
-                </label>
-                <div className="grid grid-cols-3 gap-4">
-                  {SERVICES.map((service) => (
-                    <button
-                      key={service.id}
-                      type="button"
-                      onClick={() => setSelectedService(service)}
-                      className={`py-3.5 px-4 rounded-lg border text-center font-medium text-base transition-all ${
-                        selectedService.id === service.id
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
-                      }`}
-                    >
-                      {service.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      <QueryState
+        isLoading={isLoading}
+        isError={isError}
+        error={error}
+        loadingLabel="Loading appointments..."
+        errorLabel="Error loading appointments"
+      />
 
-              {/* 2. Select Date */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                    2. Select Date
-                  </label>
-                  <div className="flex items-center space-x-3 bg-slate-50 p-1 border border-slate-200 rounded-lg dark:bg-slate-950 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={handlePrevMonth}
-                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors dark:text-slate-400 dark:hover:text-white"
-                    >
-                      &larr;
-                    </button>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800 min-w-[100px] text-center dark:text-slate-200">
-                      {currentMonthDate.toLocaleDateString("en-US", {
-                        month: "long",
-                        year: "numeric",
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleNextMonth}
-                      className="px-2.5 py-1 text-slate-500 hover:text-slate-900 transition-colors dark:text-slate-400 dark:hover:text-white"
-                    >
-                      &rarr;
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">
-                  <div>Sun</div>
-                  <div>Mon</div>
-                  <div>Tue</div>
-                  <div>Wed</div>
-                  <div>Thu</div>
-                  <div>Fri</div>
-                  <div>Sat</div>
-                </div>
-
-                <div className="grid grid-cols-7 gap-2">
-                  {daysArray.map((date, idx) => {
-                    if (!date) return <div key={`empty-${idx}`} />;
-
-                    const past = isDatePast(date);
-                    const isSelected =
-                      selectedDate &&
-                      selectedDate.toDateString() === date.toDateString();
-
-                    const dayBookingsCount = getDayBookingCount(date);
-
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={past}
-                        onClick={() => {
-                          setSelectedDate(date);
-                          setSelectedSlots([]);
-                        }}
-                        className={`flex flex-col items-center justify-between p-2 rounded-lg border transition-all h-16 relative ${
-                          past
-                            ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed line-through dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-700/60"
-                            : isSelected
-                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
-                        }`}
-                      >
-                        <span className="text-base font-bold w-full text-center mt-0.5">
-                          {date.getDate()}
-                        </span>
-
-                        {/* Day level count badge based on transactions */}
-                        {!past && dayBookingsCount > 0 && (
-                          <span
-                            className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold tracking-wide uppercase ${
-                              isSelected
-                                ? "bg-white text-indigo-600"
-                                : "bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-800"
-                            }`}
-                          >
-                            {dayBookingsCount} Booked
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 3. Available Time Slots */}
-              <div>
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
-                    3. Available Time Slots (Operating Hours: 09:00 AM - 06:00
-                    PM)
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {TIME_SLOTS.map((slot) => {
-                    const past = isTimeSlotPast(slot);
-                    const isSelected = selectedSlots.some(
-                      (s) => s.id === slot.id,
-                    );
-                    const { count, isFull } = getSlotBookingStats(slot);
-
-                    return (
-                      <button
-                        key={slot.label}
-                        type="button"
-                        disabled={past || !selectedDate || isFull}
-                        onClick={() => handleTimeSlotClick(slot)}
-                        className={`py-3 px-4 rounded-lg border text-sm transition-all flex justify-between items-center ${
-                          !selectedDate
-                            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-950 dark:border-slate-800 dark:text-slate-600"
-                            : past
-                              ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed line-through dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-700/60"
-                              : isFull
-                                ? "bg-red-50 border-red-300 text-red-500 cursor-not-allowed dark:bg-red-950/30 dark:border-red-900/60 dark:text-red-400"
-                                : isSelected
-                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm font-bold"
-                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700"
-                        }`}
-                      >
-                        <span className="font-medium">{slot.label}</span>
-
-                        {/* Time Slot Status Badge */}
-                        {selectedDate && !past && (
-                          <span
-                            className={`text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded ${
-                              isFull
-                                ? "bg-red-500 text-white"
-                                : count > 0
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
-                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800"
-                            }`}
-                          >
-                            {isFull
-                              ? "Fully Booked"
-                              : count > 0
-                                ? `${count} Booked`
-                                : "Available"}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
+      {!isLoading && !isError && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar */}
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
               <button
-                type="submit"
-                disabled={!selectedDate || selectedSlots.length === 0}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-base transition-colors mt-4 tracking-wide shadow-sm dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                Confirm Appointment
+                <ChevronLeft size={18} />
               </button>
-            </form>
+              <span className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                {currentMonthDate.toLocaleDateString("en-US", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <div key={d}>{d}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {daysArray.map((date, idx) => {
+                if (!date) return <div key={`empty-${idx}`} />;
+
+                const key = dateKey(date);
+                const dayAppointments = appointmentsByDay.get(key) || [];
+                const isSelected = selectedKey === key;
+                const isToday = dateKey(new Date()) === key;
+                const isPast = isPastDay(date);
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={isPast}
+                    onClick={() => setSelectedDate(date)}
+                    className={`flex flex-col items-center justify-between p-2 rounded-lg border transition-all h-16 relative ${
+                      isPast
+                        ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40 text-red-400 dark:text-red-800 cursor-not-allowed opacity-70"
+                        : isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                          : isToday
+                            ? "bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-slate-100"
+                            : "bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="text-base font-bold w-full text-center mt-0.5">
+                      {date.getDate()}
+                    </span>
+                    {dayAppointments.length > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        {dayAppointments.slice(0, 4).map((appt) => (
+                          <span
+                            key={appt.appointment_id}
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isSelected
+                                ? "bg-white"
+                                : SERVICE_DOT[appt.service_name] || "bg-slate-400"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Right Column: Schedule Container Summary */}
+          {/* Selected day panel */}
           <div className="lg:col-span-1">
-            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 dark:bg-slate-950 dark:border-slate-800">
-              <h3 className="text-xl font-bold text-slate-950 mb-4 dark:text-white">
-                Your Schedule
+            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-4">
+              <h3 className="text-lg font-bold text-slate-950 dark:text-white">
+                {selectedDate
+                  ? selectedDate.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  : "Select a day"}
               </h3>
-              {appointments.length === 0 ? (
-                <p className="text-sm text-slate-500 italic dark:text-slate-400">
-                  No appointments booked yet.
+
+              {selectedDayAppointments.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                  No appointments booked on this day.
                 </p>
               ) : (
-                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
-                  {appointments.map((app) => (
-                    <div
-                      key={app.id}
-                      className="flex items-center space-x-4 p-4 bg-white border border-slate-200 rounded-xl dark:bg-slate-900 dark:border-slate-800"
-                    >
-                      <div
-                        className={`w-1.5 h-12 rounded-full ${app.service.color}`}
-                      />
-                      <div>
-                        <h4 className="font-bold text-base text-slate-950 dark:text-white">
-                          {app.service.name}
-                        </h4>
-                        <p className="text-sm text-slate-600 font-medium dark:text-slate-300">
-                          {app.date}
-                        </p>
-                        <p className="text-sm text-slate-500 font-medium dark:text-slate-400">
-                          {app.time}{" "}
-                          {/* Displays unified blocks like "01:00 PM - 04:00 PM" as a single card entry */}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="space-y-3 max-h-120 overflow-y-auto pr-1">
+                  {selectedDayAppointments
+                    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+                    .map((appt) => {
+                      const isFinal = ["Completed", "Cancelled"].includes(
+                        appt.appointment_status_name,
+                      );
+                      return (
+                        <div
+                          key={appt.appointment_id}
+                          className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide border ${
+                                STATUS_BADGE[appt.appointment_status_name] ||
+                                STATUS_BADGE.Pending
+                              }`}
+                            >
+                              {appt.appointment_status_name}
+                            </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                              {formatTime(appt.start_time)} -{" "}
+                              {formatTime(appt.end_time)}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-slate-950 dark:text-white">
+                              {appt.pets_name}{" "}
+                              <span className="font-normal text-slate-500 dark:text-slate-400">
+                                ({appt.client_name})
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {appt.service_name}
+                              {appt.staff_name ? ` · ${appt.staff_name}` : ""}
+                            </p>
+                          </div>
+                          {!isFinal && (
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `${appt.appointment_id}/edit-appointment`,
+                                  )
+                                }
+                                className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 px-2 py-1 rounded-md transition-colors"
+                              >
+                                <Pencil size={12} /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `${appt.appointment_id}/cancel-appointment`,
+                                  )
+                                }
+                                className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-md transition-colors"
+                              >
+                                <XCircle size={12} /> Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <Outlet />
     </div>
   );
 }

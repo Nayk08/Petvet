@@ -13,6 +13,19 @@ export const queryClient = new QueryClient({
   },
 });
 
+// The calendar, Consultation, Grooming, and Operation pages each read
+// appointments through their own query key namespace, since they hit
+// different endpoints. Any add/edit/cancel needs to refresh all four, or
+// whichever view didn't trigger the mutation is left showing stale data.
+export function invalidateAppointmentQueries() {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["appointments"] }),
+    queryClient.invalidateQueries({ queryKey: ["consultation-appointments"] }),
+    queryClient.invalidateQueries({ queryKey: ["grooming-appointments"] }),
+    queryClient.invalidateQueries({ queryKey: ["operation-appointments"] }),
+  ]);
+}
+
 async function handleResponse(
   response,
   fallbackMessage = "Something went wrong",
@@ -607,4 +620,165 @@ export async function selectPetStatus({ signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch pet status list");
+}
+
+// ─────────────────────────────
+// Appointments
+// ─────────────────────────────
+
+export async function fetchAppointments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...(search && { search }),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+
+  const response = await fetch(`${baseUrl}/appointments?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch appointments");
+}
+
+function buildAppointmentFilterParams({ page, limit, search, filters = {} }) {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...(search && { search }),
+  });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+  return params;
+}
+
+export async function fetchConsultationAppointments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const params = buildAppointmentFilterParams({ page, limit, search, filters });
+  const response = await fetch(
+    `${baseUrl}/appointments/consultation?${params}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch consultation appointments");
+}
+
+export async function fetchGroomingAppointments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const params = buildAppointmentFilterParams({ page, limit, search, filters });
+  const response = await fetch(`${baseUrl}/appointments/grooming?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch grooming appointments");
+}
+
+export async function fetchOperationAppointments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const params = buildAppointmentFilterParams({ page, limit, search, filters });
+  const response = await fetch(`${baseUrl}/appointments/operation?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch operation appointments");
+}
+
+export async function fetchAppointmentById(appointment_id, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/appointments/${appointment_id}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch appointment");
+}
+
+export async function addAppointment(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/appointments/add-appointment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to add appointment");
+}
+
+export async function editAppointment(appointment_id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(
+    `${baseUrl}/appointments/${appointment_id}/edit-appointment`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    },
+  );
+  return handleResponse(response, "Failed to update appointment");
+}
+
+export async function cancelAppointment(appointment_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(
+    `${baseUrl}/appointments/${appointment_id}/cancel-appointment`,
+    {
+      method: "PUT",
+      headers: { "x-csrf-token": csrfToken },
+      credentials: "include",
+    },
+  );
+  return handleResponse(response, "Failed to cancel appointment");
+}
+
+export async function selectAppointmentServices({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/appointment-services`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch appointment services");
+}
+
+export async function selectAppointmentStaff({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/appointment-staff`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch staff list");
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { useQuery } from "@tanstack/react-query";
 import {
-  fetchConsultationAppointments,
+  fetchOperationAppointments,
   selectAppointmentStaff,
 } from "@/api/http";
 import { AppointmentColumns } from "@/utils/COLUMNS";
@@ -12,12 +12,12 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 
 // Read-only: booking and status changes happen from the general
-// Appointments page (gated under APPOINTMENT, not C_APPOINTMENT).
+// Appointments page (gated under APPOINTMENT, not O_APPOINTMENT).
 const READ_ONLY_COLUMNS = AppointmentColumns.filter(
   (col) => col.key !== "service_name",
 );
 
-export default function Consultation_Appointment() {
+export default function Operation_Appointment() {
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
@@ -61,14 +61,14 @@ export default function Consultation_Appointment() {
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: [
-      "consultation-appointments",
+      "operation-appointments",
       page,
       limit,
       debouncedSearch,
       filters,
     ],
     queryFn: ({ signal }) =>
-      fetchConsultationAppointments({
+      fetchOperationAppointments({
         page,
         limit,
         search: debouncedSearch,
@@ -85,15 +85,15 @@ export default function Consultation_Appointment() {
         isLoading={isLoading}
         isError={isError}
         error={error}
-        loadingLabel="Loading consultation appointments..."
-        errorLabel="Error loading consultation appointments"
+        loadingLabel="Loading operation appointments..."
+        errorLabel="Error loading operation appointments"
       />
       {!isLoading && !isError && (
         <>
           <DynamicGrid
             data={data?.rows ?? []}
             columnsConfig={columnsConfig}
-            title="Consultation Appointments"
+            title="Operation Appointments"
             limit={limit}
             search={search}
             onSearchChange={setSearch}

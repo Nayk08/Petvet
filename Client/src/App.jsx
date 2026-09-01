@@ -11,9 +11,9 @@ import Dashboard from "./pages/ServerSide/Dashboard";
 import Inventory from "./pages/ServerSide/Inventory/Inventory.jsx";
 import Cart from "./pages/ServerSide/Inventory/Cart/Cart.jsx";
 
-import Appointments from "./pages/ServerSide/Appointment";
 import Grooming_Appointment from "./pages/ServerSide/Grooming_Appointment.jsx";
 import Consultation_Appointment from "./pages/ServerSide/Consultation_Appointment.jsx";
+import Operation_Appointment from "./pages/ServerSide/Operation_Appointment.jsx";
 import LandingPage from "./pages/LandingPage";
 import { loader as LandingLoader } from "../src/pages/LandingPage.jsx";
 import {
@@ -146,8 +146,34 @@ const router = createBrowserRouter([
       },
       {
         path: "appointments",
-        element: <Appointments />,
         loader: requirePermission("APPOINTMENT"),
+        lazy: () => import("./pages/ServerSide/Appointment.jsx"),
+        children: [
+          {
+            path: "add-appointment",
+            loader: requirePermission("APPOINTMENT", "can_create"),
+            lazy: () =>
+              import(
+                "./pages/ServerSide/components/AddAppointmentModal.jsx"
+              ),
+          },
+          {
+            path: ":appointment_id/edit-appointment",
+            loader: requirePermission("APPOINTMENT", "can_edit"),
+            lazy: () =>
+              import(
+                "./pages/ServerSide/components/AddAppointmentModal.jsx"
+              ),
+          },
+          {
+            path: ":appointment_id/cancel-appointment",
+            loader: requirePermission("APPOINTMENT", "can_delete"),
+            lazy: () =>
+              import(
+                "./pages/ServerSide/components/CancelAppointmentModal.jsx"
+              ),
+          },
+        ],
       },
       {
         path: "grooming-appointment",
@@ -158,6 +184,11 @@ const router = createBrowserRouter([
         path: "consultation-appointment",
         element: <Consultation_Appointment />,
         loader: requirePermission("C_APPOINTMENT"),
+      },
+      {
+        path: "operation-appointment",
+        element: <Operation_Appointment />,
+        loader: requirePermission("O_APPOINTMENT"),
       },
       {
         path: "client-record",

@@ -19,6 +19,7 @@ import PermissionRoute from "./src/features/Authenticator/Users_Management/Permi
 import InventoryRoute from "./src/features/Inventory/Inventory_Route.js";
 import PaymentRoute from "./src/features/Payment/Payment_Route.js";
 import ClientRecordsRoute from "./src/features/Client_Records/Client_Records_Route.js";
+import AppointmentRoute from "./src/features/Appointment/Appointment_Route.js";
 
 const app = express();
 const PgSession = connectPgSimple(session);
@@ -84,6 +85,7 @@ app.use("/api", isAuth, doubleCsrfProtection, InventoryRoute);
 
 app.use("/api", isAuth, doubleCsrfProtection, PaymentRoute);
 app.use("/api", isAuth, doubleCsrfProtection, ClientRecordsRoute);
+app.use("/api", isAuth, doubleCsrfProtection, AppointmentRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {

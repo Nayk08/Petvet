@@ -152,6 +152,7 @@ RBAC/
 | `APPOINTMENT`         | Appointment                        | `appointments`                |
 | `C_APPOINTMENT`       | Consultation                       | `consultation-appointment`    |
 | `G_APPOINTMENT`       | Grooming                           | `grooming-appointment`        |
+| `O_APPOINTMENT`       | Operation                          | `operation-appointment`       |
 | `C_P_RECORDS`         | Client & Pet Records               | `client-pet-record`           |
 | `CART`                | Cart                               | `cart`                        |
 | `PAYMENTS`            | Payments                           | `payments`                    |
@@ -227,7 +228,13 @@ Pagination on `GET /api/client/:client_id/pets?page&limit&search` works differen
 
 ### Appointments
 
-Dashboard, Appointment, Grooming, and Consultation pages are routed and permission-gated; their backend feature modules are not yet implemented.
+Appointments link a client's pet to a service (`Consultation`/`Grooming`/`Operation`, `tbl_appointment_services`) and a date/time range. Status (`Pending` → `Confirmed`/`Completed`, or `Cancelled`) is resolved by name at runtime (`getAppointmentStatusId("Pending")`), mirroring Payments' status pattern.
+
+One shared `tbl_appointments` table backs all four permission-gated pages: the general **Appointments** page (`APPOINTMENT`) is a calendar with full CRUD — booking, editing, and cancelling — while **Consultation**, **Grooming**, and **Operation** (`C_APPOINTMENT`/`G_APPOINTMENT`/`O_APPOINTMENT`) are read-only, paginated, filterable tables pre-filtered to their service type, each backed by its own permission-checked endpoint (`GET /api/appointments/consultation`, `/grooming`, `/operation`) rather than just a client-side filter, so the permission is enforced server-side like everywhere else. Those three tables share a staff filter (by `assigned_staff_id`, not `staff_name` — several staff share a display name in this data, so filtering by name would conflate different people) and a date filter (`appointment_date`), which is also why `DynamicGrid.jsx` supports a `filterOnly` column (contributes a filter control without becoming a real, toggleable table column) and a `filterType: "date"` column (a native date input instead of the usual dropdown).
+
+An appointment can't double-book: two partial unique indexes (`uq_appointments_service_slot`, `uq_appointments_staff_slot`, both scoped to `is_deleted IS NOT TRUE` so a cancelled slot frees back up) stop the same service, or the same staff member regardless of service, from being booked into the same date+time twice — enforced at the database level so it's race-safe, not just checked-then-inserted. The Staff dropdown on the booking modal is itself filtered by role to match the selected service (`Grooming` → `Groomer`, `Consultation`/`Operation` → `Veterinarian`).
+
+Cancelling is a soft delete (`is_deleted` + `deleted_by`/`date_deleted`) that also flips the status to `Cancelled`, only allowed from `Pending`/`Confirmed` — same shape as `Payment_Service.js:cancelPayment`. Booking is restricted to fixed one-hour slots, 9:00 AM–6:00 PM, enforced both in the UI (a slot picker, not free-form times) and in `appointmentSchema.js` (rejects off-the-hour times, times outside the window, slots longer than an hour, and anything in the past — including "today" once the clock passes 6 PM).
 
 ---
 
@@ -305,7 +312,7 @@ Other client scripts: `npm run build`, `npm run preview`, `npm run lint` (oxlint
 
 ## Database
 
-16 tables + 6 views, PostgreSQL 14+.
+19 tables + 7 views, PostgreSQL 14+.
 
 ### Tables
 
@@ -329,6 +336,9 @@ Other client scripts: `npm run build`, `npm run preview`, `npm run lint` (oxlint
 | `tbl_payments`                | Payments  | Payment/order header — `total_amount`, `payment_status_id`, soft delete                              |
 | `tbl_payment_status`          | Payments  | Lookup: Pending / Completed / Cancelled                                                                |
 | `tbl_cart_items`              | Payments  | Line items per payment — `subtotal` is a generated column (`quantity * item_price`)                  |
+| `tbl_appointments`            | Appointments | Client + pet + service + assigned staff (`assigned_staff_id` → `tbl_users`) + date/time range + status, soft delete with `date_deleted`, indexed on `client_id`/`pets_id`/`appointment_services_id`/`appointment_date`/`assigned_staff_id`, unique on (date, time, service) and (date, time, staff) to prevent double-booking |
+| `tbl_appointment_services`    | Appointments | Lookup: Consultation / Grooming / Operation                                                            |
+| `tbl_appointment_status`      | Appointments | Lookup: Pending / Confirmed / Completed / Cancelled                                                    |
 
 ### Views
 
@@ -340,6 +350,7 @@ Other client scripts: `npm run build`, `npm run preview`, `npm run lint` (oxlint
 | `v_payments`            | Payment listings (joins status names)                  |                                            |
 | `v_client_pets`         | Client + pet record listings                           |                                            |
 | `v_payment_cart_items`  | Cart items for a payment (`GET /api/payments/:id`)     | Joins `tbl_cart_items` to `tbl_products` for `product_name`                              |
+| `v_appointments`        | Appointment listings (general + Consultation + Grooming) | Joins client, pet, service, and status names in; does **not** filter `is_deleted` (a cancelled appointment is a status, not a real deletion — same convention as `v_payments`) |
 
 > **Note:** these views live only in the database — pgAdmin's ERD/reverse-engineering export (`Tables` diagram/script) does not include `CREATE VIEW` statements. A schema-only dump made that way will create the 16 tables but omit all 6 views the app depends on; use `pg_dump --schema-only` (or pgAdmin's **Views → Generate Script**), or copy the definitions below, to recreate them on a fresh database.
 
@@ -455,7 +466,39 @@ CREATE OR REPLACE VIEW public.v_client_pets
      LEFT JOIN tbl_pet_status ps ON ps.pet_status_id = p.pet_status_id
   WHERE c.is_deleted IS NOT TRUE
   GROUP BY c.client_id, c.name, c.email, c.mobile_no;
+
+CREATE OR REPLACE VIEW public.v_appointments AS
+ SELECT a.appointment_id,
+    a.client_id,
+    c.name AS client_name,
+    a.pets_id,
+    p.pets_name,
+    a.appointment_services_id,
+    s.appointment_services AS service_name,
+    a.appointment_date,
+    a.start_time,
+    a.end_time,
+    a.appointment_status_id,
+    st.appointment_status_name,
+    a.notes,
+    a.is_deleted,
+    a.created_by,
+    a.updated_by,
+    a.deleted_by,
+    a.date_created,
+    a.date_updated,
+    a.date_deleted,
+    a.assigned_staff_id,
+    u.user_name AS staff_name
+   FROM tbl_appointments a
+     JOIN tbl_clients c ON c.client_id = a.client_id
+     JOIN tbl_pets p ON p.pets_id = a.pets_id
+     JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+     JOIN tbl_appointment_status st ON st.appointment_status_id = a.appointment_status_id
+     LEFT JOIN tbl_users u ON u.users_id = a.assigned_staff_id;
 ```
+
+> `assigned_staff_id`/`staff_name` are appended at the end rather than grouped near the other appointment columns — `CREATE OR REPLACE VIEW` can only append new columns, it can't insert or reorder existing ones. Keep that in mind before hand-editing this view directly (e.g. in pgAdmin) — a mid-list column reorder will fail outright.
 
 ### Pagination
 
@@ -562,6 +605,21 @@ Base URL: `http://localhost:3000`. All `/api/*` routes below (except `/api/csrf-
 | `PUT`  | `/api/pets/:pets_id/delete-pet`                    | `can_delete` (soft delete) |
 | `GET`  | `/api/species` · `/api/gender` · `/api/pet-status` | `can_view` (lookups)       |
 
+### Appointments · `APPOINTMENT` / `C_APPOINTMENT` / `G_APPOINTMENT` / `O_APPOINTMENT`
+
+| Method | Endpoint                                              | Permission                    |
+| ------ | ------------------------------------------------------ | ------------------------------ |
+| `GET`  | `/api/appointments?page&limit&search&filters`         | `APPOINTMENT` `can_view`      |
+| `GET`  | `/api/appointments/consultation?page&limit&search&assigned_staff_id&appointment_date` | `C_APPOINTMENT` `can_view` |
+| `GET`  | `/api/appointments/grooming?page&limit&search&assigned_staff_id&appointment_date` | `G_APPOINTMENT` `can_view` |
+| `GET`  | `/api/appointments/operation?page&limit&search&assigned_staff_id&appointment_date` | `O_APPOINTMENT` `can_view` |
+| `GET`  | `/api/appointments/:appointment_id`                   | `APPOINTMENT` `can_view`      |
+| `POST` | `/api/appointments/add-appointment`                   | `APPOINTMENT` `can_create`    |
+| `PUT`  | `/api/appointments/:appointment_id/edit-appointment`  | `APPOINTMENT` `can_edit`      |
+| `PUT`  | `/api/appointments/:appointment_id/cancel-appointment`| `APPOINTMENT` `can_delete` (soft delete) |
+| `GET`  | `/api/appointment-services`                           | `APPOINTMENT` `can_view` (lookup) |
+| `GET`  | `/api/appointment-staff`                              | `APPOINTMENT` `can_view` (lookup — every non-`Client` user) |
+
 ### Status codes
 
 | Code  | Meaning                                                                       |
@@ -624,5 +682,4 @@ Provide `DATABASE_URL` for a managed PostgreSQL instance (SSL is enabled automat
 
 These are accurate as of this writing and worth knowing before extending the system:
 
-- **Appointment modules are frontend-only.** `APPOINTMENT`, `G_APPOINTMENT`, and `C_APPOINTMENT` have routes, permissions, and pages, but no backend feature folder.
 - **No test suite.** `npm test` in `server/` is still the placeholder that exits 1.

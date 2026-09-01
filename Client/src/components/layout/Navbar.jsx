@@ -26,6 +26,7 @@ import {
   Cat,
   Scissors,
   ClipboardClock,
+  Syringe,
   Moon,
   Sun,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const MODULE_ICONS = {
   APPOINTMENT: Calendar,
   G_APPOINTMENT: Scissors,
   C_APPOINTMENT: ClipboardClock,
+  O_APPOINTMENT: Syringe,
   C_P_RECORDS: Cat,
   CART: ShoppingCart,
   PAYMENTS: CreditCard,

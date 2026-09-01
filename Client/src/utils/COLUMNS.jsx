@@ -245,3 +245,77 @@ export function formatDate(value) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
+export const AppointmentColumns = [
+  { key: "appointment_id", label: "ID" },
+  { key: "client_name", label: "CLIENT" },
+  { key: "pets_name", label: "PET" },
+  {
+    key: "service_name",
+    label: "SERVICE",
+    multiSelect: true,
+    filterOptions: [
+      { key: "grooming", value: "Grooming", label: "Grooming" },
+      { key: "operation", value: "Operation", label: "Operation" },
+      { key: "consultation", value: "Consultation", label: "Consultation" },
+    ],
+  },
+  {
+    key: "staff_name",
+    label: "STAFF",
+    render: (value) =>
+      value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+  },
+  {
+    key: "appointment_date",
+    label: "DATE",
+    render: (value) => (
+      <span className="text-slate-700 dark:text-slate-300">
+        {formatDate(value)}
+      </span>
+    ),
+  },
+  {
+    key: "start_time",
+    label: "TIME",
+    render: (value, row) => {
+      const fmt = (v) =>
+        v
+          ? new Date(v).toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "";
+      return (
+        <span className="text-slate-700 dark:text-slate-300">
+          {fmt(row.start_time)} - {fmt(row.end_time)}
+        </span>
+      );
+    },
+  },
+  {
+    key: "appointment_status_name",
+    label: "STATUS",
+    align: "right",
+    filterOptions: [
+      { key: "pending", value: "Pending", label: "Pending" },
+      { key: "confirmed", value: "Confirmed", label: "Confirmed" },
+      { key: "completed", value: "Completed", label: "Completed" },
+      { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+    ],
+    render: (value) => {
+      const variantMap = {
+        Pending: "pending",
+        Confirmed: "active",
+        Completed: "completed",
+        Cancelled: "cancelled",
+      };
+      return (
+        <StatusBadge
+          label={value ?? "Unknown"}
+          variant={variantMap[value] || "default"}
+        />
+      );
+    },
+  },
+];
