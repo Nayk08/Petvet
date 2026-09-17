@@ -220,6 +220,14 @@ The checkout flow is deliberately two-phase and transactional:
 
 Status IDs are resolved by **name** at runtime (`getPaymentStatusId("Pending")`) so numeric seed IDs can drift between environments harmlessly.
 
+The Payment list's search box matches against `control_number` (`ILIKE`), and a `payment_type` filter (`INV` / `APT`) narrows by `appointment_id IS NULL`/`IS NOT NULL` — it's a `filterOnly` column (`PaymentColumns` in `COLUMNS.jsx`) so it contributes a filter dropdown without becoming a real table column, same convention as the Appointments module's staff/date filters.
+
+**Control numbers.** Every payment gets a human-facing reference, computed (not stored) in `v_payments.control_number`: `INV{year}{payment_id}` for a product-cart checkout, `APT{year}{payment_id}` for an appointment charge (`appointment_id IS NULL` is what distinguishes the two) — the year is taken from `date_created`.
+
+**Payment method.** Completing a payment — via `PATCH /api/checkout/:id/complete` or the appointment's `POST /api/appointments/book-with-payment` — requires `payment_method` (`Cash` / `GCash` / `Split`), and `gcash_reference_number` becomes required whenever the method is `GCash` or `Split` (both move money through GCash and need something to reconcile against). When required, it must also match `GCASH_REFERENCE_PATTERN` (`server/utils/validatePaymentMethod.js`) — exactly 13 digits, the format GCash's own app shows on a payment confirmation screen. The rule is enforced in three places that must be kept in sync: the `PaymentMethodPicker` component (`Client/src/components/ui/PaymentMethodPicker.jsx`, shared by all three payment-collection modals — cart checkout's Order Summary, the Payment list's completion modal, and appointment booking — which strips non-digits and caps input at 13 characters), `appointmentSchema.js`'s `bookAppointmentWithPaymentSchema` (Zod, at the route layer), and the shared `server/utils/validatePaymentMethod.js` helper (called directly by both `Payment_Service.completePayment` and `Appointment_Service.bookAppointmentWithPayment`, so the check still holds even if a caller bypasses Zod). `tbl_payments.payment_method` stays `NULL` until a payment actually reaches this step — a still-`Pending` cart checkout has no method yet.
+
+**GCash never gives change**, so `GCash` and `Split` both require the amount received to land on the total **exactly** — not more, not less. `Cash` keeps the usual "received ≥ total, hand back change" behavior. This is enforced twice: on the frontend (`Client/src/utils/paymentValidation.js`'s `evaluatePaymentAmount` disables the submit button unless the amount matches, within a small rounding tolerance) and on the backend (`resolvePaymentSplit` in `server/utils/validatePaymentMethod.js` 400s if `cash_received + gcash_received !== total_amount` for a `Split` payment). `tbl_payments.cash_amount`/`gcash_amount` store exactly what was applied — for `Split` that's the received amounts verbatim (already forced equal to the total by the check above); for a `Cash`-only or `GCash`-only payment it's the trivial split (one field equals the total, the other `0`).
+
 ### Client & Pet Records
 
 Clients with optional profile images, plus nested pet records (species, gender, breed, DOB, weight, microchip number, spay/neuter status, pet status, and a Cloudinary-backed pet photo). Both use soft deletes (`PUT .../delete-*`). Lookup endpoints (`/species`, `/gender`, `/pet-status`) feed the modal dropdowns. Pet add/edit accepts `multipart/form-data` (mirroring Inventory's image upload) and, on edit, keeps the existing photo when no new file is uploaded.
@@ -232,9 +240,19 @@ Appointments link a client's pet to a service (`Consultation`/`Grooming`/`Operat
 
 One shared `tbl_appointments` table backs all four permission-gated pages: the general **Appointments** page (`APPOINTMENT`) is a calendar with full CRUD — booking, editing, and cancelling — while **Consultation**, **Grooming**, and **Operation** (`C_APPOINTMENT`/`G_APPOINTMENT`/`O_APPOINTMENT`) are read-only, paginated, filterable tables pre-filtered to their service type, each backed by its own permission-checked endpoint (`GET /api/appointments/consultation`, `/grooming`, `/operation`) rather than just a client-side filter, so the permission is enforced server-side like everywhere else. Those three tables share a staff filter (by `assigned_staff_id`, not `staff_name` — several staff share a display name in this data, so filtering by name would conflate different people) and a date filter (`appointment_date`), which is also why `DynamicGrid.jsx` supports a `filterOnly` column (contributes a filter control without becoming a real, toggleable table column) and a `filterType: "date"` column (a native date input instead of the usual dropdown).
 
-An appointment can't double-book: two partial unique indexes (`uq_appointments_service_slot`, `uq_appointments_staff_slot`, both scoped to `is_deleted IS NOT TRUE` so a cancelled slot frees back up) stop the same service, or the same staff member regardless of service, from being booked into the same date+time twice — enforced at the database level so it's race-safe, not just checked-then-inserted. The Staff dropdown on the booking modal is itself filtered by role to match the selected service (`Grooming` → `Groomer`, `Consultation`/`Operation` → `Veterinarian`).
+An appointment can't double-book the same staff member: a partial unique index (`uq_appointments_staff_slot` on `appointment_date, start_time, assigned_staff_id`, scoped to `is_deleted IS NOT TRUE` so a cancelled slot frees back up) stops one person from being booked into the same date+time twice — enforced at the database level so it's race-safe, not just checked-then-inserted. Two different staff can independently take the same service at the same slot (e.g. two groomers each with their own Grooming appointment at 9-10) — only the staff member is the actual constrained resource, not the service type. The Staff dropdown on the booking modal is itself filtered by role to match the selected service (`Grooming` → `Groomer`, `Consultation`/`Operation` → `Veterinarian`).
+
+**Booking requires payment.** Filling out the booking form and clicking "Book Appointment" doesn't create the appointment yet — it opens a second modal (`ConfirmAppointmentPaymentModal.jsx`) to collect payment first. Only confirming payment there calls `POST /api/appointments/book-with-payment`, which creates the appointment **and** its linked payment together in one transaction (`Appointment_Model.js:addAppointmentWithPayment`) — closing the payment modal leaves nothing behind. The charged total is resolved server-side, never trusted from the client:
+
+- **Consultation** — a fixed price on `tbl_appointment_services.service_price`.
+- **Grooming** — looked up from the booked pet's `weight_kg` against `tbl_grooming_price_tiers` (Toy/Small/Medium/Large/Giant).
+- **Operation** — too case-by-case for a fixed price or simple tier table (procedure, duration, complications all vary); staff enters the amount in the payment modal, which the endpoint requires when the service has no fixed price and isn't Grooming.
+
+The resulting payment is created directly as `Completed` (paid at the point of booking, unlike product-cart checkouts which start `Pending`) and linked back via `tbl_payments.appointment_id`, so it shows up in the normal Payments list alongside cart checkouts.
 
 Cancelling is a soft delete (`is_deleted` + `deleted_by`/`date_deleted`) that also flips the status to `Cancelled`, only allowed from `Pending`/`Confirmed` — same shape as `Payment_Service.js:cancelPayment`. Booking is restricted to fixed one-hour slots, 9:00 AM–6:00 PM, enforced both in the UI (a slot picker, not free-form times) and in `appointmentSchema.js` (rejects off-the-hour times, times outside the window, slots longer than an hour, and anything in the past — including "today" once the clock passes 6 PM).
+
+**Past appointments auto-complete.** Since payment is now collected at booking time, a `Pending`/`Confirmed` appointment whose `end_time` has already passed is presumed to have happened (paid + attended), not abandoned — `Appointment_Model.js:autoCompletePastAppointments` flips it to `Completed` (`updated_by: 'System'`) rather than leaving it stuck or requiring a manual "mark completed" click. There's no cron job in this app, so it runs lazily at the top of both `getAppointments` and `getAppointmentById` — any request that reads appointment data self-heals stale rows first. Once flipped, `cancelAppointment` correctly refuses it (**409**, same as any other already-`Completed` appointment) — a no-show can still be cancelled, but only before its slot's end time passes.
 
 ---
 
@@ -333,12 +351,13 @@ Other client scripts: `npm run build`, `npm run preview`, `npm run lint` (oxlint
 | `tbl_pet_status`              | Records   | Lookup: pet status                                                                                      |
 | `tbl_products`                | Inventory | Products — Cloudinary image URL, price, quantity, expiry, `status_id`, soft delete                   |
 | `tbl_status`                  | Inventory | Lookup: product status                                                                                 |
-| `tbl_payments`                | Payments  | Payment/order header — `total_amount`, `payment_status_id`, soft delete                              |
+| `tbl_payments`                | Payments  | Payment/order header — `total_amount`, `payment_status_id`, soft delete, nullable `appointment_id` linking it to the appointment it paid for (NULL for product-cart checkouts), `payment_method` (Cash/GCash/Split, set once payment is actually collected), `gcash_reference_number` (required for GCash/Split), and `cash_amount`/`gcash_amount` (always sum to `total_amount` exactly — see [Cart & Payments](#cart--payments)) |
 | `tbl_payment_status`          | Payments  | Lookup: Pending / Completed / Cancelled                                                                |
 | `tbl_cart_items`              | Payments  | Line items per payment — `subtotal` is a generated column (`quantity * item_price`)                  |
 | `tbl_appointments`            | Appointments | Client + pet + service + assigned staff (`assigned_staff_id` → `tbl_users`) + date/time range + status, soft delete with `date_deleted`, indexed on `client_id`/`pets_id`/`appointment_services_id`/`appointment_date`/`assigned_staff_id`, unique on (date, time, service) and (date, time, staff) to prevent double-booking |
-| `tbl_appointment_services`    | Appointments | Lookup: Consultation / Grooming / Operation                                                            |
+| `tbl_appointment_services`    | Appointments | Lookup: Consultation / Grooming / Operation, plus a nullable `service_price` (set for Consultation; NULL for Grooming/Operation, whose price is resolved elsewhere — see [Appointments](#appointments)) |
 | `tbl_appointment_status`      | Appointments | Lookup: Pending / Confirmed / Completed / Cancelled                                                    |
+| `tbl_grooming_price_tiers`    | Appointments | Weight-tier price list for Grooming — `tier_name`, `max_weight_kg` (NULL = open-ended top tier), `price` |
 
 ### Views
 
@@ -347,12 +366,12 @@ Other client scripts: `npm run build`, `npm run preview`, `npm run lint` (oxlint
 | `v_user_permissions`    | `hasPermission` middleware, navbar builder             |                                            |
 | `v_users`               | Login profile lookup, user listings (joins role names) | Aggregates `level_ids` across all of a user's roles via `tbl_user_level_assignments` |
 | `v_products`            | Inventory listings                                     |                                            |
-| `v_payments`            | Payment listings (joins status names)                  |                                            |
+| `v_payments`            | Payment listings (joins status names)                  | Includes `appointment_id` (tells an appointment-charge apart from a product-cart checkout), `payment_method`/`gcash_reference_number`/`cash_amount`/`gcash_amount`, and a computed `control_number` (`INV`/`APT` + year + `payment_id`) |
 | `v_client_pets`         | Client + pet record listings                           |                                            |
 | `v_payment_cart_items`  | Cart items for a payment (`GET /api/payments/:id`)     | Joins `tbl_cart_items` to `tbl_products` for `product_name`                              |
-| `v_appointments`        | Appointment listings (general + Consultation + Grooming) | Joins client, pet, service, and status names in; does **not** filter `is_deleted` (a cancelled appointment is a status, not a real deletion — same convention as `v_payments`) |
+| `v_appointments`        | Appointment listings (general + Consultation + Grooming) | Joins client, pet, service, and status names in, plus `service_price`; does **not** filter `is_deleted` (a cancelled appointment is a status, not a real deletion — same convention as `v_payments`) |
 
-> **Note:** these views live only in the database — pgAdmin's ERD/reverse-engineering export (`Tables` diagram/script) does not include `CREATE VIEW` statements. A schema-only dump made that way will create the 16 tables but omit all 6 views the app depends on; use `pg_dump --schema-only` (or pgAdmin's **Views → Generate Script**), or copy the definitions below, to recreate them on a fresh database.
+> **Note:** these views live only in the database — pgAdmin's ERD/reverse-engineering export (`Tables` diagram/script) does not include `CREATE VIEW` statements. A schema-only dump made that way will create the 17 tables but omit all 6 views the app depends on; use `pg_dump --schema-only` (or pgAdmin's **Views → Generate Script**), or copy the definitions below, to recreate them on a fresh database.
 
 ### View Definitions
 
@@ -432,11 +451,20 @@ CREATE OR REPLACE VIEW public.v_payments
     count(ci.cart_item_id) AS item_count,
     COALESCE(sum(ci.quantity), 0::bigint) AS total_quantity,
     COALESCE(sum(ci.subtotal), 0::numeric) AS computed_total,
-    p.is_deleted
+    p.is_deleted,
+    p.appointment_id,
+    p.payment_method,
+    p.gcash_reference_number,
+    CASE WHEN p.appointment_id IS NULL
+         THEN 'INV' || EXTRACT(YEAR FROM p.date_created)::int::text || p.payment_id::text
+         ELSE 'APT' || EXTRACT(YEAR FROM p.date_created)::int::text || p.payment_id::text
+    END AS control_number,
+    p.cash_amount,
+    p.gcash_amount
    FROM tbl_payments p
      JOIN tbl_payment_status ps ON p.payment_status_id = ps.payment_status_id
      LEFT JOIN tbl_cart_items ci ON ci.payment_id = p.payment_id
-  GROUP BY p.payment_id, p.total_amount, ps.payment_status_name, p.created_by, p.updated_by, p.date_created, p.date_updated, p.is_deleted;
+  GROUP BY p.payment_id, p.total_amount, ps.payment_status_name, p.created_by, p.updated_by, p.date_created, p.date_updated, p.is_deleted, p.appointment_id, p.payment_method, p.gcash_reference_number, p.cash_amount, p.gcash_amount;
 
 CREATE OR REPLACE VIEW public.v_payment_cart_items
  AS
@@ -489,7 +517,8 @@ CREATE OR REPLACE VIEW public.v_appointments AS
     a.date_updated,
     a.date_deleted,
     a.assigned_staff_id,
-    u.user_name AS staff_name
+    u.user_name AS staff_name,
+    s.service_price
    FROM tbl_appointments a
      JOIN tbl_clients c ON c.client_id = a.client_id
      JOIN tbl_pets p ON p.pets_id = a.pets_id
@@ -498,7 +527,7 @@ CREATE OR REPLACE VIEW public.v_appointments AS
      LEFT JOIN tbl_users u ON u.users_id = a.assigned_staff_id;
 ```
 
-> `assigned_staff_id`/`staff_name` are appended at the end rather than grouped near the other appointment columns — `CREATE OR REPLACE VIEW` can only append new columns, it can't insert or reorder existing ones. Keep that in mind before hand-editing this view directly (e.g. in pgAdmin) — a mid-list column reorder will fail outright.
+> `assigned_staff_id`/`staff_name`/`service_price` are appended at the end rather than grouped near the other appointment/service columns — `CREATE OR REPLACE VIEW` can only append new columns, it can't insert or reorder existing ones. Keep that in mind before hand-editing this view directly (e.g. in pgAdmin) — a mid-list column reorder will fail outright.
 
 ### Pagination
 
@@ -583,10 +612,10 @@ Base URL: `http://localhost:3000`. All `/api/*` routes below (except `/api/csrf-
 
 | Method  | Endpoint                     | Action                                               |
 | ------- | ---------------------------- | ---------------------------------------------------- |
-| `GET`   | `/api/payments`              | `can_view`                                           |
+| `GET`   | `/api/payments?page&limit&search&payment_status_name&payment_type` | `can_view` · `search` matches `control_number`, `payment_type` filters `INV`/`APT` |
 | `GET`   | `/api/payments/:id`          | `can_view` (returns the payment with its cart items) |
 | `POST`  | `/api/checkout`              | `can_create`                                         |
-| `PATCH` | `/api/checkout/:id/complete` | `can_edit`                                           |
+| `PATCH` | `/api/checkout/:id/complete` | `can_edit` · body: `payment_method` (Cash/GCash/Split), `gcash_reference_number` (required for GCash/Split), `cash_received`/`gcash_received` (required for Split — must together cover the total) |
 | `PATCH` | `/api/payments/:id/cancel`   | `can_delete`                                         |
 
 ### Client & Pet Records · `C_P_RECORDS`
@@ -615,10 +644,12 @@ Base URL: `http://localhost:3000`. All `/api/*` routes below (except `/api/csrf-
 | `GET`  | `/api/appointments/operation?page&limit&search&assigned_staff_id&appointment_date` | `O_APPOINTMENT` `can_view` |
 | `GET`  | `/api/appointments/:appointment_id`                   | `APPOINTMENT` `can_view`      |
 | `POST` | `/api/appointments/add-appointment`                   | `APPOINTMENT` `can_create`    |
+| `POST` | `/api/appointments/book-with-payment`                 | `APPOINTMENT` `can_create` (creates the appointment **and** its payment together; body also requires `payment_method` and, for GCash/Split, `gcash_reference_number` plus `cash_received`/`gcash_received` — see [Appointments](#appointments) and [Cart & Payments](#cart--payments)) |
 | `PUT`  | `/api/appointments/:appointment_id/edit-appointment`  | `APPOINTMENT` `can_edit`      |
 | `PUT`  | `/api/appointments/:appointment_id/cancel-appointment`| `APPOINTMENT` `can_delete` (soft delete) |
 | `GET`  | `/api/appointment-services`                           | `APPOINTMENT` `can_view` (lookup) |
 | `GET`  | `/api/appointment-staff`                              | `APPOINTMENT` `can_view` (lookup — every non-`Client` user) |
+| `GET`  | `/api/appointment-grooming-tiers`                     | `APPOINTMENT` `can_view` (lookup — weight-tier price list) |
 
 ### Status codes
 
