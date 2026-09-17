@@ -34,13 +34,23 @@ export default class AppointmentController {
     }
   }
 
+  // Non-admin staff only ever see their own caseload on the
+  // Consultation/Grooming/Operation module pages — the assigned_staff_id
+  // filter is forced to their own id, overriding whatever the client sent,
+  // so it can't be bypassed by editing the query string. Admin keeps full
+  // visibility and can still use the staff filter normally.
+  resolveStaffFilter(req, requestedStaffId) {
+    const isAdmin = req.session.user?.role?.trim() === "Admin";
+    return isAdmin ? requestedStaffId : String(req.session.user.id);
+  }
+
   async getConsultationAppointments(req, res) {
     try {
       const { page, limit, search, appointment_status_name, assigned_staff_id, appointment_date } =
         req.query;
       const filters = {
         appointment_status_name,
-        assigned_staff_id,
+        assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
         service_name: "Consultation",
       };
@@ -64,7 +74,7 @@ export default class AppointmentController {
         req.query;
       const filters = {
         appointment_status_name,
-        assigned_staff_id,
+        assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
         service_name: "Grooming",
       };
@@ -88,7 +98,7 @@ export default class AppointmentController {
         req.query;
       const filters = {
         appointment_status_name,
-        assigned_staff_id,
+        assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
         service_name: "Operation",
       };
@@ -210,6 +220,83 @@ export default class AppointmentController {
       res.json(staff);
     } catch (error) {
       console.log("Error on Controller selectStaff function");
+      res.status(error.statusCode || 500).json({ message: error.message });
+    }
+  }
+
+  async getGroomingPriceTiers(req, res) {
+    try {
+      const tiers = await appointmentService.getGroomingPriceTiers();
+      res.json(tiers);
+    } catch (error) {
+      console.log("Error on Controller getGroomingPriceTiers function");
+      res.status(error.statusCode || 500).json({ message: error.message });
+    }
+  }
+
+  async bookAppointmentWithPayment(req, res) {
+    try {
+      const {
+        client_id,
+        pets_id,
+        appointment_services_id,
+        assigned_staff_id,
+        appointment_date,
+        start_time,
+        end_time,
+        notes,
+        amount,
+        payment_method,
+        gcash_reference_number,
+        cash_received,
+        gcash_received,
+      } = req.body;
+
+      const result = await appointmentService.bookAppointmentWithPayment({
+        client_id,
+        pets_id,
+        appointment_services_id,
+        assigned_staff_id,
+        appointment_date,
+        start_time,
+        end_time,
+        notes,
+        payment_method,
+        gcash_reference_number,
+        cash_received,
+        gcash_received,
+        amount,
+        created_by: req.session.user.name,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      console.log("Error on Controller bookAppointmentWithPayment function");
+      res.status(error.statusCode || 500).json({ message: error.message });
+    }
+  }
+
+  async completeAppointmentPayment(req, res) {
+    try {
+      const {
+        amount,
+        payment_method,
+        gcash_reference_number,
+        cash_received,
+        gcash_received,
+      } = req.body;
+
+      const result = await appointmentService.completeAppointmentPayment({
+        appointment_id: req.params.appointment_id,
+        amount,
+        payment_method,
+        gcash_reference_number,
+        cash_received,
+        gcash_received,
+        updated_by: req.session.user.name,
+      });
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller completeAppointmentPayment function");
       res.status(error.statusCode || 500).json({ message: error.message });
     }
   }

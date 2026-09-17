@@ -4,13 +4,46 @@ import { paginateQuery } from "../../../utils/paginateQuery.js";
 const ALLOWED_FILTER_COLUMNS = ["payment_status_name"];
 
 export default class PaymentModel {
-  async getPayments({ page = 1, limit = 10, filters = {} } = {}) {
+  async getPayments({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
     try {
       const values = [];
       const conditions = [];
 
       for (const [key, value] of Object.entries(filters)) {
+        if (key === "payment_type") {
+          if (!value) continue;
+          const types = value.split(",").filter(Boolean);
+          const wantsInvoice = types.includes("INV");
+          const wantsAppointment = types.includes("APT");
+          // control_number is INV{year}{id} for a cart checkout (no
+          // appointment_id) or APT{year}{id} for an appointment charge —
+          // appointment_id is the real column backing that distinction.
+          if (wantsInvoice && !wantsAppointment) {
+            conditions.push("appointment_id IS NULL");
+          } else if (wantsAppointment && !wantsInvoice) {
+            conditions.push("appointment_id IS NOT NULL");
+          }
+          continue;
+        }
+
+        // date_created is a timestamp — match by calendar day, same column
+        // the grid itself displays as "Payment Date". Each bound is
+        // independent, so a range with only one end set still works.
+        if (key === "payment_date_from") {
+          if (!value) continue;
+          values.push(value);
+          conditions.push(`DATE(date_created) >= $${values.length}`);
+          continue;
+        }
+
+        if (key === "payment_date_to") {
+          if (!value) continue;
+          values.push(value);
+          conditions.push(`DATE(date_created) <= $${values.length}`);
+          continue;
+        }
+
         if (!ALLOWED_FILTER_COLUMNS.includes(key) || !value) continue;
 
         const valueList = value.split(",").filter(Boolean);
@@ -18,6 +51,11 @@ export default class PaymentModel {
 
         values.push(valueList);
         conditions.push(`${key} = ANY($${values.length})`);
+      }
+
+      if (search && search.trim()) {
+        values.push(`%${search.trim()}%`);
+        conditions.push(`control_number ILIKE $${values.length}`);
       }
 
       const whereClause = conditions.length
@@ -98,6 +136,7 @@ export default class PaymentModel {
   // must roll back atomically if any item fails (e.g. insufficient stock).
   async checkout({ created_by, payment_status_id, cartItems }) {
     const client = await pool.connect();
+    let queryError = null;
     try {
       await client.query("BEGIN");
 
@@ -139,11 +178,12 @@ export default class PaymentModel {
       await client.query("COMMIT");
       return payment;
     } catch (error) {
+      queryError = error;
       await client.query("ROLLBACK");
       console.log("Error on Model checkout function");
       throw error;
     } finally {
-      client.release();
+      client.release(queryError);
     }
   }
 
@@ -152,8 +192,17 @@ export default class PaymentModel {
   // the payment status — both in one transaction so a stock failure
   // (e.g. someone else bought the last unit while this order sat pending)
   // rolls back the status change too.
-  async completeCheckout({ payment_id, payment_status_id, updated_by }) {
+  async completeCheckout({
+    payment_id,
+    payment_status_id,
+    updated_by,
+    payment_method,
+    gcash_reference_number,
+    cash_amount,
+    gcash_amount,
+  }) {
     const client = await pool.connect();
+    let queryError = null;
     try {
       await client.query("BEGIN");
 
@@ -181,19 +230,32 @@ export default class PaymentModel {
         `UPDATE tbl_payments SET
         payment_status_id = $1,
         updated_by = $2,
+        payment_method = $3,
+        gcash_reference_number = $4,
+        cash_amount = $5,
+        gcash_amount = $6,
         date_updated = NOW()
-       WHERE payment_id = $3 RETURNING *`,
-        [payment_status_id, updated_by, payment_id],
+       WHERE payment_id = $7 RETURNING *`,
+        [
+          payment_status_id,
+          updated_by,
+          payment_method,
+          gcash_reference_number || null,
+          cash_amount,
+          gcash_amount,
+          payment_id,
+        ],
       );
 
       await client.query("COMMIT");
       return paymentRes.rows[0];
     } catch (error) {
+      queryError = error;
       await client.query("ROLLBACK");
       console.log("Error on Model completeCheckout function");
       throw error;
     } finally {
-      client.release();
+      client.release(queryError);
     }
   }
 
@@ -235,6 +297,232 @@ export default class PaymentModel {
       return res.rows[0];
     } catch (error) {
       console.log("Error on Model cancelPayment function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getRevenueSummary() {
+    const client = await pool.connect();
+
+    try {
+      // Only Completed payments represent money actually collected — a
+      // Pending booking or cart order must not count as revenue just
+      // because a payment row exists for it.
+      const cashRes = await client.query(
+        `SELECT SUM(cash_amount) as total_cash, SUM(gcash_amount) as total_gcash
+       FROM tbl_payments
+       WHERE is_deleted = false
+         AND payment_status_id = (
+           SELECT payment_status_id FROM tbl_payment_status
+           WHERE LOWER(TRIM(payment_status_name)) = 'completed'
+         )`,
+      );
+
+      const invRes = await client.query(
+        `SELECT SUM(total_amount) as total_invoice FROM v_payments
+         WHERE control_number LIKE 'INV%' AND is_deleted = false
+           AND payment_status_name = 'Completed'`,
+      );
+
+      const aptRes = await client.query(
+        `SELECT SUM(total_amount) as total_appointment FROM v_payments
+         WHERE control_number LIKE 'APT%' AND is_deleted = false
+           AND payment_status_name = 'Completed'`,
+      );
+
+      return {
+        total_cash: cashRes.rows[0].total_cash,
+        total_gcash: cashRes.rows[0].total_gcash,
+        total_invoice: invRes.rows[0].total_invoice,
+        total_appointment: aptRes.rows[0].total_appointment,
+      };
+    } catch (error) {
+      console.log("Error on Model getRevenueSummary function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Backs the Payment page's revenue cards' click-through modal — the
+  // all-time counterpart of Dashboard_Model.js:getTodayRevenueTransactions
+  // (same Completed-only + type/method filtering, no date restriction) so
+  // the listed transactions add up to the number the user clicked on.
+  async getRevenueTransactions({
+    type,
+    method,
+    search = "",
+    page = 1,
+    limit = 10,
+  } = {}) {
+    const client = await pool.connect();
+    try {
+      const values = [];
+      const conditions = ["is_deleted = false", "payment_status_name = 'Completed'"];
+
+      if (type === "INV" || type === "APT") {
+        values.push(`${type}%`);
+        conditions.push(`control_number LIKE $${values.length}`);
+      }
+
+      if (method === "cash") {
+        conditions.push("cash_amount > 0");
+      } else if (method === "gcash") {
+        conditions.push("gcash_amount > 0");
+      }
+
+      if (search && search.trim()) {
+        values.push(`%${search.trim()}%`);
+        conditions.push(`control_number ILIKE $${values.length}`);
+      }
+
+      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+
+      return await paginateQuery(client, {
+        baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY date_updated DESC NULLS LAST, date_created DESC`,
+        countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
+        values,
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.log("Error on Model getRevenueTransactions function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getTodayRevenueSummary() {
+    const client = await pool.connect();
+
+    try {
+      // Both booking flows (cart checkout and appointment booking) insert a
+      // Pending payment row with total_amount already set BEFORE any money
+      // actually changes hands — an unpaid booking or an abandoned cart
+      // order must not count as revenue just because it happened today.
+      // Only Completed payments represent money actually collected.
+      //
+      // "Today" here means the day the payment was actually completed, not
+      // the day the payment row was first created — a Pending payment
+      // booked yesterday and processed today must count toward TODAY's
+      // revenue. completeCheckout/completeAppointmentPayment both stamp
+      // date_updated = NOW() at the moment a payment flips to Completed;
+      // a payment that was created already-Completed in one step (e.g.
+      // addAppointmentWithPayment) never gets a date_updated, so fall back
+      // to date_created for that case.
+      const cashRes = await client.query(
+        `SELECT SUM(cash_amount) as total_cash, SUM(gcash_amount) as total_gcash
+       FROM tbl_payments
+       WHERE is_deleted = false
+         AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
+         AND payment_status_id = (
+           SELECT payment_status_id FROM tbl_payment_status
+           WHERE LOWER(TRIM(payment_status_name)) = 'completed'
+         )`,
+      );
+
+      const invRes = await client.query(
+        `SELECT SUM(total_amount) as total_invoice FROM v_payments
+         WHERE control_number LIKE 'INV%' AND is_deleted = false
+           AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
+           AND payment_status_name = 'Completed'`,
+      );
+
+      const aptRes = await client.query(
+        `SELECT SUM(total_amount) as total_appointment FROM v_payments
+         WHERE control_number LIKE 'APT%' AND is_deleted = false
+           AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
+           AND payment_status_name = 'Completed'`,
+      );
+
+      // Scheduled for today (appointment_date), not booked today
+      // (date_created) — matches Dashboard_Model.js:getTodayAppointments.
+      const todayqueueRes = await client.query(
+        `SELECT COUNT(*) as total_queue FROM tbl_appointments WHERE is_deleted = false AND appointment_date = CURRENT_DATE`,
+      );
+
+      return {
+        total_cash: cashRes.rows[0].total_cash,
+        total_gcash: cashRes.rows[0].total_gcash,
+        total_invoice: invRes.rows[0].total_invoice,
+        total_appointment: aptRes.rows[0].total_appointment,
+        total_queue: todayqueueRes.rows[0].total_queue,
+      };
+    } catch (error) {
+      console.log("Error on Model getTodayRevenueSummary function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Client-portal self-service GCash payment: stores the reference number
+  // + uploaded screenshot and moves the payment to "Awaiting Verification"
+  // — no stock/appointment side effects here, since nothing is actually
+  // confirmed paid until staff approves it (see Payment_Service.js:verifyPayment,
+  // which reuses completePayment for that side of things).
+  async submitOnlinePaymentProof({
+    payment_id,
+    payment_status_id,
+    gcash_reference_number,
+    payment_proof_image,
+  }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `UPDATE tbl_payments SET
+           payment_status_id = $1,
+           payment_method = 'GCash',
+           gcash_reference_number = $2,
+           payment_proof_image = $3,
+           date_updated = NOW()
+         WHERE payment_id = $4
+         RETURNING *`,
+        [payment_status_id, gcash_reference_number, payment_proof_image, payment_id],
+      );
+      return res.rows[0];
+    } catch (error) {
+      console.log("Error on Model submitOnlinePaymentProof function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Single-row clinic-wide settings table (id always 1) — currently just
+  // the GCash QR code image, kept as its own small table rather than
+  // repurposing an unrelated one since nothing like it existed before.
+  async getGcashQrCode() {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT gcash_qr_code_url, date_updated FROM tbl_clinic_settings WHERE id = 1`,
+      );
+      return res.rows[0];
+    } catch (error) {
+      console.log("Error on Model getGcashQrCode function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateGcashQrCode({ image_url, updated_by }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `UPDATE tbl_clinic_settings
+         SET gcash_qr_code_url = $1, updated_by = $2, date_updated = NOW()
+         WHERE id = 1
+         RETURNING *`,
+        [image_url, updated_by],
+      );
+      return res.rows[0];
+    } catch (error) {
+      console.log("Error on Model updateGcashQrCode function");
       throw error;
     } finally {
       client.release();

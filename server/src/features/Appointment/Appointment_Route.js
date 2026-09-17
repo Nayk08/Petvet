@@ -5,6 +5,8 @@ import { validateBody, validateParams } from "../../middleware/validate.js";
 import {
   addAppointmentSchema,
   editAppointmentSchema,
+  bookAppointmentWithPaymentSchema,
+  completeAppointmentPaymentSchema,
   appointmentIdParamSchema,
 } from "../../validators/appointmentSchema.js";
 
@@ -42,6 +44,13 @@ router.post(
   (req, res) => appointmentController.addAppointment(req, res),
 );
 
+router.post(
+  "/appointments/book-with-payment",
+  hasPermission("APPOINTMENT", "can_create"),
+  validateBody(bookAppointmentWithPaymentSchema),
+  (req, res) => appointmentController.bookAppointmentWithPayment(req, res),
+);
+
 router.get(
   "/appointments/:appointment_id",
   hasPermission("APPOINTMENT", "can_view"),
@@ -74,6 +83,20 @@ router.get(
   "/appointment-staff",
   hasPermission("APPOINTMENT", "can_view"),
   (req, res) => appointmentController.selectStaff(req, res),
+);
+
+router.get(
+  "/appointment-grooming-tiers",
+  hasPermission("APPOINTMENT", "can_view"),
+  (req, res) => appointmentController.getGroomingPriceTiers(req, res),
+);
+
+router.patch(
+  "/appointments/:appointment_id/complete-payment",
+  hasPermission("APPOINTMENT", "can_edit"),
+  validateParams(appointmentIdParamSchema),
+  validateBody(completeAppointmentPaymentSchema),
+  (req, res) => appointmentController.completeAppointmentPayment(req, res),
 );
 
 export default router;

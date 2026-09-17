@@ -1,5 +1,6 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
+import { resolvePaymentSplit } from "../../../utils/validatePaymentMethod.js";
 
 const ALLOWED_SEARCH_COLUMNS = ["appointment_id", "client_name", "pets_name"];
 const ALLOWED_FILTER_COLUMNS = [
@@ -15,19 +16,15 @@ const FILTER_COLUMN_CASTS = {
   appointment_date: "date[]",
 };
 
-// Maps the two partial-unique-index violations on tbl_appointments to a
+// Maps the partial-unique-index violation on tbl_appointments to a
 // friendly, user-facing message. Returns the error to throw, or null if
-// this isn't one of those two constraints.
+// this isn't that constraint. (A second index used to also block booking
+// the same SERVICE type twice in one slot regardless of staff — dropped
+// because a clinic can have multiple staff each independently handling,
+// say, a Grooming appointment at 9-10; only double-booking the same
+// PERSON is an actual conflict.)
 function mapSlotConflictError(error) {
   if (error.code !== "23505") return null;
-
-  if (error.constraint === "uq_appointments_service_slot") {
-    const err = new Error(
-      "That service is already booked for this date and time slot.",
-    );
-    err.statusCode = 409;
-    return err;
-  }
 
   if (error.constraint === "uq_appointments_staff_slot") {
     const err = new Error(
@@ -41,17 +38,54 @@ function mapSlotConflictError(error) {
 }
 
 export default class AppointmentModel {
+  // Payment is now collected at booking time, so a Pending/In Queue
+  // appointment whose slot has already passed is presumed to have happened
+  // (paid + attended), not abandoned — flip it to Completed rather than
+  // leaving it stuck, or requiring a manual "mark completed" step. Run
+  // lazily on every read rather than via a cron job, since this app has no
+  // job scheduler. A no-show can still be cancelled after the fact via the
+  // Cancel action for as long as it stays Pending/In Queue.
+  async autoCompletePastAppointments() {
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        UPDATE tbl_appointments
+        SET appointment_status_id = (
+              SELECT appointment_status_id FROM tbl_appointment_status
+              WHERE LOWER(TRIM(appointment_status_name)) = 'completed'
+            ),
+            updated_by = 'System',
+            date_updated = NOW()
+        WHERE is_deleted IS NOT TRUE
+          AND end_time < NOW()
+          AND appointment_status_id IN (
+                SELECT appointment_status_id FROM tbl_appointment_status
+                WHERE LOWER(TRIM(appointment_status_name)) IN ('pending', 'in queue')
+              )
+      `);
+    } catch (error) {
+      console.log(`Error on Model autoCompletePastAppointments function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getAppointments({
     page = 1,
     limit = 10,
     search = "",
     filters = {},
   } = {}) {
+    await this.autoCompletePastAppointments();
     const client = await pool.connect();
 
     try {
       const values = [];
-      const conditions = ["is_deleted IS NOT TRUE"];
+      // A cancelled appointment is a status, not a real deletion — it should
+      // still show up in every listing with its "Cancelled" badge, same
+      // convention as Payment_Model.js:getPayments.
+      const conditions = [];
 
       for (const [key, value] of Object.entries(filters)) {
         if (!ALLOWED_FILTER_COLUMNS.includes(key) || !value) continue;
@@ -75,7 +109,9 @@ export default class AppointmentModel {
         conditions.push(`(${searchClause})`);
       }
 
-      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+      const whereClause = conditions.length
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
 
       return await paginateQuery(client, {
         baseQuery: `SELECT * FROM v_appointments ${whereClause} ORDER BY appointment_id DESC`,
@@ -93,6 +129,7 @@ export default class AppointmentModel {
   }
 
   async getAppointmentById(appointment_id) {
+    await this.autoCompletePastAppointments();
     const client = await pool.connect();
 
     try {
@@ -114,6 +151,15 @@ export default class AppointmentModel {
     }
   }
 
+  // Books the appointment AND opens a matching Pending payment record in the
+  // same transaction — same convention as Payment_Model.js:checkout, which
+  // opens a Pending payment at checkout time and completes it later rather
+  // than only writing to tbl_payments once money actually changes hands.
+  // The total is resolved the same way completeAppointmentPayment prices
+  // it: a fixed tbl_appointment_services.service_price (Consultation) wins
+  // if set; otherwise Grooming is priced off the pet's weight tier;
+  // otherwise (Operation) the price isn't known yet, so 0 is a placeholder
+  // until completeAppointmentPayment fills in the real amount.
   async addAppointment({
     client_id,
     pets_id,
@@ -127,8 +173,11 @@ export default class AppointmentModel {
     created_by,
   }) {
     const client = await pool.connect();
+    let queryError = null;
     try {
-      const res = await client.query(
+      await client.query("BEGIN");
+
+      const apptRes = await client.query(
         `INSERT INTO tbl_appointments
           (client_id, pets_id, appointment_services_id, assigned_staff_id,
            appointment_date, start_time, end_time, appointment_status_id, notes, created_by)
@@ -147,14 +196,76 @@ export default class AppointmentModel {
           created_by,
         ],
       );
-      return res.rows[0];
+      const appointment = apptRes.rows[0];
+
+      const serviceRes = await client.query(
+        `SELECT appointment_services, service_price
+         FROM tbl_appointment_services
+         WHERE appointment_services_id = $1`,
+        [appointment_services_id],
+      );
+      if (!serviceRes.rows.length) {
+        throw new Error("Selected service not found");
+      }
+      const service = serviceRes.rows[0];
+
+      let total_amount = service.service_price;
+
+      if (total_amount == null && service.appointment_services === "Grooming") {
+        const petRes = await client.query(
+          `SELECT weight_kg FROM tbl_pets WHERE pets_id = $1`,
+          [pets_id],
+        );
+        if (!petRes.rows.length) {
+          throw new Error("Selected pet not found");
+        }
+
+        const tierRes = await client.query(
+          `SELECT price FROM tbl_grooming_price_tiers
+           WHERE max_weight_kg IS NULL OR max_weight_kg >= $1
+           ORDER BY max_weight_kg ASC NULLS LAST
+           LIMIT 1`,
+          [petRes.rows[0].weight_kg],
+        );
+        if (!tierRes.rows.length) {
+          throw new Error("No grooming price tier configured for this pet's weight");
+        }
+        total_amount = tierRes.rows[0].price;
+      }
+
+      const pendingPaymentStatusRes = await client.query(
+        `SELECT payment_status_id FROM tbl_payment_status
+         WHERE LOWER(TRIM(payment_status_name)) = 'pending'`,
+      );
+      const pending_payment_status_id =
+        pendingPaymentStatusRes.rows[0]?.payment_status_id;
+      if (!pending_payment_status_id) {
+        throw new Error("'Pending' payment status not configured");
+      }
+
+      await client.query(
+        `INSERT INTO tbl_payments
+          (total_amount, payment_status_id, appointment_id, created_by)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          total_amount ?? 0,
+          pending_payment_status_id,
+          appointment.appointment_id,
+          created_by,
+        ],
+      );
+
+      await client.query("COMMIT");
+      return appointment;
     } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
       const conflict = mapSlotConflictError(error);
       if (conflict) throw conflict;
       console.log(`Error in addAppointment: ${error}`);
       throw error;
     } finally {
-      client.release();
+      client.release(queryError);
     }
   }
 
@@ -216,7 +327,10 @@ export default class AppointmentModel {
 
   async deleteAppointment({ appointment_id, appointment_status_id, deleted_by }) {
     const client = await pool.connect();
+    let queryError = null;
     try {
+      await client.query("BEGIN");
+
       const res = await client.query(
         `UPDATE tbl_appointments
         SET is_deleted = true,
@@ -231,12 +345,40 @@ export default class AppointmentModel {
       if (res.rows.length === 0) {
         throw new Error(`Appointment with id ${appointment_id} not found`);
       }
+
+      // A cancelled appointment that was never paid shouldn't leave an
+      // orphaned Pending payment sitting in the Payment module — cancel it
+      // alongside the appointment. An In Queue appointment's Completed
+      // payment is left untouched; voiding real money is a refund
+      // decision, not an automatic side effect of cancelling.
+      await client.query(
+        `UPDATE tbl_payments
+         SET is_deleted = true,
+             payment_status_id = (
+               SELECT payment_status_id FROM tbl_payment_status
+               WHERE LOWER(TRIM(payment_status_name)) = 'cancelled'
+             ),
+             updated_by = $2,
+             deleted_by = $2,
+             date_updated = NOW()
+         WHERE appointment_id = $1
+           AND is_deleted IS NOT TRUE
+           AND payment_status_id = (
+             SELECT payment_status_id FROM tbl_payment_status
+             WHERE LOWER(TRIM(payment_status_name)) = 'pending'
+           )`,
+        [appointment_id, deleted_by],
+      );
+
+      await client.query("COMMIT");
       return res.rows[0];
     } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
       console.log(`Error in deleteAppointment: ${error}`);
       throw error;
     } finally {
-      client.release();
+      client.release(queryError);
     }
   }
 
@@ -252,6 +394,30 @@ export default class AppointmentModel {
       return res.rows[0]?.appointment_status_id;
     } catch (error) {
       console.log(`Error on Model getAppointmentStatusId function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // A bare status flip with no payment side effects — used when the payment
+  // for an appointment-linked charge gets completed through the generic
+  // Payment module ("Process" on the Payment list) rather than through
+  // completeAppointmentPayment, so the appointment doesn't stay stuck on
+  // Pending even though it's been paid.
+  async setAppointmentStatus({ appointment_id, appointment_status_id, updated_by }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `UPDATE tbl_appointments
+         SET appointment_status_id = $1, updated_by = $2, date_updated = NOW()
+         WHERE appointment_id = $3
+         RETURNING *`,
+        [appointment_status_id, updated_by, appointment_id],
+      );
+      return res.rows[0];
+    } catch (error) {
+      console.log(`Error on Model setAppointmentStatus function: ${error}`);
       throw error;
     } finally {
       client.release();
@@ -286,6 +452,305 @@ export default class AppointmentModel {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  async getGroomingPriceTiers() {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT * FROM tbl_grooming_price_tiers ORDER BY max_weight_kg ASC NULLS LAST`,
+      );
+      return res.rows;
+    } catch (error) {
+      console.log(`Error on Model getGroomingPriceTiers function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Books the appointment and charges for it in one transaction — if payment
+  // isn't confirmed, the appointment must not exist either. The total is
+  // resolved server-side: a fixed tbl_appointment_services.service_price
+  // (Consultation) wins if set; otherwise Grooming is priced off the pet's
+  // weight tier; otherwise (Operation) the caller-supplied amount is used.
+  async addAppointmentWithPayment({
+    client_id,
+    pets_id,
+    appointment_services_id,
+    assigned_staff_id,
+    appointment_date,
+    start_time,
+    end_time,
+    appointment_status_id,
+    notes,
+    amount,
+    payment_method,
+    gcash_reference_number,
+    cash_received,
+    gcash_received,
+    created_by,
+  }) {
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+
+      const serviceRes = await client.query(
+        `SELECT appointment_services, service_price
+         FROM tbl_appointment_services
+         WHERE appointment_services_id = $1`,
+        [appointment_services_id],
+      );
+      if (!serviceRes.rows.length) {
+        throw new Error("Selected service not found");
+      }
+      const service = serviceRes.rows[0];
+
+      let total_amount = service.service_price;
+
+      if (total_amount == null && service.appointment_services === "Grooming") {
+        const petRes = await client.query(
+          `SELECT weight_kg FROM tbl_pets WHERE pets_id = $1`,
+          [pets_id],
+        );
+        if (!petRes.rows.length) {
+          throw new Error("Selected pet not found");
+        }
+
+        const tierRes = await client.query(
+          `SELECT price FROM tbl_grooming_price_tiers
+           WHERE max_weight_kg IS NULL OR max_weight_kg >= $1
+           ORDER BY max_weight_kg ASC NULLS LAST
+           LIMIT 1`,
+          [petRes.rows[0].weight_kg],
+        );
+        if (!tierRes.rows.length) {
+          throw new Error("No grooming price tier configured for this pet's weight");
+        }
+        total_amount = tierRes.rows[0].price;
+      }
+
+      if (total_amount == null) {
+        total_amount = amount;
+      }
+
+      const { cash_amount, gcash_amount } = resolvePaymentSplit({
+        payment_method,
+        total_amount,
+        cash_received,
+        gcash_received,
+      });
+
+      const statusRes = await client.query(
+        `SELECT payment_status_id FROM tbl_payment_status
+         WHERE LOWER(TRIM(payment_status_name)) = 'completed'`,
+      );
+      const payment_status_id = statusRes.rows[0]?.payment_status_id;
+      if (!payment_status_id) {
+        throw new Error("'Completed' payment status not configured");
+      }
+
+      const apptRes = await client.query(
+        `INSERT INTO tbl_appointments
+          (client_id, pets_id, appointment_services_id, assigned_staff_id,
+           appointment_date, start_time, end_time, appointment_status_id, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          client_id,
+          pets_id,
+          appointment_services_id,
+          assigned_staff_id,
+          appointment_date,
+          start_time,
+          end_time,
+          appointment_status_id,
+          notes,
+          created_by,
+        ],
+      );
+      const appointment = apptRes.rows[0];
+
+      const paymentRes = await client.query(
+        `INSERT INTO tbl_payments
+          (total_amount, payment_status_id, appointment_id, payment_method, gcash_reference_number, cash_amount, gcash_amount, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          total_amount,
+          payment_status_id,
+          appointment.appointment_id,
+          payment_method,
+          gcash_reference_number || null,
+          cash_amount,
+          gcash_amount,
+          created_by,
+        ],
+      );
+
+      await client.query("COMMIT");
+      return { appointment, payment: paymentRes.rows[0] };
+    } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
+      const conflict = mapSlotConflictError(error);
+      if (conflict) throw conflict;
+      console.log(`Error in addAppointmentWithPayment: ${error}`);
+      throw error;
+    } finally {
+      client.release(queryError);
+    }
+  }
+
+  // Finishes a Pending appointment that was created without payment (the
+  // "book now, pay in the next step" flow): prices it the same way
+  // addAppointmentWithPayment does, records the payment, and flips the
+  // appointment to In Queue — all in one transaction.
+  async completeAppointmentPayment({
+    appointment_id,
+    amount,
+    payment_method,
+    gcash_reference_number,
+    cash_received,
+    gcash_received,
+    updated_by,
+  }) {
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+
+      const apptRes = await client.query(
+        `SELECT a.*, ast.appointment_status_name, s.appointment_services, s.service_price
+         FROM tbl_appointments a
+         JOIN tbl_appointment_status ast ON ast.appointment_status_id = a.appointment_status_id
+         JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+         WHERE a.appointment_id = $1 AND a.is_deleted IS NOT TRUE
+         FOR UPDATE OF a`,
+        [appointment_id],
+      );
+      if (!apptRes.rows.length) {
+        const err = new Error("Appointment not found");
+        err.statusCode = 404;
+        throw err;
+      }
+      const appointment = apptRes.rows[0];
+
+      if (appointment.appointment_status_name !== "Pending") {
+        const err = new Error(
+          `Only pending appointments can be paid. Appointment is already ${appointment.appointment_status_name}.`,
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
+      const paymentRowRes = await client.query(
+        `SELECT * FROM tbl_payments
+         WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+         FOR UPDATE`,
+        [appointment_id],
+      );
+      if (!paymentRowRes.rows.length) {
+        throw new Error("Payment record for this appointment not found");
+      }
+      const paymentRow = paymentRowRes.rows[0];
+
+      let total_amount = appointment.service_price;
+
+      if (total_amount == null && appointment.appointment_services === "Grooming") {
+        const petRes = await client.query(
+          `SELECT weight_kg FROM tbl_pets WHERE pets_id = $1`,
+          [appointment.pets_id],
+        );
+        if (!petRes.rows.length) {
+          throw new Error("Selected pet not found");
+        }
+
+        const tierRes = await client.query(
+          `SELECT price FROM tbl_grooming_price_tiers
+           WHERE max_weight_kg IS NULL OR max_weight_kg >= $1
+           ORDER BY max_weight_kg ASC NULLS LAST
+           LIMIT 1`,
+          [petRes.rows[0].weight_kg],
+        );
+        if (!tierRes.rows.length) {
+          throw new Error("No grooming price tier configured for this pet's weight");
+        }
+        total_amount = tierRes.rows[0].price;
+      }
+
+      if (total_amount == null) {
+        total_amount = amount;
+      }
+
+      const { cash_amount, gcash_amount } = resolvePaymentSplit({
+        payment_method,
+        total_amount,
+        cash_received,
+        gcash_received,
+      });
+
+      const paymentStatusRes = await client.query(
+        `SELECT payment_status_id FROM tbl_payment_status
+         WHERE LOWER(TRIM(payment_status_name)) = 'completed'`,
+      );
+      const payment_status_id = paymentStatusRes.rows[0]?.payment_status_id;
+      if (!payment_status_id) {
+        throw new Error("'Completed' payment status not configured");
+      }
+
+      const confirmedStatusRes = await client.query(
+        `SELECT appointment_status_id FROM tbl_appointment_status
+         WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'`,
+      );
+      const confirmed_status_id = confirmedStatusRes.rows[0]?.appointment_status_id;
+      if (!confirmed_status_id) {
+        throw new Error("'In Queue' appointment status not configured");
+      }
+
+      const paymentRes = await client.query(
+        `UPDATE tbl_payments SET
+           total_amount = $1,
+           payment_status_id = $2,
+           payment_method = $3,
+           gcash_reference_number = $4,
+           cash_amount = $5,
+           gcash_amount = $6,
+           updated_by = $7,
+           date_updated = NOW()
+         WHERE payment_id = $8
+         RETURNING *`,
+        [
+          total_amount,
+          payment_status_id,
+          payment_method,
+          gcash_reference_number || null,
+          cash_amount,
+          gcash_amount,
+          updated_by,
+          paymentRow.payment_id,
+        ],
+      );
+
+      const updatedApptRes = await client.query(
+        `UPDATE tbl_appointments
+         SET appointment_status_id = $1, updated_by = $2, date_updated = NOW()
+         WHERE appointment_id = $3
+         RETURNING *`,
+        [confirmed_status_id, updated_by, appointment_id],
+      );
+
+      await client.query("COMMIT");
+      return { appointment: updatedApptRes.rows[0], payment: paymentRes.rows[0] };
+    } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
+      console.log(`Error in completeAppointmentPayment: ${error}`);
+      throw error;
+    } finally {
+      client.release(queryError);
     }
   }
 }

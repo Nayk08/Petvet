@@ -1,7 +1,7 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
 
-const ALLOWED_SEARCH_COLUMNS = ["name", "client_id", "contact_number", "email"];
+const ALLOWED_SEARCH_COLUMNS = ["name", "client_id", "email"];
 const ALLOWED_FILTER_COLUMNS = ["name"];
 
 function generateMicrochipNumber() {
@@ -145,12 +145,7 @@ export default class ClientRecordsModel {
     }
   }
 
-  async getClienPetById({
-    client_id,
-    page = 1,
-    limit = 10,
-    search = "",
-  } = {}) {
+  async getClienPetById({ client_id, page = 1, limit = 10, search = "" } = {}) {
     const client = await pool.connect();
 
     try {
@@ -183,7 +178,9 @@ export default class ClientRecordsModel {
         : Math.max(1, Math.ceil(total / effectiveLimit));
       const currentPage = isAll ? 1 : Number(page);
       const start = isAll ? 0 : (currentPage - 1) * effectiveLimit;
-      const rows = isAll ? filtered : filtered.slice(start, start + effectiveLimit);
+      const rows = isAll
+        ? filtered
+        : filtered.slice(start, start + effectiveLimit);
 
       return {
         client_name,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GCASH_REFERENCE_PATTERN } from "../../utils/validatePaymentMethod.js";
 
 const BOOKING_START_HOUR = 9; // 9 AM
 const BOOKING_LAST_START_HOUR = 17; // 5 PM start → 6 PM end is the last slot
@@ -77,12 +78,75 @@ export const editAppointmentSchema = z
     end_time: z.coerce.date({
       errorMap: () => ({ message: "Invalid end time" }),
     }),
-    status_name: z.enum(["Pending", "Confirmed", "Completed"], {
+    status_name: z.enum(["Pending", "In Queue", "Completed"], {
       errorMap: () => ({ message: "Invalid status" }),
     }),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
   })
   .superRefine(validateSlot);
+
+function validatePaymentFields(data, ctx) {
+  const needsReference =
+    data.payment_method === "GCash" || data.payment_method === "Split";
+  if (!needsReference) return;
+
+  const reference = data.gcash_reference_number?.trim();
+  if (!reference) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `A GCash reference number is required for ${data.payment_method} payments.`,
+      path: ["gcash_reference_number"],
+    });
+    return;
+  }
+
+  if (!GCASH_REFERENCE_PATTERN.test(reference)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "GCash reference number must be exactly 13 digits.",
+      path: ["gcash_reference_number"],
+    });
+  }
+}
+
+export const bookAppointmentWithPaymentSchema = z
+  .object({
+    client_id: z.coerce.number().int().positive(),
+    pets_id: z.coerce.number().int().positive(),
+    appointment_services_id: z.coerce.number().int().positive(),
+    assigned_staff_id: z.coerce.number().int().positive(),
+    appointment_date: z.coerce.date({
+      errorMap: () => ({ message: "Invalid appointment date" }),
+    }),
+    start_time: z.coerce.date({
+      errorMap: () => ({ message: "Invalid start time" }),
+    }),
+    end_time: z.coerce.date({
+      errorMap: () => ({ message: "Invalid end time" }),
+    }),
+    notes: z.string().trim().max(1000).optional().or(z.literal("")),
+    amount: z.coerce.number().positive().optional(),
+    payment_method: z.enum(["Cash", "GCash", "Split"], {
+      errorMap: () => ({ message: "Invalid payment method" }),
+    }),
+    gcash_reference_number: z.string().trim().max(50).optional().or(z.literal("")),
+    cash_received: z.coerce.number().min(0).optional(),
+    gcash_received: z.coerce.number().min(0).optional(),
+  })
+  .superRefine(validateSlot)
+  .superRefine(validatePaymentFields);
+
+export const completeAppointmentPaymentSchema = z
+  .object({
+    amount: z.coerce.number().positive().optional(),
+    payment_method: z.enum(["Cash", "GCash", "Split"], {
+      errorMap: () => ({ message: "Invalid payment method" }),
+    }),
+    gcash_reference_number: z.string().trim().max(50).optional().or(z.literal("")),
+    cash_received: z.coerce.number().min(0).optional(),
+    gcash_received: z.coerce.number().min(0).optional(),
+  })
+  .superRefine(validatePaymentFields);
 
 export const appointmentIdParamSchema = z.object({
   appointment_id: z.coerce.number().int().positive(),

@@ -20,6 +20,9 @@ import InventoryRoute from "./src/features/Inventory/Inventory_Route.js";
 import PaymentRoute from "./src/features/Payment/Payment_Route.js";
 import ClientRecordsRoute from "./src/features/Client_Records/Client_Records_Route.js";
 import AppointmentRoute from "./src/features/Appointment/Appointment_Route.js";
+import DashboardRoute from "./src/features/Dashboard/Dashboard_Route.js";
+import AnalyticsRoute from "./src/features/Analytics/Analytics_Route.js";
+import ClientPortalRoute from "./src/features/ClientPortal/ClientPortal_Route.js";
 
 const app = express();
 const PgSession = connectPgSimple(session);
@@ -77,6 +80,19 @@ app.get("/", (req, res) => {
 
 // --- Routes ---
 app.use("/api/auth", authLimiter, AuthenticatorRoute); // stays public, has its own doubleCsrfProtection per-route already
+
+// Client portal — a separate JWT bearer-token auth system for actual
+// clinic clients (tbl_clients), entirely independent of the isAuth/session
+// system below (which is for staff/admin only). Its own route file splits
+// the public Google-login route from the isClientAuth-gated ones
+// internally, so nothing extra is needed here. MUST be mounted before the
+// `app.use("/api", isAuth, ...)` lines below — those match ANY path
+// starting with "/api" (Express treats the mount path as a prefix, not an
+// exact match), so isAuth was intercepting every /api/client-portal/*
+// request and rejecting it with a staff-session 401 before this route
+// ever got a chance to run.
+app.use("/api/client-portal", ClientPortalRoute);
+
 app.use("/api", isAuth, doubleCsrfProtection, commonRoutes);
 app.use("/api", isAuth, doubleCsrfProtection, userRoutes);
 app.use("/api", isAuth, doubleCsrfProtection, userLevelRoutes);
@@ -86,6 +102,8 @@ app.use("/api", isAuth, doubleCsrfProtection, InventoryRoute);
 app.use("/api", isAuth, doubleCsrfProtection, PaymentRoute);
 app.use("/api", isAuth, doubleCsrfProtection, ClientRecordsRoute);
 app.use("/api", isAuth, doubleCsrfProtection, AppointmentRoute);
+app.use("/api", isAuth, doubleCsrfProtection, DashboardRoute);
+app.use("/api", isAuth, doubleCsrfProtection, AnalyticsRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {
