@@ -29,6 +29,7 @@ import {
   Syringe,
   Moon,
   Sun,
+  BarChart3,
 } from "lucide-react";
 
 const MODULE_ICONS = {
@@ -41,6 +42,7 @@ const MODULE_ICONS = {
   CART: ShoppingCart,
   PAYMENTS: CreditCard,
   INVENTORY: Package,
+  ANALYTICS: BarChart3,
 
   USER_MGMT: Users,
   USER_MGMT_USERS: User,

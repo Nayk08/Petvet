@@ -22,6 +22,11 @@ import {
 import { useCartStore } from "@/stores/useCartStore.js";
 import { Input } from "@/components/ui/input.jsx";
 import { queryClient, checkoutOrder, completePayment } from "@/api/http.js";
+import PaymentMethodPicker from "@/components/ui/PaymentMethodPicker.jsx";
+import {
+  evaluatePaymentAmount,
+  requiresExactAmount,
+} from "@/utils/paymentValidation.js";
 
 // Editable quantity field. Keeps its own local "draft" text while the user is
 // typing so digits don't get clobbered by the store on every keystroke, then
@@ -89,7 +94,11 @@ export function Component() {
 
   // Checkout / payment state — kept locally only for the live "Change"
   // preview before submitting; the action re-validates authoritatively.
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const isSplit = paymentMethod === "Split";
   const [amountPaid, setAmountPaid] = useState("");
+  const [splitCashPaid, setSplitCashPaid] = useState("");
+  const [splitGcashPaid, setSplitGcashPaid] = useState("");
 
   // Once the "start" fetcher resolves, either open the confirm modal
   // (success) or surface the error as a toast (failure).
@@ -140,22 +149,33 @@ export function Component() {
     0,
   );
 
-  const paidNumber = parseFloat(amountPaid);
-  const hasValidPayment = !Number.isNaN(paidNumber) && paidNumber >= subtotal;
-  const change = hasValidPayment ? paidNumber - subtotal : 0;
+  const paidNumber = isSplit
+    ? (parseFloat(splitCashPaid) || 0) + (parseFloat(splitGcashPaid) || 0)
+    : parseFloat(amountPaid);
+  const { isValid: hasValidPayment, change } = evaluatePaymentAmount({
+    paymentMethod,
+    receivedTotal: paidNumber,
+    total: subtotal,
+  });
 
   // Starts checkout via the route action (intent: "start") instead of
   // calling checkoutOrder() directly, so the ["Payments"] query cache
   // gets invalidated from inside the action.
   const handleOpenCheckout = () => {
+    setPaymentMethod("Cash");
     setAmountPaid("");
+    setSplitCashPaid("");
+    setSplitGcashPaid("");
     startFetcher.submit({ intent: "start" }, { method: "post" });
   };
 
   const handleCheckoutOpenChange = (open) => {
     setShowCheckout(open);
     if (!open) {
+      setPaymentMethod("Cash");
       setAmountPaid("");
+      setSplitCashPaid("");
+      setSplitGcashPaid("");
       clearCart();
       setPaymentId(null);
     }
@@ -423,37 +443,99 @@ export function Component() {
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-4 pt-3">
-              <label
-                htmlFor="amount-paid"
-                className="text-sm text-slate-700 dark:text-slate-300 shrink-0"
-              >
-                Amount received
-              </label>
-              <div className="flex items-center gap-1 w-36">
-                <span className="text-slate-500 dark:text-slate-400 text-sm">
-                  $
-                </span>
-                <Input
-                  id="amount-paid"
-                  name="amount_paid"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-right focus-visible:ring-cyan-500"
-                />
-              </div>
-            </div>
+            <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
 
-            {amountPaid !== "" && !hasValidPayment && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 text-right pt-1">
-                Amount received must be at least ${subtotal.toFixed(2)}
-              </p>
+            {isSplit ? (
+              <>
+                <div className="flex items-center justify-between gap-4 pt-3">
+                  <label
+                    htmlFor="amount-paid-cash"
+                    className="text-sm text-slate-700 dark:text-slate-300 shrink-0"
+                  >
+                    Cash received
+                  </label>
+                  <div className="flex items-center gap-1 w-36">
+                    <span className="text-slate-500 dark:text-slate-400 text-sm">
+                      $
+                    </span>
+                    <Input
+                      id="amount-paid-cash"
+                      name="cash_received"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={splitCashPaid}
+                      onChange={(e) => setSplitCashPaid(e.target.value)}
+                      className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-right focus-visible:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4 pt-2">
+                  <label
+                    htmlFor="amount-paid-gcash"
+                    className="text-sm text-slate-700 dark:text-slate-300 shrink-0"
+                  >
+                    GCash received
+                  </label>
+                  <div className="flex items-center gap-1 w-36">
+                    <span className="text-slate-500 dark:text-slate-400 text-sm">
+                      $
+                    </span>
+                    <Input
+                      id="amount-paid-gcash"
+                      name="gcash_received"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={splitGcashPaid}
+                      onChange={(e) => setSplitGcashPaid(e.target.value)}
+                      className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-right focus-visible:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between gap-4 pt-3">
+                <label
+                  htmlFor="amount-paid"
+                  className="text-sm text-slate-700 dark:text-slate-300 shrink-0"
+                >
+                  Amount received
+                </label>
+                <div className="flex items-center gap-1 w-36">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm">
+                    $
+                  </span>
+                  <Input
+                    id="amount-paid"
+                    name="amount_paid"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-right focus-visible:ring-cyan-500"
+                  />
+                </div>
+              </div>
             )}
+
+            {!hasValidPayment &&
+              (isSplit
+                ? splitCashPaid !== "" || splitGcashPaid !== ""
+                : amountPaid !== "") && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 text-right pt-1">
+                  {requiresExactAmount(paymentMethod)
+                    ? `Amount received must exactly equal $${subtotal.toFixed(2)} — GCash doesn't give change`
+                    : `Amount received must be at least $${subtotal.toFixed(2)}`}
+                </p>
+              )}
 
             <div className="flex justify-between items-center font-bold text-base pt-3">
               <span className="text-slate-700 dark:text-slate-300">Change</span>
@@ -511,6 +593,8 @@ export async function action({ request }) {
     try {
       const payment = await checkoutOrder(cartItems); // saved as Pending
       await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+      await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
+      await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
       return { payment };
     } catch (error) {
       const errorMessage = error.message || "Could not start checkout.";
@@ -521,6 +605,10 @@ export async function action({ request }) {
 
   // intent === "confirm"
   const paymentId = formData.get("payment_id");
+  const payment_method = formData.get("payment_method");
+  const gcash_reference_number = formData.get("gcash_reference_number");
+  const cash_received = formData.get("cash_received");
+  const gcash_received = formData.get("gcash_received");
   const amountPaid = parseFloat(formData.get("amount_paid"));
 
   const cartItems = useCartStore.getState().cartItems;
@@ -533,24 +621,44 @@ export async function action({ request }) {
     return { error: "No pending order found. Please reopen checkout." };
   }
 
-  if (Number.isNaN(amountPaid) || amountPaid < subtotal) {
+  const receivedTotal =
+    payment_method === "Split"
+      ? (parseFloat(cash_received) || 0) + (parseFloat(gcash_received) || 0)
+      : amountPaid;
+
+  const { isValid } = evaluatePaymentAmount({
+    paymentMethod: payment_method,
+    receivedTotal,
+    total: subtotal,
+  });
+  if (!isValid) {
     return {
-      error: `Amount received must be at least $${subtotal.toFixed(2)}`,
+      error: requiresExactAmount(payment_method)
+        ? `Amount received must exactly equal $${subtotal.toFixed(2)} — GCash doesn't give change`
+        : `Amount received must be at least $${subtotal.toFixed(2)}`,
     };
   }
 
   try {
-    await completePayment(paymentId);
+    await completePayment(paymentId, {
+      payment_method,
+      gcash_reference_number,
+      cash_received,
+      gcash_received,
+    });
   } catch (error) {
     const errorMessage = error.message || "Failed to complete checkout.";
     toast.error("Checkout failed", { description: errorMessage });
     return { error: errorMessage };
   }
 
-  const change = amountPaid - subtotal;
+  const change = receivedTotal - subtotal;
 
   await queryClient.invalidateQueries({ queryKey: ["inventoryProducts"] });
   await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+  await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
+  await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
+  await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
   useCartStore.getState().clearCart();
 
   toast.success("Order placed", {

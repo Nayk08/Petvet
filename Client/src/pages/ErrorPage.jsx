@@ -64,7 +64,7 @@ export default function ErrorPage() {
             ← Go Back
           </button>
           <Link
-            to="/dashboard"
+            to="/"
             className="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             🏠 Go Home

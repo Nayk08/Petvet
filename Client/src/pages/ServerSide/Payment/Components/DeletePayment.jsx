@@ -108,11 +108,37 @@ export async function action({ request, params }) {
   // Extract search parameters from the request URL since `location` is a hook
   const search = new URL(request.url).search;
 
+  // Optimistically flip this row to Cancelled in every cached list that
+  // could be showing it — the Payment module's own list AND the
+  // Dashboard's "Today's Sales" widget — so whichever one you're on
+  // updates instantly instead of waiting on the round trip. Snapshot both
+  // first so a failure can roll them back.
+  const patchRow = (old) => {
+    if (!old?.rows) return old;
+    return {
+      ...old,
+      rows: old.rows.map((row) =>
+        String(row.payment_id) === String(paymentId)
+          ? { ...row, payment_status_name: "Cancelled" }
+          : row,
+      ),
+    };
+  };
+  const previousPaymentsQueries = [
+    ...queryClient.getQueriesData({ queryKey: ["Payments"] }),
+    ...queryClient.getQueriesData({ queryKey: ["TodayPayments"] }),
+  ];
+  queryClient.setQueriesData({ queryKey: ["Payments"] }, patchRow);
+  queryClient.setQueriesData({ queryKey: ["TodayPayments"] }, patchRow);
+
   try {
     await deletePayment(paymentId);
 
     await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+    await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
     await queryClient.invalidateQueries({ queryKey: ["Payment", paymentId] });
+    await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
+    await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
 
     toast.success("Payment cancelled", {
       className:
@@ -125,6 +151,11 @@ export async function action({ request, params }) {
 
     return redirect(`..${search}`);
   } catch (err) {
+    // Roll back the optimistic update — the payment is still Pending.
+    previousPaymentsQueries.forEach(([queryKey, data]) => {
+      queryClient.setQueryData(queryKey, data);
+    });
+
     toast.error("Cancel failed", {
       className:
         "bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",

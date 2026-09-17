@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCurrentUser } from "@/api/auth";
@@ -15,6 +16,7 @@ import {
   useActionData,
   redirect,
   useNavigation,
+  useNavigate,
 } from "react-router-dom";
 import {
   AlertCircle,
@@ -24,16 +26,48 @@ import {
   ShieldCheck,
   HeartPulse,
 } from "lucide-react";
-import { queryClient } from "@/api/http";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+import { queryClient, fetchNavbar } from "@/api/http";
+import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
+import {
+  loginWithGoogle,
+  setClientToken,
+  getClientToken,
+} from "@/api/clientPortal.js";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL;
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function AuthForm() {
   const [searchParams] = useSearchParams();
   const actionData = useActionData();
   const { state } = useNavigation();
+  const navigate = useNavigate();
   const isSubmitting = state === "submitting";
   const isLogin = searchParams.get("mode") !== "register";
+
+  // Client (Google) sign-in is a separate flow from the staff email/password
+  // Form above — it doesn't go through the router action, so it needs its
+  // own error state and its own submitting flag.
+  const [googleError, setGoogleError] = useState(null);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  async function handleGoogleSuccess(credentialResponse) {
+    setGoogleError(null);
+    setIsGoogleSubmitting(true);
+    try {
+      const { token } = await loginWithGoogle(credentialResponse.credential);
+      setClientToken(token);
+      navigate("/portal");
+    } catch (err) {
+      setGoogleError(
+        err.message ||
+          "Sign-in failed. If you're a first-time visitor, please contact the clinic to set up your record first.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  }
 
   return (
     <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden transition-all duration-300">
@@ -203,6 +237,51 @@ export default function AuthForm() {
                 : "Register Account"}
           </Button>
         </Form>
+
+        {isLogin && (
+          <>
+            <div className="flex items-center gap-3 my-5">
+              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+              <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Client? Sign in with Google
+              </span>
+              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+            </div>
+
+            {isGoogleSubmitting ? (
+              <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+                Signing in...
+              </p>
+            ) : GOOGLE_CLIENT_ID ? (
+              <div className="flex justify-center">
+                <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() =>
+                      setGoogleError("Google sign-in failed. Please try again.")
+                    }
+                  />
+                </GoogleOAuthProvider>
+              </div>
+            ) : (
+              <p className="text-center text-xs text-rose-500 dark:text-rose-400">
+                Google sign-in isn't configured yet.
+              </p>
+            )}
+
+            {googleError && (
+              <div className="flex items-center gap-2 p-3 mt-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <p className="font-medium leading-tight">{googleError}</p>
+              </div>
+            )}
+
+            <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-500 mt-3">
+              New client? Visit the clinic in person first so we can set up
+              your record.
+            </p>
+          </>
+        )}
       </CardContent>
 
       {/* Footer Nav Links */}
@@ -224,7 +303,14 @@ export default function AuthForm() {
 export async function loader({ request }) {
   const user = await getCurrentUser();
   if (user) {
-    throw redirect("/dashboard");
+    const { modules } = await fetchNavbar({});
+    throw redirect(resolveLandingPath(modules));
+  }
+
+  // Already signed in as a client (JWT in localStorage)? Same idea as the
+  // staff check above — skip the form and go straight to the portal.
+  if (getClientToken()) {
+    throw redirect("/portal");
   }
 
   const url = new URL(request.url);
@@ -336,7 +422,8 @@ export async function action({ request }) {
     }
 
     queryClient.clear();
-    return redirect("/dashboard");
+    const { modules } = await fetchNavbar({});
+    return redirect(resolveLandingPath(modules));
   } catch (err) {
     throw new Response(
       JSON.stringify({ message: err.message || "Unexpected error occurred." }),

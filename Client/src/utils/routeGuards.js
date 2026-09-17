@@ -1,6 +1,7 @@
 // src/utils/routeGuards.js
 import { redirect } from "react-router-dom";
 import { fetchCurrentUser, fetchNavbar, queryClient } from "../api/http";
+import { resolveLandingPath } from "./resolveLandingPath.js";
 
 // Require the user to be logged in
 export async function requireAuth() {
@@ -60,7 +61,12 @@ export async function loader() {
   });
 
   if (user) {
-    throw redirect("/dashboard");
+    const { modules } = await queryClient.ensureQueryData({
+      queryKey: ["navData", user.id, user.role],
+      queryFn: ({ signal }) => fetchNavbar({ signal }),
+      staleTime: 1000 * 60 * 5,
+    });
+    throw redirect(resolveLandingPath(modules));
   }
 
   return null;

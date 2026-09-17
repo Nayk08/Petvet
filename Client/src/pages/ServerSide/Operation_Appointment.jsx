@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchOperationAppointments,
   selectAppointmentStaff,
+  fetchCurrentUser,
 } from "@/api/http";
 import { AppointmentColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
@@ -35,6 +36,17 @@ export default function Operation_Appointment() {
     queryFn: ({ signal }) => selectAppointmentStaff({ signal }),
   });
 
+  // Non-admins only ever see their own appointments here (enforced
+  // server-side, overriding this filter regardless of what's sent) — so
+  // the Staff filter would be misleading for them and is hidden instead.
+  const { data: currentUserData } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: ({ signal }) => fetchCurrentUser({ signal }),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+  });
+  const isAdmin = currentUserData?.user?.role?.trim() === "Admin";
+
   const columnsConfig = useMemo(() => {
     const staffFilterOptions = (staff ?? []).map((s) => ({
       key: s.users_id,
@@ -43,13 +55,17 @@ export default function Operation_Appointment() {
     }));
     return [
       ...READ_ONLY_COLUMNS,
-      {
-        key: "assigned_staff_id",
-        label: "Staff",
-        filterOnly: true,
-        multiSelect: true,
-        filterOptions: staffFilterOptions,
-      },
+      ...(isAdmin
+        ? [
+            {
+              key: "assigned_staff_id",
+              label: "Staff",
+              filterOnly: true,
+              multiSelect: true,
+              filterOptions: staffFilterOptions,
+            },
+          ]
+        : []),
       {
         key: "appointment_date",
         label: "Date",
@@ -57,7 +73,7 @@ export default function Operation_Appointment() {
         filterType: "date",
       },
     ];
-  }, [staff]);
+  }, [staff, isAdmin]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: [

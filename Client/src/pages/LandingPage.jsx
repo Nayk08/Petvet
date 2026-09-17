@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { getCurrentUser } from "@/api/auth";
+import { fetchNavbar } from "@/api/http";
+import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -552,7 +554,8 @@ export async function loader() {
   const user = await getCurrentUser();
 
   if (user) {
-    return window.location.assign("/dashboard");
+    const { modules } = await fetchNavbar({});
+    return window.location.assign(resolveLandingPath(modules));
   }
 
   return null;

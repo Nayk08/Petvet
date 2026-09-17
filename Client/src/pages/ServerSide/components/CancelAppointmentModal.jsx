@@ -22,6 +22,7 @@ import {
   fetchAppointmentById,
   cancelAppointment,
   invalidateAppointmentQueries,
+  queryClient,
 } from "@/api/http";
 
 export function Component() {
@@ -123,6 +124,14 @@ export async function action({ params }) {
   try {
     await cancelAppointment(params.appointment_id);
     await invalidateAppointmentQueries();
+    // Cancelling also cancels the appointment's linked Pending payment (see
+    // Appointment_Model.js:deleteAppointment), so refresh both the
+    // Dashboard's widgets and the Payment module's own list too.
+    await queryClient.invalidateQueries({ queryKey: ["TodayAppointments"] });
+    await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+    await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
+    await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
+    await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message };

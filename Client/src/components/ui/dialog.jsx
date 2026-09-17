@@ -56,7 +56,12 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // bg-popover/text-popover-foreground (the shadcn defaults) don't
+          // pick up this app's .dark class the way every other component's
+          // explicit dark: classes do, leaving dialogs stuck light while
+          // their own contents (which DO use dark:) render correctly —
+          // spelling it out explicitly here matches the rest of the app.
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-white border border-slate-200 p-6 text-sm text-slate-800 ring-1 ring-black/5 duration-100 outline-none sm:max-w-md dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 dark:ring-white/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}>
@@ -127,7 +132,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        "text-sm text-slate-500 dark:text-slate-400 *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-slate-900 dark:*:[a]:hover:text-white",
         className
       )}
       {...props} />

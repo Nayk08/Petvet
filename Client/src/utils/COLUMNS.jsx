@@ -13,6 +13,8 @@ const StatusBadge = ({ label, variant = "default" }) => {
     out: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
     pending:
       "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+    awaiting:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
     completed:
       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
     cancelled:
@@ -31,6 +33,16 @@ const StatusBadge = ({ label, variant = "default" }) => {
     </span>
   );
 };
+
+export function formatDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export const usersColumns = [
   { key: "user_name", label: "NAME" },
@@ -154,7 +166,30 @@ export const InventoryColumns = [
 ];
 
 export const PaymentColumns = [
-  { key: "payment_id", label: "PAYMENT ID" },
+  {
+    key: "control_number",
+    label: "CONTROL NO.",
+    render: (value) => (
+      <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
+        {value ?? "—"}
+      </span>
+    ),
+  },
+  {
+    key: "payment_type",
+    label: "TYPE",
+    filterOnly: true,
+    filterOptions: [
+      { key: "inv", value: "INV", label: "Invoice (INV)" },
+      { key: "apt", value: "APT", label: "Appointment (APT)" },
+    ],
+  },
+  {
+    key: "payment_date",
+    label: "Date",
+    filterOnly: true,
+    filterType: "dateRange",
+  },
   {
     key: "date_created",
     label: "PAYMENT DATE",
@@ -178,17 +213,30 @@ export const PaymentColumns = [
       ),
   },
   {
+    key: "payment_method",
+    label: "METHOD",
+    render: (value) => (
+      <span className="text-slate-700 dark:text-slate-300">{value ?? "—"}</span>
+    ),
+  },
+  {
     key: "payment_status_name",
     label: "PAYMENT STATUS",
     align: "right",
     filterOptions: [
       { key: "pending", value: "Pending", label: "Pending" },
+      {
+        key: "awaiting_verification",
+        value: "Awaiting Verification",
+        label: "Awaiting Verification",
+      },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
     ],
     render: (value) => {
       const variantMap = {
         Pending: "pending",
+        "Awaiting Verification": "awaiting",
         Completed: "completed",
         Cancelled: "cancelled",
       };
@@ -201,6 +249,18 @@ export const PaymentColumns = [
     },
   },
 ];
+
+// For the revenue cards' click-through modal: every row is already
+// Completed and scoped to whatever the clicked card meant (a day, a
+// method, a type), so the Date Range and Status filters would just be
+// redundant clutter — drop the date-range filter column entirely and
+// strip the status column's filter (keeping the column itself, since it's
+// still useful to see at a glance).
+export const PaymentTransactionModalColumns = PaymentColumns.filter(
+  (col) => col.key !== "payment_date",
+).map((col) =>
+  col.key === "payment_status_name" ? { ...col, filterOptions: undefined } : col,
+);
 
 export const ClientRecordsColumns = [
   { key: "client_id", label: "CLIENT ID" },
@@ -235,16 +295,6 @@ export const PetRecordsColumns = [
   { key: "species_name", label: "SPECIES" },
   { key: "gender_name", label: "GENDER" },
 ];
-
-export function formatDate(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 export const AppointmentColumns = [
   { key: "appointment_id", label: "ID" },
@@ -296,17 +346,86 @@ export const AppointmentColumns = [
   {
     key: "appointment_status_name",
     label: "STATUS",
-    align: "right",
+    align: "left",
     filterOptions: [
       { key: "pending", value: "Pending", label: "Pending" },
-      { key: "confirmed", value: "Confirmed", label: "Confirmed" },
+      { key: "in_queue", value: "In Queue", label: "In Queue" },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
     ],
     render: (value) => {
       const variantMap = {
         Pending: "pending",
-        Confirmed: "active",
+        "In Queue": "active",
+        Completed: "completed",
+        Cancelled: "cancelled",
+      };
+      return (
+        <StatusBadge
+          label={value ?? "Unknown"}
+          variant={variantMap[value] || "default"}
+        />
+      );
+    },
+  },
+];
+
+// Client portal's own "My Appointments" — same as AppointmentColumns minus
+// client_name (always the logged-in client themselves) and any staff/date
+// filter chips that assume a staff-wide view.
+export const PortalAppointmentColumns = AppointmentColumns.filter(
+  (col) => col.key !== "client_name",
+);
+
+// Dashboard's "Today's Live Queue" widget — a dedicated, lighter column set
+// (no Control No./Date, since the whole table is already scoped to today)
+// backed by GET /appointments/today.
+export const TodayQueueColumns = [
+  { key: "appointment_id", label: "ID" },
+  { key: "pets_name", label: "PATIENT NAME" },
+  { key: "client_name", label: "OWNER" },
+  {
+    key: "service_name",
+    label: "SERVICE TYPE",
+    multiSelect: true,
+    filterOptions: [
+      { key: "grooming", value: "Grooming", label: "Grooming" },
+      { key: "operation", value: "Operation", label: "Operation" },
+      { key: "consultation", value: "Consultation", label: "Consultation" },
+    ],
+  },
+  {
+    key: "start_time",
+    label: "APPOINTMENT TIME",
+    render: (value, row) => {
+      const fmt = (v) =>
+        v
+          ? new Date(v).toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "";
+      return (
+        <span className="text-slate-700 dark:text-slate-300">
+          {fmt(row.start_time)} - {fmt(row.end_time)}
+        </span>
+      );
+    },
+  },
+  {
+    key: "appointment_status_name",
+    label: "LIVE STATUS",
+    align: "right",
+    filterOptions: [
+      { key: "pending", value: "Pending", label: "Pending" },
+      { key: "in_queue", value: "In Queue", label: "In Queue" },
+      { key: "completed", value: "Completed", label: "Completed" },
+      { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+    ],
+    render: (value) => {
+      const variantMap = {
+        Pending: "pending",
+        "In Queue": "active",
         Completed: "completed",
         Cancelled: "cancelled",
       };

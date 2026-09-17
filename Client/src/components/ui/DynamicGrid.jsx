@@ -46,6 +46,15 @@ export default function DynamicGrid({
   onSearchChange,
   filters = {},
   onFiltersChange,
+  // For embedding inside something that already provides its own card
+  // chrome and heading (e.g. a Dialog) — skips the outer bordered/shadowed
+  // card wrapper and the title/description header bar, keeping just the
+  // toolbar (search/filters/columns) and the table itself.
+  bare = false,
+  // Optional extra control(s) rendered in the toolbar next to "Columns"
+  // (e.g. a "Generate Report" button) — for page-specific actions that
+  // don't belong in this shared component itself.
+  extraActions,
 }) {
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
@@ -188,51 +197,66 @@ export default function DynamicGrid({
     visibleColumns.length + (resolvedActions.length > 0 ? 1 : 0);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100">
+    <div
+      className={
+        bare
+          ? "w-full text-slate-800 dark:text-slate-100"
+          : "bg-white border border-slate-200 rounded-xl p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100"
+      }
+    >
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4 dark:border-slate-800">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-wide dark:text-white">
-            {title}
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-            Real-time status tracking and record management.
-          </p>
+      {!bare && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4 dark:border-slate-800">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-wide dark:text-white">
+              {title}
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
+              Real-time status tracking and record management.
+            </p>
+          </div>
+          {buttonLink && (
+            <div className="shrink-0">
+              <Button asChild variant="default" size="default">
+                <Link
+                  to={buttonLink}
+                  className="flex items-center gap-1.5 font-medium"
+                >
+                  <Plus size={16} />
+                  <span>{buttonText}</span>
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
-        {buttonLink && (
-          <div className="shrink-0">
-            <Button asChild variant="default" size="default">
-              <Link
-                to={buttonLink}
-                className="flex items-center gap-1.5 font-medium"
-              >
-                <Plus size={16} />
-                <span>{buttonText}</span>
-              </Link>
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Action Toolbar */}
-      <div className="flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between pt-4 w-full relative z-20">
-        <div className="flex flex-col md:flex-row flex-1 items-stretch md:items-center gap-3">
-          <div className="relative w-full md:w-64 shrink-0">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search records..."
-              value={search}
-              onChange={(e) => onSearchChange?.(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
-            />
-          </div>
+      {/* Action Toolbar — a single flex-wrap row rather than nested
+          viewport-breakpoint containers, so it reflows correctly based on
+          how much space it ACTUALLY has (a narrow Dialog vs. the full
+          page), not the browser window's width; md:/xl: prefixes fire off
+          the viewport regardless of how narrow this component's own
+          container is, which used to scramble the wrap order when this
+          rendered inside a Dialog. */}
+      <div
+        className={`flex flex-wrap items-center gap-3 w-full relative z-20 ${bare ? "" : "pt-4"}`}
+      >
+        <div className="relative w-full sm:w-64 shrink-0">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search records..."
+            value={search}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
+          />
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            {columnsConfig
+        {columnsConfig
               .filter(
                 (col) =>
                   col.filterType === "date" ||
+                  col.filterType === "dateRange" ||
                   (col.filterOptions && col.filterOptions.length > 0),
               )
               .map((col) =>
@@ -254,6 +278,46 @@ export default function DynamicGrid({
                         : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
                     }`}
                   />
+                ) : col.filterType === "dateRange" ? (
+                  <div key={col.key} className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={filters[`${col.key}_from`] || ""}
+                      max={filters[`${col.key}_to`] || undefined}
+                      onChange={(e) =>
+                        onFiltersChange?.({
+                          ...filters,
+                          [`${col.key}_from`]: e.target.value,
+                        })
+                      }
+                      title={`${col.label} from`}
+                      className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                        filters[`${col.key}_from`]
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
+                          : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
+                      }`}
+                    />
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      to
+                    </span>
+                    <input
+                      type="date"
+                      value={filters[`${col.key}_to`] || ""}
+                      min={filters[`${col.key}_from`] || undefined}
+                      onChange={(e) =>
+                        onFiltersChange?.({
+                          ...filters,
+                          [`${col.key}_to`]: e.target.value,
+                        })
+                      }
+                      title={`${col.label} to`}
+                      className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                        filters[`${col.key}_to`]
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
+                          : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
+                      }`}
+                    />
+                  </div>
                 ) : col.multiSelect ? (
                   <MultiSelectFilter
                     key={col.key}
@@ -304,10 +368,9 @@ export default function DynamicGrid({
                 <span>Reset</span>
               </button>
             )}
-          </div>
-        </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 ml-auto shrink-0">
+          {extraActions}
           {onLimitChange && (
             <div className="shrink-0">
               <select

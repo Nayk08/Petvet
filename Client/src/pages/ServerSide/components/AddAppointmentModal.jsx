@@ -27,13 +27,15 @@ import {
   addAppointment,
   editAppointment,
   fetchAppointmentById,
+  fetchAppointments,
   fetchClientRecords,
   fetchPetRecordsByClientId,
   selectAppointmentServices,
   selectAppointmentStaff,
 } from "@/api/http";
+import { formatDate } from "@/utils/COLUMNS";
 
-const STATUS_OPTIONS = ["Pending", "Confirmed", "Completed"];
+const STATUS_OPTIONS = ["Pending", "In Queue", "Completed"];
 
 // Which staff roles can be assigned to each service type.
 const SERVICE_STAFF_ROLES = {
@@ -71,6 +73,25 @@ function formatDateString(d) {
 
 function todayDateString() {
   return formatDateString(new Date());
+}
+
+function buildAppointmentPayload(formData) {
+  const appointment_date = formData.get("appointment_date");
+  const time_slot = formData.get("time_slot"); // e.g. "09:00", a one-hour slot
+  const [slotHour] = time_slot.split(":").map(Number);
+  const start_time = `${appointment_date}T${time_slot}:00`;
+  const end_time = `${appointment_date}T${String(slotHour + 1).padStart(2, "0")}:00:00`;
+
+  return {
+    client_id: formData.get("client_id"),
+    pets_id: formData.get("pets_id"),
+    appointment_services_id: formData.get("appointment_services_id"),
+    assigned_staff_id: formData.get("assigned_staff_id"),
+    appointment_date,
+    start_time,
+    end_time,
+    notes: formData.get("notes"),
+  };
 }
 
 // The earliest date still worth showing in the picker: today, unless every
@@ -130,10 +151,12 @@ export function Component() {
     setSelectedClientId(String(client.client_id));
     setClientSearch(client.name);
     setIsClientDropdownOpen(false);
+    setSelectedPetId(""); // previously-picked pet belonged to a different client
   }
 
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedStaffId, setSelectedStaffId] = useState("");
+  const [selectedPetId, setSelectedPetId] = useState("");
 
   const { data: services } = useQuery({
     queryKey: ["appointment-services"],
@@ -190,6 +213,9 @@ export function Component() {
     if (appointmentData?.assigned_staff_id) {
       setSelectedStaffId(String(appointmentData.assigned_staff_id));
     }
+    if (appointmentData?.pets_id) {
+      setSelectedPetId(String(appointmentData.pets_id));
+    }
   }, [appointmentData]);
 
   const isToday = selectedDate === todayDateString();
@@ -198,6 +224,33 @@ export function Component() {
     const slotStart = new Date(`${selectedDate}T${slot.value}:00`);
     return slotStart.getTime() > Date.now();
   });
+
+  // Which hour-slots this staff member already has on the selected date,
+  // so the picker can disable them instead of letting the user hit the
+  // server's double-booking conflict error after filling out the form.
+  const { data: staffAppointmentsForDate } = useQuery({
+    queryKey: ["appointment-slots", selectedStaffId, selectedDate],
+    queryFn: ({ signal }) =>
+      fetchAppointments({
+        limit: "all",
+        filters: { assigned_staff_id: selectedStaffId, appointment_date: selectedDate },
+        signal,
+      }).then((r) => r.rows ?? []),
+    enabled: Boolean(selectedStaffId && selectedDate),
+  });
+
+  const bookedSlots = new Set(
+    (staffAppointmentsForDate ?? [])
+      .filter(
+        (appt) =>
+          appt.appointment_status_name !== "Cancelled" &&
+          String(appt.appointment_id) !== String(params.appointment_id ?? ""),
+      )
+      .map(
+        (appt) =>
+          String(new Date(appt.start_time).getHours()).padStart(2, "0") + ":00",
+      ),
+  );
 
   const { data: pets, isPending: isPetsPending } = useQuery({
     queryKey: ["pets-for-client", selectedClientId],
@@ -209,13 +262,67 @@ export function Component() {
     enabled: Boolean(selectedClientId),
   });
 
+  const selectedPet = pets?.find(
+    (p) => String(p.pet_id) === selectedPetId,
+  );
+
   function closeModal() {
     navigate(`..${location.search}`);
   }
 
-  function handleSubmit(event) {
+  const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState(null);
+
+  async function handleSubmit(event) {
     event.preventDefault();
-    submit(event.currentTarget, { method: isEditMode ? "PUT" : "POST" });
+
+    if (isEditMode) {
+      submit(event.currentTarget, { method: "PUT" });
+      return;
+    }
+
+    // New bookings are created immediately as "Pending" so the appointment
+    // still exists even if the payment step gets abandoned; the payment
+    // step then upgrades it to "In Queue".
+    const formData = new FormData(event.currentTarget);
+    const payload = buildAppointmentPayload(formData);
+    const selectedStaffMember = filteredStaff.find(
+      (s) => String(s.users_id) === String(payload.assigned_staff_id),
+    );
+
+    setBookingError(null);
+    setIsBookingSubmitting(true);
+    try {
+      const appointment = await addAppointment(payload);
+      await invalidateAppointmentQueries();
+      // Booking also opens a Pending payment row (see
+      // Appointment_Model.js:addAppointment) — refresh the Dashboard's
+      // Today's Live Queue/Sales and revenue cards, and the Payment
+      // module's own list, so this shows up immediately everywhere.
+      await queryClient.invalidateQueries({ queryKey: ["TodayAppointments"] });
+      await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
+      await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
+      await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+
+      navigate(`../confirm-payment${location.search}`, {
+        state: {
+          appointmentId: appointment.appointment_id,
+          payload,
+          clientName: clientSearch,
+          petName: selectedPet?.pet_name,
+          petWeightKg: selectedPet?.weight_kg,
+          serviceName: selectedServiceName,
+          servicePrice: services?.find(
+            (s) => String(s.appointment_services_id) === payload.appointment_services_id,
+          )?.service_price,
+          staffName: selectedStaffMember?.user_name,
+        },
+      });
+    } catch (error) {
+      setBookingError(error.message || "Failed to book appointment.");
+    } finally {
+      setIsBookingSubmitting(false);
+    }
   }
 
   return (
@@ -262,6 +369,7 @@ export function Component() {
                     onChange={(e) => {
                       setClientSearch(e.target.value);
                       setSelectedClientId("");
+                      setSelectedPetId("");
                       setIsClientDropdownOpen(true);
                     }}
                     onFocus={() => setIsClientDropdownOpen(true)}
@@ -308,7 +416,8 @@ export function Component() {
                   name="pets_id"
                   required
                   disabled={!selectedClientId}
-                  defaultValue={appointmentData?.pets_id ?? ""}
+                  value={selectedPetId}
+                  onChange={(e) => setSelectedPetId(e.target.value)}
                   className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2 disabled:opacity-50"
                 >
                   <option value="">
@@ -326,6 +435,44 @@ export function Component() {
                 </select>
               </div>
             </div>
+
+            {/* Pet details preview — shown once a pet is picked */}
+            {selectedPet && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
+                {selectedPet.pet_image ? (
+                  <img
+                    src={selectedPet.pet_image}
+                    alt={selectedPet.pet_name}
+                    className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 text-[10px] font-medium shrink-0">
+                    No photo
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs flex-1 min-w-0">
+                  <div className="col-span-2 font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    {selectedPet.pet_name}
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    {selectedPet.species_name || "—"}
+                    {selectedPet.breed ? ` · ${selectedPet.breed}` : ""}
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    {selectedPet.gender_name || "—"}
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    {selectedPet.weight_kg != null ? `${selectedPet.weight_kg} kg` : "—"}
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    {selectedPet.is_spayed_neutered ? "Spayed/Neutered" : "Not spayed/neutered"}
+                  </div>
+                  <div className="col-span-2 text-slate-500 dark:text-slate-400">
+                    Born {formatDate(selectedPet.date_of_birth) || "—"}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Service / Staff */}
             <div className="grid grid-cols-2 gap-4">
@@ -364,7 +511,10 @@ export function Component() {
                   required
                   disabled={!selectedServiceId}
                   value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedStaffId(e.target.value);
+                    setSelectedSlot(""); // previously-picked slot may conflict with this staff member
+                  }}
                   className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2 disabled:opacity-50"
                 >
                   <option value="">
@@ -419,11 +569,19 @@ export function Component() {
                       ? "No slots left today"
                       : "Select a slot"}
                   </option>
-                  {availableSlots.map((slot) => (
-                    <option key={slot.value} value={slot.value}>
-                      {slot.label}
-                    </option>
-                  ))}
+                  {availableSlots.map((slot) => {
+                    const isBooked = bookedSlots.has(slot.value);
+                    return (
+                      <option
+                        key={slot.value}
+                        value={slot.value}
+                        disabled={isBooked}
+                      >
+                        {slot.label}
+                        {isBooked ? " (Booked)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -466,7 +624,7 @@ export function Component() {
             </div>
 
             {/* Error Message Section */}
-            {isActionError && (
+            {(isActionError || bookingError) && (
               <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 text-xs leading-relaxed">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
                 <div className="flex-1">
@@ -474,7 +632,8 @@ export function Component() {
                     Failed to save appointment
                   </span>
                   <span className="opacity-90">
-                    {actionError?.message ||
+                    {bookingError ||
+                      actionError ||
                       "An unexpected network error occurred."}
                   </span>
                 </div>
@@ -483,7 +642,7 @@ export function Component() {
 
             {/* Actions */}
             <DialogFooter className="pt-2 sm:space-x-2">
-              {state !== "submitting" && (
+              {state !== "submitting" && !isBookingSubmitting && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -496,10 +655,10 @@ export function Component() {
 
               <Button
                 type="submit"
-                disabled={state === "submitting"}
+                disabled={state === "submitting" || isBookingSubmitting}
                 className="disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-sm"
               >
-                {state === "submitting" ? (
+                {state === "submitting" || isBookingSubmitting ? (
                   <div className="flex items-center gap-2">
                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     <span>Saving...</span>
@@ -551,34 +710,13 @@ export async function loader({ params }) {
 
 export async function action({ request, params }) {
   const formData = await request.formData();
-  const isEditMode = Boolean(params.appointment_id);
-
-  const appointment_date = formData.get("appointment_date");
-  const time_slot = formData.get("time_slot"); // e.g. "09:00", a one-hour slot
-  const [slotHour] = time_slot.split(":").map(Number);
-  const start_time = `${appointment_date}T${time_slot}:00`;
-  const end_time = `${appointment_date}T${String(slotHour + 1).padStart(2, "0")}:00:00`;
-
-  const payload = {
-    client_id: formData.get("client_id"),
-    pets_id: formData.get("pets_id"),
-    appointment_services_id: formData.get("appointment_services_id"),
-    assigned_staff_id: formData.get("assigned_staff_id"),
-    appointment_date,
-    start_time,
-    end_time,
-    notes: formData.get("notes"),
-  };
+  const payload = buildAppointmentPayload(formData);
 
   try {
-    if (isEditMode) {
-      await editAppointment(params.appointment_id, {
-        ...payload,
-        status_name: formData.get("status_name"),
-      });
-    } else {
-      await addAppointment(payload);
-    }
+    await editAppointment(params.appointment_id, {
+      ...payload,
+      status_name: formData.get("status_name"),
+    });
   } catch (error) {
     const errorMessage = error.message || "Failed to save appointment.";
 
@@ -595,16 +733,14 @@ export async function action({ request, params }) {
   }
 
   await invalidateAppointmentQueries();
-  if (isEditMode) {
-    await queryClient.invalidateQueries({
-      queryKey: ["appointment", params.appointment_id],
-    });
-  }
+  await queryClient.invalidateQueries({
+    queryKey: ["appointment", params.appointment_id],
+  });
 
-  toast.success(isEditMode ? "Appointment updated" : "Appointment booked", {
+  toast.success("Appointment updated", {
     className:
       "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-500 flex items-center gap-3 p-4 rounded-lg shadow-lg",
-    description: `Appointment was ${isEditMode ? "updated" : "booked"} successfully.`,
+    description: "Appointment was updated successfully.",
     descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
     duration: 2000,
     icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,

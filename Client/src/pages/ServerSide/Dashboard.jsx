@@ -1,83 +1,235 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Container from "@/components/ui/Container";
+import DynamicGrid from "@/components/ui/DynamicGrid";
+import { Pagination } from "@/components/ui/Pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  TodayQueueColumns,
+  PaymentColumns,
+  PaymentTransactionModalColumns,
+} from "@/utils/COLUMNS";
+import { usePagination } from "@/hooks/usePagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
-// Mock Data matching the PetVet aesthetic
-const STATS = [
-  {
-    id: 1,
-    name: "Total Appointments",
-    value: "142",
-    change: "+12% this week",
-    color: "text-blue-600",
-    dotBg: "bg-blue-500",
-  },
-  {
-    id: 2,
-    name: "Active Consultations",
-    value: "12",
-    change: "3 currently in queue",
-    color: "text-amber-600",
-    dotBg: "bg-amber-500",
-  },
-  {
-    id: 3,
-    name: "Completed Grooming",
-    value: "68",
-    change: "Target 80% reached",
-    color: "text-emerald-600",
-    dotBg: "bg-emerald-500",
-  },
-  {
-    id: 4,
-    name: "Critical Operations",
-    value: "3",
-    change: "Scheduled for today",
-    color: "text-rose-600",
-    dotBg: "bg-rose-500",
-  },
-];
+import {
+  fetchTodayRevenue,
+  fetchTodayAppointments,
+  fetchTodayPayments,
+  fetchTodayRevenueTransactions,
+  fetchCurrentUser,
+  queryClient,
+} from "@/api/http.js";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
-const RECENT_PATIENTS = [
-  {
-    id: "PET-9021",
-    name: "Max (Golden Retriever)",
-    owner: "Alice Johnson",
-    service: "Grooming",
-    status: "Completed",
-    time: "09:00 AM",
-  },
-  {
-    id: "PET-4412",
-    name: "Luna (Siamese Cat)",
-    owner: "Robert Smith",
-    service: "Consultation",
-    status: "In Progress",
-    time: "10:30 AM",
-  },
-  {
-    id: "PET-1092",
-    name: "Rocky (German Shepherd)",
-    owner: "Charlie Brown",
-    service: "Operation",
-    status: "Pending",
-    time: "01:00 PM",
-  },
-  {
-    id: "PET-7721",
-    name: "Bella (Persian Cat)",
-    owner: "Diana Prince",
-    service: "Grooming",
-    status: "Pending",
-    time: "02:30 PM",
-  },
-];
+// Which revenue card was clicked: the hero "Revenue" card shows everything
+// (undefined type/method); the two row cards below it are keyed by
+// payment method instead of Sales/Services, since that split is already
+// shown in the hero card's own breakdown bars.
+const REVENUE_MODALS = {
+  all: { title: "Today's Transactions" },
+  cash: { method: "cash", title: "Today's Cash Transactions" },
+  cashless: { method: "gcash", title: "Today's Cashless Transactions" },
+};
 
-export default function Dashboard() {
-  const [filterStatus, setFilterStatus] = useState("All");
+// Live date/time for the "Today's Live Queue" widget — makes it clear the
+// table below is scoped to appointments scheduled for THIS calendar date,
+// and ticks over automatically at midnight without needing a page refresh.
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
 
-  const filteredPatients =
-    filterStatus === "All"
-      ? RECENT_PATIENTS
-      : RECENT_PATIENTS.filter((p) => p.status === filterStatus);
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {now.toLocaleDateString(undefined, {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}
+      </span>
+      <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+        {now.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })}
+      </span>
+    </div>
+  );
+}
+
+export function Component() {
+  const navigate = useNavigate();
+
+  const {
+    data: revenueSummary,
+    isPending: isRevenuePending,
+    isError: isRevenueError,
+  } = useQuery({
+    queryKey: ["TodayRevenueSummary"],
+    queryFn: ({ signal }) => fetchTodayRevenue({ signal }),
+  });
+
+  const { data: currentUserData } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: ({ signal }) => fetchCurrentUser({ signal }),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+  });
+
+  const cashRevenue = Number(revenueSummary?.total_cash ?? 0);
+  const gcashRevenue = Number(revenueSummary?.total_gcash ?? 0);
+  const InvoiceRevenue = Number(revenueSummary?.total_invoice ?? 0);
+  const AppointmentRevenue = Number(revenueSummary?.total_appointment ?? 0);
+  const totalRevenue = cashRevenue + gcashRevenue;
+  // Matches Payment_Model.js:getTodayRevenueSummary's actual field name —
+  // this was previously read as `total_appointment_queue`, a field that
+  // doesn't exist, so the card silently showed 0 no matter what.
+  const appointmentQueueCount = Number(revenueSummary?.total_queue ?? 0);
+
+  const revenueDisplay = (value) =>
+    isRevenuePending
+      ? "…"
+      : isRevenueError
+        ? "—"
+        : `₱ ${value.toLocaleString()}`;
+
+  // Revenue cards -> click-through modal listing the actual transactions
+  // behind that number ("all" / "cash" / "cashless" key into
+  // REVENUE_MODALS; null means closed).
+  const [revenueModalKey, setRevenueModalKey] = useState(null);
+  const [revenueModalSearch, setRevenueModalSearch] = useState("");
+  const [revenueModalFilters, setRevenueModalFilters] = useState({});
+  const activeRevenueModal = revenueModalKey
+    ? REVENUE_MODALS[revenueModalKey]
+    : null;
+  const debouncedRevenueModalSearch = useDebouncedValue(revenueModalSearch, 400);
+
+  // Opening a different card's modal shouldn't carry over a stale search
+  // or Type filter from whichever one was open before.
+  function openRevenueModal(key) {
+    setRevenueModalKey(key);
+    setRevenueModalSearch("");
+    setRevenueModalFilters({});
+  }
+
+  const {
+    data: revenueModalData,
+    isPending: isRevenueModalPending,
+    isError: isRevenueModalError,
+    error: revenueModalError,
+  } = useQuery({
+    queryKey: [
+      "TodayRevenueTransactions",
+      activeRevenueModal?.type,
+      activeRevenueModal?.method,
+      debouncedRevenueModalSearch,
+      revenueModalFilters,
+    ],
+    queryFn: ({ signal }) =>
+      fetchTodayRevenueTransactions({
+        type: revenueModalFilters.payment_type || activeRevenueModal?.type,
+        method: activeRevenueModal?.method,
+        search: debouncedRevenueModalSearch,
+        limit: 1000,
+        signal,
+      }),
+    enabled: Boolean(activeRevenueModal),
+    // Keeps the previous page's rows (and the search box mounted/focused)
+    // while a new search/filter combination is fetching, instead of
+    // dropping to isPending and unmounting the DynamicGrid every keystroke.
+    placeholderData: keepPreviousData,
+  });
+
+  // Today's Live Queue (appointments)
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueFilters, setQueueFilters] = useState({});
+  const {
+    page: queuePage,
+    limit: queueLimit,
+    setPage: setQueuePage,
+    setLimit: setQueueLimit,
+  } = usePagination({ defaultLimit: 10 });
+  const debouncedQueueSearch = useDebouncedValue(queueSearch, 400);
+
+  useEffect(() => {
+    setQueuePage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQueueSearch, JSON.stringify(queueFilters)]);
+
+  const {
+    data: todayAppointments,
+    isPending: isQueuePending,
+    isError: isQueueError,
+    error: queueError,
+  } = useQuery({
+    queryKey: [
+      "TodayAppointments",
+      queuePage,
+      queueLimit,
+      debouncedQueueSearch,
+      queueFilters,
+    ],
+    queryFn: ({ signal }) =>
+      fetchTodayAppointments({
+        page: queuePage,
+        limit: queueLimit,
+        search: debouncedQueueSearch,
+        filters: queueFilters,
+        signal,
+      }),
+  });
+
+  // Today's Sales (payments) — replicates the real Payment page: same
+  // columns and row actions (View/Process/Delete), scoped to today.
+  const [salesSearch, setSalesSearch] = useState("");
+  const [salesFilters, setSalesFilters] = useState({});
+  const {
+    page: salesPage,
+    limit: salesLimit,
+    setPage: setSalesPage,
+    setLimit: setSalesLimit,
+  } = usePagination({ defaultLimit: 10 });
+  const debouncedSalesSearch = useDebouncedValue(salesSearch, 400);
+
+  useEffect(() => {
+    setSalesPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSalesSearch, JSON.stringify(salesFilters)]);
+
+  const {
+    data: todaySales,
+    isPending: isSalesPending,
+    isError: isSalesError,
+    error: salesError,
+  } = useQuery({
+    queryKey: [
+      "TodayPayments",
+      salesPage,
+      salesLimit,
+      debouncedSalesSearch,
+      salesFilters,
+    ],
+    queryFn: ({ signal }) =>
+      fetchTodayPayments({
+        page: salesPage,
+        limit: salesLimit,
+        search: debouncedSalesSearch,
+        filters: salesFilters,
+        signal,
+      }),
+  });
 
   return (
     <div className="w-full space-y-8 py-8">
@@ -85,7 +237,7 @@ export default function Dashboard() {
       <div className="flex justify-between items-center border-b border-slate-200 pb-6 dark:border-slate-800">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
-            Welcome Back, Admin
+            Welcome Back, {currentUserData?.user?.name ?? "User"}!
           </h1>
           <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
             Here is what's happening at PetVet clinic today.
@@ -102,125 +254,208 @@ export default function Dashboard() {
       </div>
 
       {/* Analytics/Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {STATS.map((stat) => (
-          <div
-            key={stat.id}
-            className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700"
-          >
-            <div className="flex justify-between items-start">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                {stat.name}
+      <div className="flex flex-col lg:flex-row gap-4">
+        <Container
+          variant="hero"
+          title="Revenue"
+          value={revenueDisplay(totalRevenue)}
+          trend="+12.5%"
+          trendLabel="from last month"
+          breakdown={[
+            {
+              label: "Sales",
+              value: InvoiceRevenue,
+              displayValue: revenueDisplay(InvoiceRevenue),
+              barColor: "bg-rose-500",
+            },
+            {
+              label: "Services",
+              value: AppointmentRevenue,
+              displayValue: revenueDisplay(AppointmentRevenue),
+              barColor: "bg-teal-500",
+            },
+          ]}
+          className="lg:w-1/4"
+          onClick={() => openRevenueModal("all")}
+        />
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+          <Container
+            title="Cash"
+            value={revenueDisplay(cashRevenue)}
+            trend="+12.5%"
+            onClick={() => openRevenueModal("cash")}
+          />
+          <Container
+            title="Cashless"
+            value={revenueDisplay(gcashRevenue)}
+            trend="+8.2%"
+            onClick={() => openRevenueModal("cashless")}
+          />
+          <Container
+            title="Today's Appointments"
+            value={appointmentQueueCount}
+            trend="+2"
+          />
+        </div>
+      </div>
+
+      <Dialog
+        open={Boolean(activeRevenueModal)}
+        onOpenChange={(isOpen) => !isOpen && setRevenueModalKey(null)}
+      >
+        {activeRevenueModal && (
+          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{activeRevenueModal.title}</DialogTitle>
+            </DialogHeader>
+            {isRevenueModalPending ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Loading transactions...
               </p>
-              <span className={`w-2.5 h-2.5 rounded-full ${stat.dotBg}`} />
-            </div>
-            <p className="text-3xl font-extrabold text-slate-900 mt-4 tracking-tight dark:text-white">
-              {stat.value}
-            </p>
-            <p className="text-xs text-slate-500 mt-2 font-medium dark:text-slate-400">
-              {stat.change}
-            </p>
-          </div>
-        ))}
+            ) : isRevenueModalError ? (
+              <p className="text-sm text-rose-500 dark:text-rose-400">
+                {revenueModalError?.message ??
+                  "Error loading transactions"}
+              </p>
+            ) : (
+              <DynamicGrid
+                data={revenueModalData?.rows ?? []}
+                columnsConfig={PaymentTransactionModalColumns}
+                search={revenueModalSearch}
+                onSearchChange={setRevenueModalSearch}
+                filters={revenueModalFilters}
+                onFiltersChange={setRevenueModalFilters}
+                bare
+              />
+            )}
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Today's Live Queue */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          Today's Live Queue
+        </h2>
+        <LiveClock />
       </div>
+      <DynamicGrid
+        data={todayAppointments?.rows ?? []}
+        columnsConfig={TodayQueueColumns}
+        title="Appointments scheduled for today"
+        limit={queueLimit}
+        search={queueSearch}
+        onSearchChange={setQueueSearch}
+        filters={queueFilters}
+        onFiltersChange={setQueueFilters}
+        onLimitChange={setQueueLimit}
+      />
+      {isQueuePending ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Loading today's queue...
+        </p>
+      ) : isQueueError ? (
+        <p className="text-sm text-rose-500 dark:text-rose-400">
+          {queueError?.message ?? "Error loading today's queue"}
+        </p>
+      ) : (
+        <Pagination
+          page={queuePage}
+          totalPages={
+            queueLimit === "all"
+              ? 1
+              : (todayAppointments?.pagination?.totalPages ?? 1)
+          }
+          onPageChange={setQueuePage}
+          disabled={isQueuePending}
+          total={todayAppointments?.pagination?.total}
+          limit={
+            queueLimit === "all"
+              ? todayAppointments?.pagination?.total
+              : queueLimit
+          }
+        />
+      )}
 
-      {/* Dynamic Grid Section */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4 dark:border-slate-800">
-          <div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              Today's Live Queue
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-              Real-time status tracking for checked-in patients.
-            </p>
-          </div>
-
-          {/* Control Filters */}
-          <div className="flex items-center space-x-2">
-            {["All", "Pending", "In Progress", "Completed"].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setFilterStatus(status)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                  filterStatus === status
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="overflow-x-auto mt-4">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
-                <th className="py-4 px-4">Pet ID</th>
-                <th className="py-4 px-4">Patient Name</th>
-                <th className="py-4 px-4">Owner</th>
-                <th className="py-4 px-4">Service Type</th>
-                <th className="py-4 px-4">Appointment Time</th>
-                <th className="py-4 px-4 text-right">Live Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
-              {filteredPatients.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="6"
-                    className="py-12 text-center text-sm text-slate-400 italic dark:text-slate-500"
-                  >
-                    No matching records found.
-                  </td>
-                </tr>
-              ) : (
-                filteredPatients.map((patient) => (
-                  <tr
-                    key={patient.id}
-                    className="hover:bg-slate-50/80 transition-colors group dark:hover:bg-slate-800/60"
-                  >
-                    <td className="py-3.5 px-4 font-mono text-xs text-slate-500 font-bold dark:text-slate-400">
-                      {patient.id}
-                    </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors dark:text-slate-100 dark:group-hover:text-indigo-300">
-                      {patient.name}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
-                      {patient.owner}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-                        {patient.service}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">
-                      {patient.time}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <span
-                        className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded tracking-wide border ${
-                          patient.status === "Completed"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800"
-                            : patient.status === "In Progress"
-                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
-                              : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800"
-                        }`}
-                      >
-                        {patient.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Today's Sales */}
+      <DynamicGrid
+        data={todaySales?.rows ?? []}
+        columnsConfig={PaymentColumns}
+        title="Today's Sales"
+        onView={(row) => navigate(`/payments/view-payment/${row.payment_id}`)}
+        onProcess={(row) =>
+          navigate(`/payments/process-payment/${row.payment_id}?from=dashboard`)
+        }
+        onDelete={(row) =>
+          navigate(`/payments/delete-payment/${row.payment_id}`)
+        }
+        canProcess={(row) => row.payment_status_name === "Pending"}
+        canView={(row) =>
+          row.payment_status_name === "Completed" ||
+          row.payment_status_name === "Cancelled"
+        }
+        canDelete={(row) => row.payment_status_name === "Pending"}
+        limit={salesLimit}
+        search={salesSearch}
+        onSearchChange={setSalesSearch}
+        filters={salesFilters}
+        onFiltersChange={setSalesFilters}
+        onLimitChange={setSalesLimit}
+      />
+      {isSalesPending ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Loading today's sales...
+        </p>
+      ) : isSalesError ? (
+        <p className="text-sm text-rose-500 dark:text-rose-400">
+          {salesError?.message ?? "Error loading today's sales"}
+        </p>
+      ) : (
+        <Pagination
+          page={salesPage}
+          totalPages={
+            salesLimit === "all" ? 1 : (todaySales?.pagination?.totalPages ?? 1)
+          }
+          onPageChange={setSalesPage}
+          disabled={isSalesPending}
+          total={todaySales?.pagination?.total}
+          limit={
+            salesLimit === "all" ? todaySales?.pagination?.total : salesLimit
+          }
+        />
+      )}
     </div>
   );
+}
+
+export async function loader() {
+  await Promise.all([
+    queryClient.prefetchQuery({
+      queryKey: ["TodayRevenueSummary"],
+      queryFn: ({ signal }) => fetchTodayRevenue({ signal }),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["TodayAppointments", 1, 10, "", {}],
+      queryFn: ({ signal }) =>
+        fetchTodayAppointments({
+          page: 1,
+          limit: 10,
+          search: "",
+          filters: {},
+          signal,
+        }),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["TodayPayments", 1, 10, "", {}],
+      queryFn: ({ signal }) =>
+        fetchTodayPayments({
+          page: 1,
+          limit: 10,
+          search: "",
+          filters: {},
+          signal,
+        }),
+    }),
+  ]);
+  return null;
 }

@@ -156,16 +156,52 @@ export function Component() {
                     <CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   }
                   label="Payment Method"
-                  value={payment.method}
+                  value={payment.payment_method}
                 />
                 <FieldCard
                   icon={
                     <Hash className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   }
-                  label="Reference Code"
-                  value={payment.payment_id}
-                  onCopy={() => copyToClipboard(payment.payment_id)}
+                  label="Control Number"
+                  value={payment.control_number}
+                  onCopy={() => copyToClipboard(payment.control_number)}
                 />
+                {payment.gcash_reference_number && (
+                  <FieldCard
+                    icon={
+                      <Hash className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    }
+                    label="GCash Reference"
+                    value={payment.gcash_reference_number}
+                    onCopy={() => copyToClipboard(payment.gcash_reference_number)}
+                  />
+                )}
+                {payment.payment_method === "Split" && (
+                  <>
+                    <FieldCard
+                      icon={
+                        <CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      }
+                      label="Cash Portion"
+                      value={
+                        payment.cash_amount != null
+                          ? `$${payment.cash_amount}`
+                          : "—"
+                      }
+                    />
+                    <FieldCard
+                      icon={
+                        <CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      }
+                      label="GCash Portion"
+                      value={
+                        payment.gcash_amount != null
+                          ? `$${payment.gcash_amount}`
+                          : "—"
+                      }
+                    />
+                  </>
+                )}
               </div>
 
               {/* Purchased Line Items */}

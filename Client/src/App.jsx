@@ -1,13 +1,14 @@
 import {
   createBrowserRouter,
-  Navigate,
+  redirect,
   RouterProvider,
 } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { loader, requireAuth, requirePermission } from "./utils/routeGuards.js";
+import { requireClientAuth } from "./utils/clientPortalGuards.js";
+import { resolveLandingPath } from "./utils/resolveLandingPath.js";
 import Layout from "./components/layout/Layout";
 import ErrorPage from "./pages/ErrorPage";
-import Dashboard from "./pages/ServerSide/Dashboard";
 import Inventory from "./pages/ServerSide/Inventory/Inventory.jsx";
 import Cart from "./pages/ServerSide/Inventory/Cart/Cart.jsx";
 
@@ -23,9 +24,25 @@ import {
 
 import Login from "./pages/Authentication/Login";
 
-import { queryClient } from "./api/http";
+import { queryClient, fetchNavbar } from "./api/http";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
-const router = createBrowserRouter([
+
+// LandingPage.jsx and AuthForm.jsx export a `loader`/`action` alongside
+// their component, which Vite's Fast Refresh can't hot-swap ("loader"
+// export is incompatible") — so editing anything they import invalidates
+// those modules and Vite re-executes THIS module too, since it statically
+// imports both. Re-running `createBrowserRouter([...])` on every one of
+// those hot updates creates a brand new router instance while
+// <RouterProvider> below is still mounted with the OLD one — React Router
+// isn't designed to have its router swapped out at runtime, and the
+// mismatch between the live DOM/history and the freshly recreated router
+// left the whole app dead (no navigation, no requests, no errors) after
+// almost any edit during dev. `import.meta.hot.data` survives module
+// re-execution across a hot reload, so cache the router there and reuse
+// the same instance instead of building a second one.
+const router =
+  import.meta.hot?.data.router ??
+  createBrowserRouter([
   {
     index: true,
     element: <LandingPage />,
@@ -46,6 +63,50 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
 
+  // Client-facing portal — separate JWT-based auth (localStorage token,
+  // not a cookie session), so this branch is NOT nested under the "/"
+  // Layout's requireAuth loader below; requireClientAuth checks
+  // localStorage directly instead of hitting /api/auth/me.
+  {
+    path: "/portal",
+    errorElement: <ErrorPage />,
+    children: [
+      {
+        // Login now lives at the shared /login page (email/password for
+        // staff, a "Sign in with Google" option there for clients) —
+        // redirect old bookmarks/links to it instead of 404ing.
+        path: "login",
+        loader: () => redirect("/login"),
+      },
+      {
+        lazy: () => import("./pages/ClientPortal/PortalLayout.jsx"),
+        loader: requireClientAuth,
+        children: [
+          {
+            index: true,
+            loader: () => redirect("/portal/appointments"),
+          },
+          {
+            path: "appointments",
+            lazy: () => import("./pages/ClientPortal/PortalAppointments.jsx"),
+          },
+          {
+            path: "appointments/book",
+            lazy: () => import("./pages/ClientPortal/PortalBookAppointment.jsx"),
+          },
+          {
+            path: "pets",
+            lazy: () => import("./pages/ClientPortal/PortalPets.jsx"),
+          },
+          {
+            path: "payments",
+            lazy: () => import("./pages/ClientPortal/PortalPayments.jsx"),
+          },
+        ],
+      },
+    ],
+  },
+
   {
     path: "/",
     element: <Layout />,
@@ -57,14 +118,34 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     loader: requireAuth,
     children: [
-      { index: true, element: <Navigate to="dashboard" replace /> },
+      {
+        index: true,
+        loader: async () => {
+          const user = await requireAuth();
+          const { modules } = await queryClient.ensureQueryData({
+            queryKey: ["navData", user.id, user.role],
+            queryFn: ({ signal }) => fetchNavbar({ signal }),
+            staleTime: 1000 * 60 * 5,
+          });
+          return redirect(resolveLandingPath(modules));
+        },
+      },
 
       // Governed by the Permission Matrix via requirePermission,
       // matching the real module_code values in tbl_user_module.
       {
         path: "dashboard",
-        element: <Dashboard />,
-        loader: requirePermission("DASHBOARD"),
+        lazy: async () => {
+          const mod = await import("./pages/ServerSide/Dashboard.jsx");
+          const permissionLoader = requirePermission("DASHBOARD");
+          return {
+            ...mod,
+            loader: async (args) => {
+              await permissionLoader(args);
+              return mod.loader(args);
+            },
+          };
+        },
       },
       {
         path: "inventory",
@@ -107,9 +188,59 @@ const router = createBrowserRouter([
         children: [
           {
             path: "process-payment/:payment_id",
-            lazy: () =>
-              import("./pages/ServerSide/Payment/Components/PaymentProcessModal.jsx"),
-            loader: requirePermission("PAYMENTS", "can_view"),
+            lazy: async () => {
+              const mod = await import(
+                "./pages/ServerSide/Payment/Components/PaymentProcessModal.jsx"
+              );
+              const viewPermissionLoader = requirePermission(
+                "PAYMENTS",
+                "can_view",
+              );
+              const editPermissionLoader = requirePermission(
+                "PAYMENTS",
+                "can_edit",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await viewPermissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await editPermissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
+          },
+          {
+            path: "verify-payment/:payment_id",
+            lazy: async () => {
+              const mod = await import(
+                "./pages/ServerSide/Payment/Components/VerifyPaymentModal.jsx"
+              );
+              const viewPermissionLoader = requirePermission(
+                "PAYMENTS",
+                "can_view",
+              );
+              const editPermissionLoader = requirePermission(
+                "PAYMENTS",
+                "can_edit",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await viewPermissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await editPermissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
           },
           {
             path: "view-payment/:payment_id",
@@ -151,27 +282,83 @@ const router = createBrowserRouter([
         children: [
           {
             path: "add-appointment",
+            lazy: async () => {
+              const mod = await import(
+                "./pages/ServerSide/components/AddAppointmentModal.jsx"
+              );
+              const permissionLoader = requirePermission(
+                "APPOINTMENT",
+                "can_create",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await permissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await permissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
+          },
+          {
+            path: "confirm-payment",
             loader: requirePermission("APPOINTMENT", "can_create"),
             lazy: () =>
               import(
-                "./pages/ServerSide/components/AddAppointmentModal.jsx"
+                "./pages/ServerSide/components/ConfirmAppointmentPaymentModal.jsx"
               ),
           },
           {
             path: ":appointment_id/edit-appointment",
-            loader: requirePermission("APPOINTMENT", "can_edit"),
-            lazy: () =>
-              import(
+            lazy: async () => {
+              const mod = await import(
                 "./pages/ServerSide/components/AddAppointmentModal.jsx"
-              ),
+              );
+              const permissionLoader = requirePermission(
+                "APPOINTMENT",
+                "can_edit",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await permissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await permissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
           },
           {
             path: ":appointment_id/cancel-appointment",
-            loader: requirePermission("APPOINTMENT", "can_delete"),
-            lazy: () =>
-              import(
+            lazy: async () => {
+              const mod = await import(
                 "./pages/ServerSide/components/CancelAppointmentModal.jsx"
-              ),
+              );
+              const permissionLoader = requirePermission(
+                "APPOINTMENT",
+                "can_delete",
+              );
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await permissionLoader(args);
+                  return mod.loader(args);
+                },
+                action: async (args) => {
+                  await permissionLoader(args);
+                  return mod.action(args);
+                },
+              };
+            },
           },
         ],
       },
@@ -189,6 +376,21 @@ const router = createBrowserRouter([
         path: "operation-appointment",
         element: <Operation_Appointment />,
         loader: requirePermission("O_APPOINTMENT"),
+      },
+      {
+        path: "analytics",
+        lazy: async () => {
+          const mod = await import("./pages/ServerSide/Analytics.jsx");
+          const permissionLoader = requirePermission("ANALYTICS");
+
+          return {
+            ...mod,
+            loader: async (args) => {
+              await permissionLoader(args);
+              return mod.loader(args);
+            },
+          };
+        },
       },
       {
         path: "client-record",
@@ -249,9 +451,20 @@ const router = createBrowserRouter([
         children: [
           {
             path: "users",
-            loader: requirePermission("USER_MGMT_USERS"),
-            lazy: () =>
-              import("./pages/Authentication/Users_Management/Users/Users.jsx"),
+            lazy: async () => {
+              const mod = await import(
+                "./pages/Authentication/Users_Management/Users/Users.jsx"
+              );
+              const permissionLoader = requirePermission("USER_MGMT_USERS");
+
+              return {
+                ...mod,
+                loader: async (args) => {
+                  await permissionLoader(args);
+                  return mod.loader(args);
+                },
+              };
+            },
 
             children: [
               {
@@ -320,7 +533,11 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+  ]);
+
+if (import.meta.hot) {
+  import.meta.hot.data.router = router;
+}
 
 function App() {
   return (

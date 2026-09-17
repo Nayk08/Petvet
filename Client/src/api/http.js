@@ -26,10 +26,119 @@ export function invalidateAppointmentQueries() {
   ]);
 }
 
+// Bumps the Dashboard/Payment revenue cards (Today + all-time) by the
+// amount just collected, so they update the instant a payment completes
+// instead of waiting on the round trip + refetch. `isAppointment` picks
+// which of the Sales/Services buckets the total lands in, matching how
+// getRevenueSummary/getTodayRevenueSummary split by control_number
+// (INV = cart checkout, APT = appointment charge). Returns a rollback()
+// to call if the request fails.
+export function applyOptimisticRevenue({
+  cashAmount = 0,
+  gcashAmount = 0,
+  totalAmount = 0,
+  isAppointment,
+}) {
+  const keys = [["TodayRevenueSummary"], ["RevenueSummary"]];
+  const previous = keys.map((key) => [key, queryClient.getQueryData(key)]);
+
+  const patch = (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      total_cash: Number(old.total_cash ?? 0) + Number(cashAmount || 0),
+      total_gcash: Number(old.total_gcash ?? 0) + Number(gcashAmount || 0),
+      total_invoice:
+        Number(old.total_invoice ?? 0) +
+        (isAppointment ? 0 : Number(totalAmount || 0)),
+      total_appointment:
+        Number(old.total_appointment ?? 0) +
+        (isAppointment ? Number(totalAmount || 0) : 0),
+    };
+  };
+
+  keys.forEach((key) => queryClient.setQueryData(key, patch));
+
+  return function rollback() {
+    previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  };
+}
+
+// Splits a payment's total into cash_amount/gcash_amount for the
+// optimistic patch above, mirroring resolvePaymentSplit's shape closely
+// enough for a UI estimate (Cash/GCash land the whole total on one side,
+// Split uses exactly what the cashier entered) — the server remains the
+// source of truth once the follow-up invalidateQueries reconciles it.
+export function estimatePaymentSplit({
+  paymentMethod,
+  totalAmount,
+  cashReceived,
+  gcashReceived,
+}) {
+  if (paymentMethod === "GCash") {
+    return { cashAmount: 0, gcashAmount: Number(totalAmount || 0) };
+  }
+  if (paymentMethod === "Split") {
+    return {
+      cashAmount: Number(cashReceived || 0),
+      gcashAmount: Number(gcashReceived || 0),
+    };
+  }
+  return { cashAmount: Number(totalAmount || 0), gcashAmount: 0 };
+}
+
+// Every route's loader calls requireAuth/requirePermission, and both await
+// queryClient.ensureQueryData(["currentUser"], ...) — TanStack Query
+// de-duplicates concurrent calls to the same key, so if this one fetch ever
+// hangs (no response, no error — a stalled connection, which plain fetch()
+// has no built-in timeout for; the `signal` passed in is tied to the
+// query's own lifecycle, not to elapsed time), every subsequent navigation
+// just awaits that same permanently-stuck promise instead of firing a new
+// request. That freezes the ENTIRE app — every future navigation, on every
+// page — with zero new network activity and no console error, since
+// nothing ever actually fails. A hard timeout guarantees a stalled request
+// eventually rejects instead of hanging forever, so at worst a query
+// retries or errors out — it can no longer wedge every other page shut.
+const FETCH_TIMEOUT_MS = 15000;
+
+function fetchWithTimeout(url, { signal, ...options } = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+    FETCH_TIMEOUT_MS,
+  );
+
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+  }
+
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timeoutId),
+  );
+}
+
 async function handleResponse(
   response,
   fallbackMessage = "Something went wrong",
 ) {
+  if (response.status === 401) {
+    // The session died (expired, or a background refetch after being idle
+    // found it already gone) — cached currentUser/navData are now lying
+    // about who's logged in, so every button/toggle relying on them just
+    // silently fails instead of doing anything. A full reload to /login
+    // clears that stale state and gets a real session again; a plain
+    // thrown Error here would otherwise surface as a generic error page
+    // instead of a clean re-login.
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      queryClient.clear();
+      window.location.assign("/login?mode=login");
+    }
+    throw new Error("Session expired. Please log in again.");
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const error = new Error(body.message || fallbackMessage);
@@ -66,7 +175,7 @@ async function getCsrfToken() {
 // ─────────────────────────────
 
 export async function fetchCurrentUser({ signal }) {
-  const response = await fetch(`${AuthUrl}/me`, {
+  const response = await fetchWithTimeout(`${AuthUrl}/me`, {
     signal,
     credentials: "include",
   });
@@ -90,7 +199,7 @@ export async function logoutUser() {
 // ─────────────────────────────
 
 export async function fetchNavbar({ signal }) {
-  const response = await fetch(`${baseUrl}/nav`, {
+  const response = await fetchWithTimeout(`${baseUrl}/nav`, {
     signal,
     credentials: "include",
   });
@@ -393,14 +502,53 @@ export async function checkoutOrder(cartItems) {
 
   return handleResponse(response, "Checkout failed");
 }
-export async function completePayment(paymentId) {
+export async function completePayment(paymentId, payload) {
   const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/checkout/${paymentId}/complete`, {
     method: "PATCH",
-    headers: { "x-csrf-token": csrfToken },
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
     credentials: "include",
+    body: JSON.stringify(payload),
   });
   return handleResponse(response, "Failed to complete payment");
+}
+
+// decision: "approve" | "reject" — staff reviewing a client's self-service
+// GCash proof submission (see ClientPortal's submitPaymentProof).
+export async function verifyPayment(paymentId, decision) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/payments/${paymentId}/verify`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    credentials: "include",
+    body: JSON.stringify({ decision }),
+  });
+  return handleResponse(response, "Failed to verify payment");
+}
+
+export async function fetchGcashQrCode({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/payments/gcash-qr-code`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch QR code");
+}
+
+export async function updateGcashQrCode(formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/payments/gcash-qr-code`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to update QR code");
 }
 
 export async function fetchPayments({
@@ -434,6 +582,63 @@ export async function fetchPayments({
   return handleResponse(response, "Failed to fetch Payments");
 }
 
+export async function fetchTodayPayments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
+  });
+
+  const response = await fetch(
+    `${baseUrl}/dashboard/today-payments?${params.toString()}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch today's payments");
+}
+
+// Backs the Dashboard revenue cards' click-through modal. `type` is "INV"
+// (Sales), "APT" (Services), or omitted for the full Revenue breakdown.
+// `method` is "cash" or "gcash" for the Cash/Cashless row cards.
+export async function fetchTodayRevenueTransactions({
+  type,
+  method,
+  search = "",
+  page = 1,
+  limit = 10,
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...(type && { type }),
+    ...(method && { method }),
+    ...(search && { search }),
+  });
+
+  const response = await fetch(
+    `${baseUrl}/dashboard/today-revenue-transactions?${params.toString()}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch today's revenue transactions");
+}
+
 export async function fetchPaymentById(payment_id, { signal } = {}) {
   const response = await fetch(`${baseUrl}/payments/${payment_id}`, {
     signal,
@@ -458,6 +663,48 @@ export async function deletePayment(payment_id) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to cancel payment");
+}
+
+export async function fetchRevenueSummary({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/revenue-summary`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch revenue summary");
+}
+
+export async function fetchTodayRevenue({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/revenue-summary/today`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch today's revenue");
+}
+
+// Backs the Payment page's revenue cards' click-through modal. `type` is
+// "INV" (Sales) / "APT" (Services); `method` is "cash" / "gcash"
+// (Cash/Cashless) — omit both for the full Revenue breakdown.
+export async function fetchRevenueTransactions({
+  type,
+  method,
+  search = "",
+  page = 1,
+  limit = 10,
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...(type && { type }),
+    ...(method && { method }),
+    ...(search && { search }),
+  });
+
+  const response = await fetch(
+    `${baseUrl}/revenue-transactions?${params.toString()}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch revenue transactions");
 }
 
 // ─────────────────────────────
@@ -715,6 +962,21 @@ export async function fetchOperationAppointments({
   return handleResponse(response, "Failed to fetch operation appointments");
 }
 
+export async function fetchTodayAppointments({
+  page = 1,
+  limit = 10,
+  search = "",
+  filters = {},
+  signal,
+} = {}) {
+  const params = buildAppointmentFilterParams({ page, limit, search, filters });
+  const response = await fetch(`${baseUrl}/dashboard/today-appointments?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch today's appointments");
+}
+
 export async function fetchAppointmentById(appointment_id, { signal } = {}) {
   const response = await fetch(`${baseUrl}/appointments/${appointment_id}`, {
     signal,
@@ -735,6 +997,37 @@ export async function addAppointment(payload) {
     body: JSON.stringify(payload),
   });
   return handleResponse(response, "Failed to add appointment");
+}
+
+export async function bookAppointmentWithPayment(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/appointments/book-with-payment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to book appointment");
+}
+
+export async function completeAppointmentPayment(appointment_id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(
+    `${baseUrl}/appointments/${appointment_id}/complete-payment`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    },
+  );
+  return handleResponse(response, "Failed to complete appointment payment");
 }
 
 export async function editAppointment(appointment_id, payload) {
@@ -781,4 +1074,81 @@ export async function selectAppointmentStaff({ signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch staff list");
+}
+
+export async function selectGroomingPriceTiers({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/appointment-grooming-tiers`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch grooming price tiers");
+}
+
+// ─────────────────────────────
+// Analytics
+// ─────────────────────────────
+
+function buildDateRangeParams({ start_date, end_date, ...rest }) {
+  const params = new URLSearchParams();
+  if (start_date) params.set("start_date", start_date);
+  if (end_date) params.set("end_date", end_date);
+  Object.entries(rest).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  return params;
+}
+
+export async function fetchRevenueTrend({
+  start_date,
+  end_date,
+  signal,
+} = {}) {
+  const params = buildDateRangeParams({ start_date, end_date });
+  const response = await fetch(
+    `${baseUrl}/analytics/revenue-trend?${params}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch revenue trend");
+}
+
+export async function fetchAppointmentsBreakdown({
+  start_date,
+  end_date,
+  signal,
+} = {}) {
+  const params = buildDateRangeParams({ start_date, end_date });
+  const response = await fetch(
+    `${baseUrl}/analytics/appointments-breakdown?${params}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch appointments breakdown");
+}
+
+export async function fetchTopProducts({
+  start_date,
+  end_date,
+  limit,
+  signal,
+} = {}) {
+  const params = buildDateRangeParams({ start_date, end_date, limit });
+  const response = await fetch(`${baseUrl}/analytics/top-products?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch top products");
+}
+
+export async function fetchClientGrowth({
+  start_date,
+  end_date,
+  signal,
+} = {}) {
+  const params = buildDateRangeParams({ start_date, end_date });
+  const response = await fetch(
+    `${baseUrl}/analytics/client-growth?${params}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch client growth");
 }
