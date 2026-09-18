@@ -1152,3 +1152,13 @@ export async function fetchClientGrowth({
   );
   return handleResponse(response, "Failed to fetch client growth");
 }
+
+export async function fetchProductMovers({ month, signal } = {}) {
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  const response = await fetch(
+    `${baseUrl}/analytics/product-movers?${params}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch product movers");
+}

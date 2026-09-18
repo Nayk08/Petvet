@@ -5,6 +5,7 @@ import {
   fetchAppointmentsBreakdown,
   fetchTopProducts,
   fetchClientGrowth,
+  fetchProductMovers,
   queryClient,
 } from "@/api/http.js";
 
@@ -85,6 +86,54 @@ function DateRangeControl({ range, onChange }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Month control (Product Movers section) ─────────────────────────────
+
+function currentMonthString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function MonthControl({ month, onChange }) {
+  function shiftMonth(delta) {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const label = new Date(`${month}-01T00:00:00`).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const btnClass =
+    "w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:hover:bg-slate-50 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white";
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => shiftMonth(-1)}
+        className={btnClass}
+        aria-label="Previous month"
+      >
+        ‹
+      </button>
+      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 w-28 text-center">
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={() => shiftMonth(1)}
+        disabled={month >= currentMonthString()}
+        className={btnClass}
+        aria-label="Next month"
+      >
+        ›
+      </button>
     </div>
   );
 }
@@ -432,6 +481,7 @@ const STATUS_COLOR_VAR = {
 
 export function Component() {
   const [range, setRange] = useState(() => daysAgoRange(30));
+  const [month, setMonth] = useState(() => currentMonthString());
 
   const revenueQuery = useQuery({
     queryKey: ["AnalyticsRevenueTrend", range.start_date, range.end_date],
@@ -451,6 +501,11 @@ export function Component() {
   const clientGrowthQuery = useQuery({
     queryKey: ["AnalyticsClientGrowth", range.start_date, range.end_date],
     queryFn: ({ signal }) => fetchClientGrowth({ ...range, signal }),
+  });
+
+  const productMoversQuery = useQuery({
+    queryKey: ["AnalyticsProductMovers", month],
+    queryFn: ({ signal }) => fetchProductMovers({ month, signal }),
   });
 
   return (
@@ -587,6 +642,56 @@ export function Component() {
           />
         </ChartCard>
       </div>
+
+      {/* Product movers */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Product Movers
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
+              Units sold per product this month, ranked
+            </p>
+          </div>
+          <MonthControl month={month} onChange={setMonth} />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartCard
+            title="Fast Moving"
+            subtitle="Top 5 by units sold"
+            isPending={productMoversQuery.isPending}
+            isError={productMoversQuery.isError}
+            error={productMoversQuery.error}
+            isEmpty={(productMoversQuery.data?.fastMoving?.length ?? 0) === 0}
+          >
+            <RankedBarChart
+              data={productMoversQuery.data?.fastMoving ?? []}
+              valueKey="total_quantity"
+              labelKey="product_name"
+              colorVar="--status-good"
+              formatValue={formatCount}
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Slow Moving"
+            subtitle="Bottom 5 by units sold (at least 1 sale)"
+            isPending={productMoversQuery.isPending}
+            isError={productMoversQuery.isError}
+            error={productMoversQuery.error}
+            isEmpty={(productMoversQuery.data?.slowMoving?.length ?? 0) === 0}
+          >
+            <RankedBarChart
+              data={productMoversQuery.data?.slowMoving ?? []}
+              valueKey="total_quantity"
+              labelKey="product_name"
+              colorVar="--status-critical"
+              formatValue={formatCount}
+            />
+          </ChartCard>
+        </div>
+      </div>
     </div>
   );
 }
@@ -609,6 +714,11 @@ export async function loader() {
     queryClient.prefetchQuery({
       queryKey: ["AnalyticsClientGrowth", range.start_date, range.end_date],
       queryFn: ({ signal }) => fetchClientGrowth({ ...range, signal }),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["AnalyticsProductMovers", currentMonthString()],
+      queryFn: ({ signal }) =>
+        fetchProductMovers({ month: currentMonthString(), signal }),
     }),
   ]);
   return null;
