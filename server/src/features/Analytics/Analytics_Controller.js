@@ -59,4 +59,15 @@ export default class AnalyticsController {
       res.status(error.statusCode || 500).json({ message: error.message });
     }
   }
+
+  async getProductMovers(req, res) {
+    try {
+      const { month } = req.query;
+      const result = await analyticsService.getProductMovers({ month });
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller getProductMovers function");
+      res.status(error.statusCode || 500).json({ message: error.message });
+    }
+  }
 }

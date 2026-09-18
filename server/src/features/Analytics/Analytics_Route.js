@@ -29,4 +29,10 @@ router.get(
   (req, res) => analyticsController.getClientGrowth(req, res),
 );
 
+router.get(
+  "/analytics/product-movers",
+  hasPermission("ANALYTICS", "can_view"),
+  (req, res) => analyticsController.getProductMovers(req, res),
+);
+
 export default router;

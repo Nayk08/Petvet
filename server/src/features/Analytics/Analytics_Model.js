@@ -91,6 +91,34 @@ export default class AnalyticsModel {
     }
   }
 
+  // Product "movement" = units actually sold — Completed payments only, so a
+  // Cancelled or still-Pending cart checkout doesn't count toward velocity.
+  async getProductMovers({ startDate, endDate }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT
+           p.product_name,
+           SUM(ci.quantity) AS total_quantity
+         FROM tbl_cart_items ci
+         JOIN tbl_products p ON p.product_id = ci.product_id
+         JOIN v_payments pay ON pay.payment_id = ci.payment_id
+         WHERE pay.is_deleted = false
+           AND pay.payment_status_name = 'Completed'
+           AND pay.date_created::date BETWEEN $1 AND $2
+         GROUP BY p.product_name
+         ORDER BY total_quantity DESC`,
+        [startDate, endDate],
+      );
+      return res.rows;
+    } catch (error) {
+      console.log(`Error on Model getProductMovers function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getClientGrowth({ startDate, endDate }) {
     const client = await pool.connect();
     try {
