@@ -1162,3 +1162,11 @@ export async function fetchProductMovers({ month, signal } = {}) {
   );
   return handleResponse(response, "Failed to fetch product movers");
 }
+
+export async function fetchCriticalStock({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/analytics/critical-stock`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch critical stock");
+}

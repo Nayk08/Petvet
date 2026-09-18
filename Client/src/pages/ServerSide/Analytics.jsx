@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import {
   fetchRevenueTrend,
   fetchAppointmentsBreakdown,
   fetchTopProducts,
   fetchClientGrowth,
   fetchProductMovers,
+  fetchCriticalStock,
   queryClient,
 } from "@/api/http.js";
 
@@ -479,6 +481,42 @@ const STATUS_COLOR_VAR = {
   Cancelled: "--status-critical",
 };
 
+function StockStatusBadge({ status }) {
+  const styles =
+    status === "Out of Stock"
+      ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800"
+      : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800";
+  return (
+    <span
+      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border whitespace-nowrap ${styles}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function ExpiryBadge({ isExpired }) {
+  const styles = isExpired
+    ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800"
+    : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800";
+  return (
+    <span
+      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border whitespace-nowrap ${styles}`}
+    >
+      {isExpired ? "Expired" : "Expiring Soon"}
+    </span>
+  );
+}
+
+function formatExpiryDate(dateString) {
+  if (!dateString) return "—";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function Component() {
   const [range, setRange] = useState(() => daysAgoRange(30));
   const [month, setMonth] = useState(() => currentMonthString());
@@ -506,6 +544,11 @@ export function Component() {
   const productMoversQuery = useQuery({
     queryKey: ["AnalyticsProductMovers", month],
     queryFn: ({ signal }) => fetchProductMovers({ month, signal }),
+  });
+
+  const criticalStockQuery = useQuery({
+    queryKey: ["AnalyticsCriticalStock"],
+    queryFn: ({ signal }) => fetchCriticalStock({ signal }),
   });
 
   return (
@@ -692,6 +735,82 @@ export function Component() {
           </ChartCard>
         </div>
       </div>
+
+      {/* Critical stock */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Critical Stock
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
+              Low/out-of-stock products, plus anything expired or expiring
+              within 5 months
+            </p>
+          </div>
+          <Link
+            to="/inventory"
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
+          >
+            View Inventory →
+          </Link>
+        </div>
+
+        <div className="mt-4">
+          {criticalStockQuery.isPending ? (
+            <div className="h-24 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">
+              Loading...
+            </div>
+          ) : criticalStockQuery.isError ? (
+            <div className="h-24 flex items-center justify-center text-sm text-rose-500 dark:text-rose-400">
+              {criticalStockQuery.error?.message ?? "Failed to load"}
+            </div>
+          ) : (criticalStockQuery.data?.length ?? 0) === 0 ? (
+            <div className="h-24 flex items-center justify-center text-sm text-slate-400 italic dark:text-slate-500">
+              No products are low/out of stock or nearing expiry.
+            </div>
+          ) : (
+            <div className="max-h-80 overflow-y-auto border border-slate-100 rounded-lg dark:border-slate-800 scrollbar-thin [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#334155_transparent]">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950">
+                  <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
+                    <th className="px-3 py-2 font-semibold">Product</th>
+                    <th className="px-3 py-2 font-semibold text-right">Qty</th>
+                    <th className="px-3 py-2 font-semibold text-right">Expiry</th>
+                    <th className="px-3 py-2 font-semibold text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {criticalStockQuery.data.map((p) => (
+                    <tr key={p.product_id}>
+                      <td className="px-3 py-2 text-slate-800 dark:text-slate-200">
+                        {p.product_name}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
+                        {p.product_quantity}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
+                        {formatExpiryDate(p.product_expiry_date)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {(p.status_name === "Low Stock" ||
+                            p.status_name === "Out of Stock") && (
+                            <StockStatusBadge status={p.status_name} />
+                          )}
+                          {(p.is_expired || p.expiring_soon) && (
+                            <ExpiryBadge isExpired={p.is_expired} />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -719,6 +838,10 @@ export async function loader() {
       queryKey: ["AnalyticsProductMovers", currentMonthString()],
       queryFn: ({ signal }) =>
         fetchProductMovers({ month: currentMonthString(), signal }),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["AnalyticsCriticalStock"],
+      queryFn: ({ signal }) => fetchCriticalStock({ signal }),
     }),
   ]);
   return null;

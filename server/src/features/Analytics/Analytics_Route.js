@@ -35,4 +35,10 @@ router.get(
   (req, res) => analyticsController.getProductMovers(req, res),
 );
 
+router.get(
+  "/analytics/critical-stock",
+  hasPermission("ANALYTICS", "can_view"),
+  (req, res) => analyticsController.getCriticalStock(req, res),
+);
+
 export default router;

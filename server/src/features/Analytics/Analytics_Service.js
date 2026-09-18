@@ -95,4 +95,8 @@ export default class AnalyticsService {
       totalProducts: rows.length,
     };
   }
+
+  async getCriticalStock() {
+    return analyticsModel.getCriticalStock();
+  }
 }

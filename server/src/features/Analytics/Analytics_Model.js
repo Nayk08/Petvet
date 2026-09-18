@@ -139,4 +139,39 @@ export default class AnalyticsModel {
       client.release();
     }
   }
+
+  // Current-state snapshot (not date-ranged) — reuses v_products' existing
+  // stock-tier logic (Inventory.jsx already shows the same tiers) rather
+  // than inventing a separate "critical" threshold. A product also counts
+  // as critical if it expires within 5 months, even with plenty of stock
+  // left, since it'll need to be pulled/discounted soon regardless.
+  async getCriticalStock() {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT product_id, product_name, product_quantity, status_name,
+                product_expiry_date, is_expired,
+                (product_expiry_date IS NOT NULL
+                 AND NOT is_expired
+                 AND product_expiry_date <= CURRENT_DATE + INTERVAL '5 months'
+                ) AS expiring_soon
+         FROM v_products
+         WHERE status_name IN ('Low Stock', 'Out of Stock')
+            OR (product_expiry_date IS NOT NULL
+                AND product_expiry_date <= CURRENT_DATE + INTERVAL '5 months')
+         ORDER BY
+           is_expired DESC,
+           expiring_soon DESC,
+           product_expiry_date ASC NULLS LAST,
+           product_quantity ASC,
+           product_name ASC`,
+      );
+      return res.rows;
+    } catch (error) {
+      console.log(`Error on Model getCriticalStock function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }

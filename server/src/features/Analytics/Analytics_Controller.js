@@ -70,4 +70,14 @@ export default class AnalyticsController {
       res.status(error.statusCode || 500).json({ message: error.message });
     }
   }
+
+  async getCriticalStock(req, res) {
+    try {
+      const result = await analyticsService.getCriticalStock();
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller getCriticalStock function");
+      res.status(error.statusCode || 500).json({ message: error.message });
+    }
+  }
 }
