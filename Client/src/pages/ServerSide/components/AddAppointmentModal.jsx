@@ -75,12 +75,49 @@ function todayDateString() {
   return formatDateString(new Date());
 }
 
+// FIXED — added: extracts just the "HH:mm" portion from a raw time value,
+// which may be:
+//   - "2026-09-30 17:00:00" — what GET /appointments now returns, once
+//     db.js's TIMESTAMP type parser (types.setTypeParser(types.builtins.TIMESTAMP,
+//     v => v)) stops `pg` from turning it into a JS Date on read
+//   - "17:00:00" — the bare time-of-day string this form now sends/receives
+//     in its own payload
+// Deliberately never routes through `new Date(...)`: browsers parse a
+// non-ISO "YYYY-MM-DD HH:mm:ss" string (space instead of "T") in an
+// implementation-defined way, which is exactly the class of bug that
+// caused this app's original 8-hour display shift. Plain string slicing
+// has no timezone behavior to get wrong.
+function extractTimeOfDay(value) {
+  if (!value) return "";
+  const timePart = value.includes(" ") ? value.split(" ")[1] : value;
+  return timePart.slice(0, 5); // "HH:mm"
+}
+
+function extractHour(value) {
+  const timePart = extractTimeOfDay(value);
+  return timePart ? Number(timePart.split(":")[0]) : null;
+}
+
 function buildAppointmentPayload(formData) {
   const appointment_date = formData.get("appointment_date");
   const time_slot = formData.get("time_slot"); // e.g. "09:00", a one-hour slot
   const [slotHour] = time_slot.split(":").map(Number);
-  const start_time = `${appointment_date}T${time_slot}:00`;
-  const end_time = `${appointment_date}T${String(slotHour + 1).padStart(2, "0")}:00:00`;
+
+  // FIXED: start_time/end_time are now sent as bare "HH:mm:ss" time-of-day
+  // strings, not a combined "<date>T<time>" datetime string. Why: the
+  // backend column (tbl_appointments.start_time/end_time) is TIMESTAMP
+  // WITHOUT TIME ZONE storing a clinic-local wall-clock slot.
+  // appointmentSchema.js validates these fields as plain time strings
+  // (never z.coerce.date() / new Date(...)), and Appointment_Model.js
+  // recombines them with appointment_date server-side, right before the
+  // write, via a toTimestampString() helper — never through a Date object.
+  // Sending a full "<date>T<time>" datetime string here, as this used to
+  // do, either fails schema validation outright (safe) or — if the schema
+  // and this payload fall out of sync — corrupts the write with a garbled
+  // value. Keep this as bare time, always; the date travels separately in
+  // appointment_date.
+  const start_time = `${time_slot}:00`;
+  const end_time = `${String(slotHour + 1).padStart(2, "0")}:00:00`;
 
   return {
     client_id: formData.get("client_id"),
@@ -176,20 +213,19 @@ export function Component() {
     allowedStaffRoles.includes(s.user_level?.trim()),
   );
 
-  const { data: appointmentData, isPending: isAppointmentPending } = useQuery(
-    {
-      queryKey: ["appointment", params.appointment_id],
-      queryFn: ({ signal }) =>
-        fetchAppointmentById(params.appointment_id, { signal }),
-      enabled: isEditMode,
-    },
-  );
+  const { data: appointmentData, isPending: isAppointmentPending } = useQuery({
+    queryKey: ["appointment", params.appointment_id],
+    queryFn: ({ signal }) =>
+      fetchAppointmentById(params.appointment_id, { signal }),
+    enabled: isEditMode,
+  });
 
+  // FIXED: was `new Date(appointmentData.start_time).getHours()...` — see
+  // extractTimeOfDay/extractHour comment above for why that's unreliable
+  // against the space-separated "YYYY-MM-DD HH:mm:ss" strings the API now
+  // returns.
   const initialSlotValue = appointmentData?.start_time
-    ? new Date(appointmentData.start_time)
-        .getHours()
-        .toString()
-        .padStart(2, "0") + ":00"
+    ? String(extractHour(appointmentData.start_time)).padStart(2, "0") + ":00"
     : "";
   const [selectedSlot, setSelectedSlot] = useState(initialSlotValue);
 
@@ -204,7 +240,9 @@ export function Component() {
       setSelectedDate(appointmentData.appointment_date.split("T")[0]);
     }
     if (appointmentData?.start_time) {
-      const hour = new Date(appointmentData.start_time).getHours();
+      // FIXED: was `new Date(appointmentData.start_time).getHours()` — see
+      // extractHour comment above.
+      const hour = extractHour(appointmentData.start_time);
       setSelectedSlot(String(hour).padStart(2, "0") + ":00");
     }
     if (appointmentData?.appointment_services_id) {
@@ -221,6 +259,11 @@ export function Component() {
   const isToday = selectedDate === todayDateString();
   const availableSlots = TIME_SLOTS.filter((slot) => {
     if (!isToday) return true;
+    // This comparison never leaves the browser (both sides are
+    // browser-local), so it's unaffected by the server-side timezone bug —
+    // left as-is. It's a client-side "disable past slots today" convenience;
+    // the server independently re-validates via appointmentSchema.js's
+    // validateSlot using Asia/Manila time regardless of what this produces.
     const slotStart = new Date(`${selectedDate}T${slot.value}:00`);
     return slotStart.getTime() > Date.now();
   });
@@ -233,12 +276,17 @@ export function Component() {
     queryFn: ({ signal }) =>
       fetchAppointments({
         limit: "all",
-        filters: { assigned_staff_id: selectedStaffId, appointment_date: selectedDate },
+        filters: {
+          assigned_staff_id: selectedStaffId,
+          appointment_date: selectedDate,
+        },
         signal,
       }).then((r) => r.rows ?? []),
     enabled: Boolean(selectedStaffId && selectedDate),
   });
 
+  // FIXED: was `new Date(appt.start_time).getHours()` — see extractHour
+  // comment above.
   const bookedSlots = new Set(
     (staffAppointmentsForDate ?? [])
       .filter(
@@ -247,8 +295,7 @@ export function Component() {
           String(appt.appointment_id) !== String(params.appointment_id ?? ""),
       )
       .map(
-        (appt) =>
-          String(new Date(appt.start_time).getHours()).padStart(2, "0") + ":00",
+        (appt) => String(extractHour(appt.start_time)).padStart(2, "0") + ":00",
       ),
   );
 
@@ -262,9 +309,7 @@ export function Component() {
     enabled: Boolean(selectedClientId),
   });
 
-  const selectedPet = pets?.find(
-    (p) => String(p.pet_id) === selectedPetId,
-  );
+  const selectedPet = pets?.find((p) => String(p.pet_id) === selectedPetId);
 
   function closeModal() {
     navigate(`..${location.search}`);
@@ -301,7 +346,9 @@ export function Component() {
       // module's own list, so this shows up immediately everywhere.
       await queryClient.invalidateQueries({ queryKey: ["TodayAppointments"] });
       await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
-      await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["TodayRevenueSummary"],
+      });
       await queryClient.invalidateQueries({ queryKey: ["Payments"] });
 
       navigate(`../confirm-payment${location.search}`, {
@@ -313,7 +360,9 @@ export function Component() {
           petWeightKg: selectedPet?.weight_kg,
           serviceName: selectedServiceName,
           servicePrice: services?.find(
-            (s) => String(s.appointment_services_id) === payload.appointment_services_id,
+            (s) =>
+              String(s.appointment_services_id) ===
+              payload.appointment_services_id,
           )?.service_price,
           staffName: selectedStaffMember?.user_name,
         },
@@ -462,10 +511,14 @@ export function Component() {
                     {selectedPet.gender_name || "—"}
                   </div>
                   <div className="text-slate-500 dark:text-slate-400">
-                    {selectedPet.weight_kg != null ? `${selectedPet.weight_kg} kg` : "—"}
+                    {selectedPet.weight_kg != null
+                      ? `${selectedPet.weight_kg} kg`
+                      : "—"}
                   </div>
                   <div className="text-slate-500 dark:text-slate-400">
-                    {selectedPet.is_spayed_neutered ? "Spayed/Neutered" : "Not spayed/neutered"}
+                    {selectedPet.is_spayed_neutered
+                      ? "Spayed/Neutered"
+                      : "Not spayed/neutered"}
                   </div>
                   <div className="col-span-2 text-slate-500 dark:text-slate-400">
                     Born {formatDate(selectedPet.date_of_birth) || "—"}
@@ -586,7 +639,8 @@ export function Component() {
               </div>
             </div>
             <p className="text-[11px] -mt-2 text-slate-500 dark:text-slate-400">
-              Appointments are booked in fixed one-hour slots, 9:00 AM to 6:00 PM.
+              Appointments are booked in fixed one-hour slots, 9:00 AM to 6:00
+              PM.
             </p>
 
             {/* Status (edit mode only — new appointments always start Pending) */}

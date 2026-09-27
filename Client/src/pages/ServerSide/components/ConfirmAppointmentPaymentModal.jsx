@@ -44,12 +44,20 @@ function formatDateLabel(dateString) {
   });
 }
 
-function formatTimeLabel(isoString) {
-  if (!isoString) return "";
-  return new Date(isoString).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// FIXED: was `new Date(isoString).toLocaleTimeString(...)`. draft.payload.start_time
+// is now a bare "HH:mm:ss" time-of-day string (see AppointmentFormModal.jsx's
+// buildAppointmentPayload — it no longer sends a combined "<date>T<time>"
+// datetime string), so wrapping it in `new Date(...)` here would produce
+// "Invalid Date". Plain string parsing keeps the AM/PM display, with no
+// Date object and no timezone conversion involved anywhere in the path.
+function formatTimeLabel(timeString) {
+  if (!timeString) return "";
+  const [hStr, mStr] = timeString.split(":");
+  const h = Number(hStr);
+  if (Number.isNaN(h)) return "";
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${mStr} ${period}`;
 }
 
 function resolveGroomingTier(tiers, weightKg) {
@@ -61,7 +69,8 @@ function resolveGroomingTier(tiers, weightKg) {
   });
   return (
     sorted.find(
-      (t) => t.max_weight_kg == null || Number(t.max_weight_kg) >= Number(weightKg),
+      (t) =>
+        t.max_weight_kg == null || Number(t.max_weight_kg) >= Number(weightKg),
     ) ?? null
   );
 }
@@ -120,7 +129,8 @@ export function Component() {
     }
 
     const received = isSplit
-      ? (parseFloat(splitCashReceived) || 0) + (parseFloat(splitGcashReceived) || 0)
+      ? (parseFloat(splitCashReceived) || 0) +
+        (parseFloat(splitGcashReceived) || 0)
       : parseFloat(amountReceived);
 
     const { isValid, change: computedChange } = evaluatePaymentAmount({
@@ -150,7 +160,10 @@ export function Component() {
 
   if (!draft?.appointmentId) {
     return (
-      <Dialog open onOpenChange={(isOpen) => !isOpen && navigate(`..${location.search}`)}>
+      <Dialog
+        open
+        onOpenChange={(isOpen) => !isOpen && navigate(`..${location.search}`)}
+      >
         <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-sm shadow-xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-950 dark:text-slate-50">
@@ -158,9 +171,9 @@ export function Component() {
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
               We lost track of this payment step (this can happen after a page
-              refresh) — but the appointment was already saved as Pending on
-              the calendar. Payment collection for it isn't available from
-              here right now.
+              refresh) — but the appointment was already saved as Pending on the
+              calendar. Payment collection for it isn't available from here
+              right now.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="pt-2">
@@ -186,7 +199,11 @@ export function Component() {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="hidden" name="appointment_id" value={draft.appointmentId} />
+          <input
+            type="hidden"
+            name="appointment_id"
+            value={draft.appointmentId}
+          />
           {/* Grooming/fixed-price services don't submit an `amount` field
               (the server prices them itself) — this carries the same
               client-computed total purely so the action below can bump
@@ -209,7 +226,9 @@ export function Component() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-slate-400">Service</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Service
+              </span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {draft.serviceName}
               </span>
@@ -221,7 +240,9 @@ export function Component() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-slate-400">Date / Time</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Date / Time
+              </span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {formatDateLabel(draft.payload.appointment_date)},{" "}
                 {formatTimeLabel(draft.payload.start_time)}
@@ -269,7 +290,10 @@ export function Component() {
             </div>
           )}
 
-          <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
+          <PaymentMethodPicker
+            value={paymentMethod}
+            onChange={setPaymentMethod}
+          />
 
           {/* Amount received / change (cashier convenience only) */}
           {isSplit ? (
@@ -390,9 +414,7 @@ export function Component() {
             <Button
               type="submit"
               disabled={
-                navState === "submitting" ||
-                !hasValidPayment ||
-                !(total > 0)
+                navState === "submitting" || !hasValidPayment || !(total > 0)
               }
               className="disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 font-medium h-10 px-5 rounded-lg transition-colors duration-150 shadow-sm"
             >
@@ -465,7 +487,9 @@ export async function action({ request }) {
   await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
   await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
   await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
-  await queryClient.invalidateQueries({ queryKey: ["TodayRevenueTransactions"] });
+  await queryClient.invalidateQueries({
+    queryKey: ["TodayRevenueTransactions"],
+  });
 
   toast.success("Appointment booked", {
     className:
