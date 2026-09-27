@@ -127,8 +127,13 @@ export function Component() {
   async function handleSubmit(event) {
     event.preventDefault();
     const [slotHour] = selectedSlot.split(":").map(Number);
-    const start_time = `${selectedDate}T${selectedSlot}:00`;
-    const end_time = `${selectedDate}T${String(slotHour + 1).padStart(2, "0")}:00:00`;
+    // Bare "HH:mm:ss" time-of-day, not a combined "<date>T<time>" datetime
+    // string — matches AddAppointmentModal.jsx's buildAppointmentPayload and
+    // what Appointment_Model.js's toTimestampString expects. A full ISO
+    // string here silently produces a garbled, unparseable timestamp when
+    // the model concatenates it with appointment_date.
+    const start_time = `${selectedSlot}:00`;
+    const end_time = `${String(slotHour + 1).padStart(2, "0")}:00:00`;
 
     setBookingError(null);
     setIsSubmitting(true);
