@@ -16,6 +16,24 @@ const FILTER_COLUMN_CASTS = {
   appointment_date: "date[]",
 };
 
+// Combines the validated appointment_date (a Date, UTC-midnight — see
+// appointmentSchema.js's date-string comment) with a time-of-day string
+// ("HH:mm" or "HH:mm:ss", from the fixed Zod schema) into a single
+// "YYYY-MM-DD HH:mm:ss" string for tbl_appointments.start_time/end_time
+// (TIMESTAMP WITHOUT TIME ZONE). Postgres's timestamp type requires a full
+// date+time — a bare "17:00:00" is not valid input for it (that's what a
+// TIME column takes). Building this as plain text keeps the write path
+// free of any Date/timezone conversion while still matching what the
+// column expects — no new Date(...) anywhere in this file, on purpose.
+function toTimestampString(appointment_date, timeStr) {
+  const dateStr =
+    appointment_date instanceof Date
+      ? appointment_date.toISOString().slice(0, 10)
+      : appointment_date;
+  const normalizedTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr; // "HH:mm" → "HH:mm:ss"
+  return `${dateStr} ${normalizedTime}`;
+}
+
 // Maps the partial-unique-index violation on tbl_appointments to a
 // friendly, user-facing message. Returns the error to throw, or null if
 // this isn't that constraint. (A second index used to also block booking
@@ -45,6 +63,14 @@ export default class AppointmentModel {
   // lazily on every read rather than via a cron job, since this app has no
   // job scheduler. A no-show can still be cancelled after the fact via the
   // Cancel action for as long as it stays Pending/In Queue.
+  //
+  // NOTE: NOW() is a TIMESTAMPTZ; end_time is a naive TIMESTAMP now storing
+  // genuine Manila wall-clock values. Comparing them makes Postgres cast
+  // end_time using the session's TimeZone setting — on Render that's likely
+  // UTC, which would make this comparison run 8 hours off from the fixed
+  // display values. Worth revisiting once the display fix is confirmed:
+  // either set the DB/session TimeZone to Asia/Manila, or compare against
+  // an explicit Manila-anchored expression instead of bare NOW().
   async autoCompletePastAppointments() {
     const client = await pool.connect();
     try {
@@ -64,7 +90,9 @@ export default class AppointmentModel {
               )
       `);
     } catch (error) {
-      console.log(`Error on Model autoCompletePastAppointments function: ${error}`);
+      console.log(
+        `Error on Model autoCompletePastAppointments function: ${error}`,
+      );
       throw error;
     } finally {
       client.release();
@@ -94,7 +122,9 @@ export default class AppointmentModel {
         if (valueList.length === 0) continue;
 
         values.push(valueList);
-        const cast = FILTER_COLUMN_CASTS[key] ? `::${FILTER_COLUMN_CASTS[key]}` : "";
+        const cast = FILTER_COLUMN_CASTS[key]
+          ? `::${FILTER_COLUMN_CASTS[key]}`
+          : "";
         conditions.push(`${key} = ANY($${values.length}${cast})`);
       }
 
@@ -177,6 +207,15 @@ export default class AppointmentModel {
     try {
       await client.query("BEGIN");
 
+      // FIXED: combine date + time as plain text before the write — see
+      // toTimestampString comment above. Previously start_time/end_time
+      // were passed straight through as-is; now that the schema hands them
+      // over as bare "HH:mm:ss" strings (not full timestamps), they must be
+      // combined with the date first or the INSERT fails against a
+      // TIMESTAMP column.
+      const start_time_full = toTimestampString(appointment_date, start_time);
+      const end_time_full = toTimestampString(appointment_date, end_time);
+
       const apptRes = await client.query(
         `INSERT INTO tbl_appointments
           (client_id, pets_id, appointment_services_id, assigned_staff_id,
@@ -189,8 +228,8 @@ export default class AppointmentModel {
           appointment_services_id,
           assigned_staff_id,
           appointment_date,
-          start_time,
-          end_time,
+          start_time_full,
+          end_time_full,
           appointment_status_id,
           notes,
           created_by,
@@ -228,7 +267,9 @@ export default class AppointmentModel {
           [petRes.rows[0].weight_kg],
         );
         if (!tierRes.rows.length) {
-          throw new Error("No grooming price tier configured for this pet's weight");
+          throw new Error(
+            "No grooming price tier configured for this pet's weight",
+          );
         }
         total_amount = tierRes.rows[0].price;
       }
@@ -283,6 +324,11 @@ export default class AppointmentModel {
   }) {
     const client = await pool.connect();
     try {
+      // FIXED: same combine-before-write as addAppointment — see
+      // toTimestampString comment above.
+      const start_time_full = toTimestampString(appointment_date, start_time);
+      const end_time_full = toTimestampString(appointment_date, end_time);
+
       const res = await client.query(
         `UPDATE tbl_appointments
        SET pets_id = $1,
@@ -302,8 +348,8 @@ export default class AppointmentModel {
           appointment_services_id,
           assigned_staff_id,
           appointment_date,
-          start_time,
-          end_time,
+          start_time_full,
+          end_time_full,
           appointment_status_id,
           notes,
           updated_by,
@@ -325,7 +371,11 @@ export default class AppointmentModel {
     }
   }
 
-  async deleteAppointment({ appointment_id, appointment_status_id, deleted_by }) {
+  async deleteAppointment({
+    appointment_id,
+    appointment_status_id,
+    deleted_by,
+  }) {
     const client = await pool.connect();
     let queryError = null;
     try {
@@ -405,7 +455,11 @@ export default class AppointmentModel {
   // Payment module ("Process" on the Payment list) rather than through
   // completeAppointmentPayment, so the appointment doesn't stay stuck on
   // Pending even though it's been paid.
-  async setAppointmentStatus({ appointment_id, appointment_status_id, updated_by }) {
+  async setAppointmentStatus({
+    appointment_id,
+    appointment_status_id,
+    updated_by,
+  }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
@@ -430,7 +484,9 @@ export default class AppointmentModel {
       const res = await client.query(`SELECT * FROM tbl_appointment_services`);
       return res.rows;
     } catch (error) {
-      console.log(`Error on Model selectAppointmentServices function: ${error}`);
+      console.log(
+        `Error on Model selectAppointmentServices function: ${error}`,
+      );
       throw error;
     } finally {
       client.release();
@@ -527,7 +583,9 @@ export default class AppointmentModel {
           [petRes.rows[0].weight_kg],
         );
         if (!tierRes.rows.length) {
-          throw new Error("No grooming price tier configured for this pet's weight");
+          throw new Error(
+            "No grooming price tier configured for this pet's weight",
+          );
         }
         total_amount = tierRes.rows[0].price;
       }
@@ -552,6 +610,11 @@ export default class AppointmentModel {
         throw new Error("'Completed' payment status not configured");
       }
 
+      // FIXED: same combine-before-write as addAppointment — see
+      // toTimestampString comment above.
+      const start_time_full = toTimestampString(appointment_date, start_time);
+      const end_time_full = toTimestampString(appointment_date, end_time);
+
       const apptRes = await client.query(
         `INSERT INTO tbl_appointments
           (client_id, pets_id, appointment_services_id, assigned_staff_id,
@@ -564,8 +627,8 @@ export default class AppointmentModel {
           appointment_services_id,
           assigned_staff_id,
           appointment_date,
-          start_time,
-          end_time,
+          start_time_full,
+          end_time_full,
           appointment_status_id,
           notes,
           created_by,
@@ -608,6 +671,10 @@ export default class AppointmentModel {
   // "book now, pay in the next step" flow): prices it the same way
   // addAppointmentWithPayment does, records the payment, and flips the
   // appointment to In Queue — all in one transaction.
+  //
+  // NOTE: this method doesn't touch start_time/end_time at all (it only
+  // updates payment fields and the appointment's status), so it needs no
+  // change for this fix — included here unmodified for completeness.
   async completeAppointmentPayment({
     appointment_id,
     amount,
@@ -659,7 +726,10 @@ export default class AppointmentModel {
 
       let total_amount = appointment.service_price;
 
-      if (total_amount == null && appointment.appointment_services === "Grooming") {
+      if (
+        total_amount == null &&
+        appointment.appointment_services === "Grooming"
+      ) {
         const petRes = await client.query(
           `SELECT weight_kg FROM tbl_pets WHERE pets_id = $1`,
           [appointment.pets_id],
@@ -676,7 +746,9 @@ export default class AppointmentModel {
           [petRes.rows[0].weight_kg],
         );
         if (!tierRes.rows.length) {
-          throw new Error("No grooming price tier configured for this pet's weight");
+          throw new Error(
+            "No grooming price tier configured for this pet's weight",
+          );
         }
         total_amount = tierRes.rows[0].price;
       }
@@ -705,7 +777,8 @@ export default class AppointmentModel {
         `SELECT appointment_status_id FROM tbl_appointment_status
          WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'`,
       );
-      const confirmed_status_id = confirmedStatusRes.rows[0]?.appointment_status_id;
+      const confirmed_status_id =
+        confirmedStatusRes.rows[0]?.appointment_status_id;
       if (!confirmed_status_id) {
         throw new Error("'In Queue' appointment status not configured");
       }
@@ -743,7 +816,10 @@ export default class AppointmentModel {
       );
 
       await client.query("COMMIT");
-      return { appointment: updatedApptRes.rows[0], payment: paymentRes.rows[0] };
+      return {
+        appointment: updatedApptRes.rows[0],
+        payment: paymentRes.rows[0],
+      };
     } catch (error) {
       queryError = error;
       await client.query("ROLLBACK");

@@ -10,7 +10,7 @@ const { Pool, types } = pkg;
 // back a day for any positive UTC offset. Keep it as the raw "YYYY-MM-DD"
 // string instead; every consumer either uses it as-is or re-parses it.
 types.setTypeParser(types.builtins.DATE, (value) => value);
-
+types.setTypeParser(types.builtins.TIMESTAMP, (value) => value);
 // Without these, a stuck query or an exhausted pool waits forever with no
 // error — which is indistinguishable from the app just "freezing" (the
 // symptom reported: buttons that stop responding, no console error, only a
