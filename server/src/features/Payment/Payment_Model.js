@@ -134,16 +134,52 @@ export default class PaymentModel {
   // Checkout needs its own connection + transaction since it writes to
   // tbl_payments, tbl_cart_items, and tbl_products (stock) together and
   // must roll back atomically if any item fails (e.g. insufficient stock).
+  // Cart lines are keyed by product_name, not a specific batch — a product
+  // can have several batches (same name, different expiry dates) sharing
+  // one shelf quantity. This resolves each line against the real batches
+  // FEFO-style (soonest expiry consumed first, matching the Critical Stock/
+  // expiry conventions elsewhere in the app), splitting across batches when
+  // one alone doesn't cover the requested quantity — each portion becomes
+  // its own tbl_cart_items row with THAT batch's real product_id/price,
+  // never a client-supplied price.
   async checkout({ created_by, payment_status_id, cartItems }) {
     const client = await pool.connect();
     let queryError = null;
     try {
       await client.query("BEGIN");
 
-      const totalAmount = cartItems.reduce(
-        (sum, item) => sum + Number(item.item_price) * Number(item.quantity),
-        0,
-      );
+      let totalAmount = 0;
+      const insertRows = [];
+
+      for (const item of cartItems) {
+        const batchesRes = await client.query(
+          `SELECT product_id, product_price, product_quantity
+           FROM tbl_products
+           WHERE product_name = $1 AND is_deleted = false AND product_quantity > 0
+           ORDER BY product_expiry_date ASC NULLS LAST, product_id ASC
+           FOR UPDATE`,
+          [item.product_name],
+        );
+
+        let remaining = Number(item.quantity);
+        for (const batch of batchesRes.rows) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, batch.product_quantity);
+          if (take <= 0) continue;
+
+          insertRows.push({
+            product_id: batch.product_id,
+            quantity: take,
+            item_price: batch.product_price,
+          });
+          totalAmount += Number(batch.product_price) * take;
+          remaining -= take;
+        }
+
+        if (remaining > 0) {
+          throw new Error(`Insufficient stock for ${item.product_name}`);
+        }
+      }
 
       const paymentRes = await client.query(
         `INSERT INTO tbl_payments (total_amount, payment_status_id, created_by)
@@ -152,26 +188,14 @@ export default class PaymentModel {
       );
       const payment = paymentRes.rows[0];
 
-      for (const item of cartItems) {
-        // Just confirm enough stock exists right now — do NOT deduct yet.
-        // Stock is only committed when the payment is actually completed,
-        // so an abandoned/pending order never holds inventory hostage.
-        const stockRes = await client.query(
-          `SELECT product_quantity FROM tbl_products WHERE product_id = $1`,
-          [item.product_id],
-        );
-
-        if (
-          stockRes.rows.length === 0 ||
-          stockRes.rows[0].product_quantity < item.quantity
-        ) {
-          throw new Error(`Insufficient stock for product ${item.product_id}`);
-        }
-
+      // Stock isn't deducted here — only confirmed above — so an
+      // abandoned/pending order never holds inventory hostage. It's
+      // actually committed when the payment is completed (completeCheckout).
+      for (const row of insertRows) {
         await client.query(
           `INSERT INTO tbl_cart_items (payment_id, product_id, quantity, item_price)
          VALUES ($1, $2, $3, $4)`,
-          [payment.payment_id, item.product_id, item.quantity, item.item_price],
+          [payment.payment_id, row.product_id, row.quantity, row.item_price],
         );
       }
 
@@ -205,6 +229,32 @@ export default class PaymentModel {
     let queryError = null;
     try {
       await client.query("BEGIN");
+
+      // Lock the payment row and re-check status inside the transaction —
+      // the Service-layer check alone can't stop two concurrent requests
+      // (double-click, or completePayment firing twice via verifyPayment's
+      // "approve" path) from both passing before either commits, which
+      // would otherwise deduct stock twice for the same order.
+      const lockRes = await client.query(
+        `SELECT p.payment_id, ps.payment_status_name
+         FROM tbl_payments p
+         JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+         WHERE p.payment_id = $1
+         FOR UPDATE OF p`,
+        [payment_id],
+      );
+      if (!lockRes.rows.length) {
+        const err = new Error("Payment not found");
+        err.statusCode = 404;
+        throw err;
+      }
+      if (lockRes.rows[0].payment_status_name !== "Pending") {
+        const err = new Error(
+          `Only pending payments can be completed. Payment is already ${lockRes.rows[0].payment_status_name}.`,
+        );
+        err.statusCode = 409;
+        throw err;
+      }
 
       const itemsRes = await client.query(
         `SELECT product_id, quantity FROM tbl_cart_items WHERE payment_id = $1`,

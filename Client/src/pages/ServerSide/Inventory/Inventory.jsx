@@ -9,7 +9,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 import BatchesModal from "./components/BatchesModal.jsx";
-import { Layers } from "lucide-react";
+import { Layers, PackagePlus } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 
@@ -89,6 +89,17 @@ export default function Inventory() {
             canEdit={(row) => row.batch_count === 1}
             canDelete={(row) => row.batch_count === 1}
             actions={[
+              {
+                label: "Add Quantity",
+                icon: PackagePlus,
+                className:
+                  "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50",
+                onClick: (row) => navigate(`add-quantity/${row.product_id}`),
+                // Only unambiguous for a single batch — for a grouped row,
+                // restock a specific batch from inside the batches modal
+                // instead.
+                show: (row) => row.batch_count === 1,
+              },
               {
                 label: "View Batches",
                 icon: Layers,

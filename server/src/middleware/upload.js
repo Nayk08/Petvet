@@ -28,3 +28,4 @@ export default upload;
 
 export const uploadPaymentProof = makeUploader({ folder: "payment_proofs" });
 export const uploadQrCode = makeUploader({ folder: "qr_codes" });
+export const uploadProfilePicture = makeUploader({ folder: "profile_pictures" });

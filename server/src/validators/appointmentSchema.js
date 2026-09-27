@@ -103,19 +103,34 @@ const gcashReferenceNumberSchema = z
   .optional()
   .or(z.literal(""));
 
+// Shared by the staff-side schema (adds client_id below) and the
+// client-portal booking schema (client_id comes from the JWT instead, never
+// the body) — so both get the exact same business-hour/slot enforcement
+// instead of the portal route having none at all.
+const baseAppointmentSlotFields = {
+  pets_id: z.coerce.number().int().positive(),
+  appointment_services_id: z.coerce.number().int().positive(),
+  assigned_staff_id: z.coerce.number().int().positive(),
+  appointment_date: z.coerce.date({
+    error: "Invalid appointment date",
+  }),
+  start_time: timeOfDaySchema,
+  end_time: timeOfDaySchema,
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
+};
+
 export const addAppointmentSchema = z
   .object({
     client_id: z.coerce.number().int().positive(),
-    pets_id: z.coerce.number().int().positive(),
-    appointment_services_id: z.coerce.number().int().positive(),
-    assigned_staff_id: z.coerce.number().int().positive(),
-    appointment_date: z.coerce.date({
-      error: "Invalid appointment date",
-    }),
-    start_time: timeOfDaySchema,
-    end_time: timeOfDaySchema,
-    notes: z.string().trim().max(1000).optional().or(z.literal("")),
+    ...baseAppointmentSlotFields,
   })
+  .superRefine(validateSlot);
+
+// Client-portal equivalent of addAppointmentSchema — same slot/business-hour
+// rules, just without client_id (the controller injects that from the
+// authenticated JWT, never trusting the request body for it).
+export const clientPortalBookAppointmentSchema = z
+  .object(baseAppointmentSlotFields)
   .superRefine(validateSlot);
 
 export const editAppointmentSchema = z

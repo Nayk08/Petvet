@@ -38,6 +38,7 @@ export default class AuthenticatorController {
           role: user.role,
           user_level_id: user.user_level_id,
           level_ids: user.level_ids,
+          user_picture: user.user_picture,
         };
         req.session.isLoggedIn = true;
         res
@@ -69,5 +70,32 @@ export default class AuthenticatorController {
 
   async me(req, res) {
     res.status(200).json({ user: req.session.user });
+  }
+
+  // /me and /nav both just read req.session.user rather than querying the
+  // DB fresh each time — so a picture change needs to write through to the
+  // session here too, or it wouldn't show up anywhere until the next login.
+  async updateMyPicture(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No image uploaded" });
+      }
+
+      const user_picture = await authService.updateMyPicture(
+        req.session.user.id,
+        req.file.path,
+      );
+      req.session.user.user_picture = user_picture;
+
+      req.session.save((err) => {
+        if (err) {
+          return res.status(500).json({ message: "Failed to save session" });
+        }
+        res.status(200).json({ user: req.session.user });
+      });
+    } catch (error) {
+      const status = error.status || 500;
+      res.status(status).json({ message: error.message || "Something went wrong" });
+    }
   }
 }

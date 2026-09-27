@@ -123,7 +123,11 @@ export default class ClientPortalService {
 
   // client_id is always taken from the authenticated JWT (passed in here
   // by the controller) — never trusted from the request body — so a
-  // client can only ever book an appointment for themselves.
+  // client can only ever book an appointment for themselves. pets_id DOES
+  // come from the body though, so it still needs an explicit ownership
+  // check here — otherwise any authenticated client could book (and later
+  // pay for) an appointment against another client's pet just by guessing
+  // or enumerating a pets_id.
   async bookAppointment({
     client_id,
     pets_id,
@@ -134,6 +138,13 @@ export default class ClientPortalService {
     end_time,
     notes,
   }) {
+    const pet = await clientRecordsService.getPetById(pets_id);
+    if (String(pet.client_id) !== String(client_id)) {
+      const err = new Error("You can only book appointments for your own pets.");
+      err.statusCode = 403;
+      throw err;
+    }
+
     return appointmentService.addAppointment({
       client_id,
       pets_id,

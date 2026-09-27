@@ -11,6 +11,7 @@ import {
 import {
   addProductSchema,
   updateProductSchema,
+  addQuantitySchema,
   productIdParamSchema,
 } from "../../validators/productSchema.js";
 
@@ -53,6 +54,14 @@ router.put(
   validateParams(productIdParamSchema),
   validateBody(updateProductSchema),
   (req, res) => inventoryController.updateProduct(req, res),
+);
+
+router.patch(
+  "/inventory/:product_id/add-quantity",
+  hasPermission("INVENTORY", "can_view", "can_edit"),
+  validateParams(productIdParamSchema),
+  validateBody(addQuantitySchema),
+  (req, res) => inventoryController.addQuantity(req, res),
 );
 
 router.delete(

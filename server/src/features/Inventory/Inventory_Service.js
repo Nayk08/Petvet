@@ -86,6 +86,27 @@ export default class InventoryService {
     }
   }
 
+  async addQuantity({
+    product_id,
+    quantity,
+    product_price,
+    product_expiry_date,
+    updated_by,
+  }) {
+    try {
+      return await inventoryModel.addQuantity({
+        product_id,
+        quantity,
+        product_price,
+        product_expiry_date,
+        updated_by,
+      });
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
   async deleteProductById({ product_id, deleted_by }) {
     try {
       const deleteProductById = await inventoryModel.deleteProductById({

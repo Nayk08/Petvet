@@ -196,9 +196,15 @@ export function Component() {
               <Input
                 name="product_expiry_date"
                 type="date"
+                // The raw value here is "YYYY-MM-DD HH:mm:ss" (space, not
+                // "T" — db.js's TIMESTAMP type parser returns the column as
+                // a plain string, never a Date), so .split("T")[0] just
+                // returned the whole unsliced string — not valid input for
+                // a date input, which silently renders that as blank.
+                // Slicing the first 10 chars works for either separator.
                 defaultValue={
                   data?.product_expiry_date
-                    ? data.product_expiry_date.split("T")[0]
+                    ? data.product_expiry_date.slice(0, 10)
                     : ""
                 }
                 className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"

@@ -3,6 +3,8 @@ import ClientPortalController from "./ClientPortal_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
 import authLimiter from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
+import { validateBody } from "../../middleware/validate.js";
+import { clientPortalBookAppointmentSchema } from "../../validators/appointmentSchema.js";
 
 const router = express.Router();
 const clientPortalController = new ClientPortalController();
@@ -24,8 +26,14 @@ router.get("/me", isClientAuth, (req, res) =>
 router.get("/appointments", isClientAuth, (req, res) =>
   clientPortalController.getMyAppointments(req, res),
 );
-router.post("/appointments", isClientAuth, (req, res) =>
-  clientPortalController.bookAppointment(req, res),
+// Same business-hour/slot rules the staff booking route enforces
+// (addAppointmentSchema) — this route previously had no validation at all,
+// so a direct request could book any date/time.
+router.post(
+  "/appointments",
+  isClientAuth,
+  validateBody(clientPortalBookAppointmentSchema),
+  (req, res) => clientPortalController.bookAppointment(req, res),
 );
 router.get("/appointments/booked-slots", isClientAuth, (req, res) =>
   clientPortalController.getStaffBookedSlots(req, res),

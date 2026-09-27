@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, PackagePlus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -126,6 +126,18 @@ export default function BatchesModal({ productName, onClose }) {
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    title="Add quantity to this batch"
+                    onClick={() =>
+                      navigate(`add-quantity/${batch.product_id}`)
+                    }
+                    className="h-8 w-8 text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+                  >
+                    <PackagePlus className="w-3.5 h-3.5" />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"

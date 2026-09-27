@@ -47,7 +47,7 @@ export function Component() {
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
             Are you sure you want to delete{" "}
             <span className="font-medium text-slate-900 dark:text-slate-200">
-              {data?.user_level}
+              {data?.product_name}
             </span>
             ? You can restore this later if needed.
           </DialogDescription>

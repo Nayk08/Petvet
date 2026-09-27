@@ -43,7 +43,7 @@ export function Component() {
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
             Are you sure you want to delete{" "}
             <span className="font-medium text-slate-900 dark:text-slate-200">
-              {data?.user_level}
+              {data?.pets_name}
             </span>
             ? You can restore this later if needed.
           </DialogDescription>
@@ -74,7 +74,7 @@ export function Component() {
 
 export async function loader({ params }) {
   return queryClient.fetchQuery({
-    queryKey: ["inventory", params.pets_id],
+    queryKey: ["pet", params.pets_id],
     queryFn: ({ signal }) => fetchPetById({ pets_id: params.pets_id, signal }),
   });
 }
@@ -83,7 +83,7 @@ export async function action({ params }) {
   try {
     const petId = params.pets_id;
     await deletePet(petId);
-    await queryClient.invalidateQueries(["pet-records"]);
+    await queryClient.invalidateQueries({ queryKey: ["pet-records"] });
 
     toast.error("Successfully Deleted", {
       className:

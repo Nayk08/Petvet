@@ -96,6 +96,25 @@ export default class InventoryController {
     }
   }
 
+  async addQuantity(req, res) {
+    try {
+      const { quantity, product_price, product_expiry_date } = req.body;
+      const product = await inventoryService.addQuantity({
+        product_id: req.params.product_id,
+        quantity,
+        product_price,
+        product_expiry_date,
+        updated_by: req.session.user.name,
+      });
+      return res.status(200).json(product);
+    } catch (error) {
+      const status = error.status || 500;
+      return res
+        .status(status)
+        .json({ message: error.message || "Something went wrong" });
+    }
+  }
+
   async deleteProductById(req, res) {
     try {
       const deleteProductById = await inventoryService.deleteProductById({

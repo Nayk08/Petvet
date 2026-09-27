@@ -194,6 +194,19 @@ export async function logoutUser() {
   return handleResponse(response, "Failed to logout");
 }
 
+export async function updateMyProfilePicture(formData) {
+  const csrfToken = await getCsrfToken();
+
+  const response = await fetch(`${AuthUrl}/me/picture`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    body: formData,
+    credentials: "include",
+  });
+
+  return handleResponse(response, "Failed to update profile picture");
+}
+
 // ─────────────────────────────
 // COMMON
 // ─────────────────────────────
@@ -483,6 +496,22 @@ export async function updateProduct(id, formData) {
   return handleResponse(response, "Failed to update product");
 }
 
+// Restocks one specific batch — adds to its quantity and always overwrites
+// its price/expiry with whatever's submitted.
+export async function addProductQuantity(
+  id,
+  { quantity, product_price, product_expiry_date },
+) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/inventory/${id}/add-quantity`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    body: JSON.stringify({ quantity, product_price, product_expiry_date }),
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to add quantity");
+}
+
 export async function deleteProduct(id) {
   const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/inventory/${id}/delete-product`, {
@@ -511,11 +540,14 @@ export async function pullExpiredProducts() {
 export async function checkoutOrder(cartItems) {
   const csrfToken = await getCsrfToken();
 
+  // Keyed by product_name, not a specific batch — a product can have
+  // several batches (same name, different expiry dates) sharing one shelf
+  // quantity, and the server resolves which real batch(es) to draw from
+  // (FEFO) and their real prices at checkout time.
   const payload = {
     cartItems: cartItems.map((item) => ({
-      product_id: item.product_id,
+      product_name: item.product_name,
       quantity: item.quantity,
-      item_price: item.product_price,
     })),
   };
 

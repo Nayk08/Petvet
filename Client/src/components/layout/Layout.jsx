@@ -1,4 +1,4 @@
-import Navbar from "./Navbar";
+import Sidebar from "./Sidebar";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
@@ -54,12 +54,16 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans dark:bg-slate-950 dark:text-slate-100">
-      {/* Fixed top navigation bar */}
-      <Navbar />
+      {/* Fixed left sidebar (an off-canvas drawer below md, behind a
+          slim top bar with the menu toggle) */}
+      <Sidebar />
 
-      {/* Main content viewport container */}
-      <main className="pt-16 max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <Outlet />
+      {/* Main content viewport container — offset for the mobile top bar
+          below md, and for the sidebar's own width at md and up */}
+      <main className="pt-14 md:pt-0 md:pl-64 w-full">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+          <Outlet />
+        </div>
       </main>
 
       <Toaster

@@ -36,16 +36,17 @@ export default class PaymentService {
       throw err;
     }
 
+    // Cart lines are keyed by product_name (not a specific batch) and
+    // never carry a trusted price — the model resolves the real batch(es)
+    // and their real prices at checkout time (see Payment_Model.checkout).
     for (const item of cartItems) {
-      if (!item.product_id || !item.quantity || item.quantity <= 0) {
-        const err = new Error(
-          "Each cart item needs a valid product_id and quantity > 0",
-        );
+      if (!item.product_name || typeof item.product_name !== "string") {
+        const err = new Error("Each cart item needs a valid product_name");
         err.statusCode = 400;
         throw err;
       }
-      if (item.item_price == null || Number(item.item_price) < 0) {
-        const err = new Error("Each cart item needs a valid item_price");
+      if (!item.quantity || item.quantity <= 0) {
+        const err = new Error("Each cart item needs a quantity > 0");
         err.statusCode = 400;
         throw err;
       }
@@ -90,6 +91,13 @@ export default class PaymentService {
     } = {},
   ) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
+    if (payment.payment_status_name !== "Pending") {
+      const err = new Error(
+        `Only pending payments can be completed. Payment is already ${payment.payment_status_name}.`,
+      );
+      err.statusCode = 409;
+      throw err;
+    }
     validatePaymentMethod({ payment_method, gcash_reference_number });
     const { cash_amount, gcash_amount } = resolvePaymentSplit({
       payment_method,
@@ -164,11 +172,30 @@ export default class PaymentService {
         throw err;
       }
 
-      return paymentModel.cancelPayment({
+      const cancelled = await paymentModel.cancelPayment({
         payment_id,
         payment_status_id: cancelledStatusId,
         updated_by,
       });
+
+      // This payment's cancel/delete soft-deletes the row entirely, so an
+      // appointment linked to it would otherwise be left stuck on Pending
+      // with no valid payment row left to ever complete against (see
+      // completeAppointmentPayment's "Payment record ... not found"). Cancel
+      // the appointment too — the client needs a fresh booking either way.
+      if (payment.appointment_id) {
+        const cancelledApptStatusId =
+          await appointmentModel.getAppointmentStatusId("Cancelled");
+        if (cancelledApptStatusId) {
+          await appointmentModel.setAppointmentStatus({
+            appointment_id: payment.appointment_id,
+            appointment_status_id: cancelledApptStatusId,
+            updated_by,
+          });
+        }
+      }
+
+      return cancelled;
     } catch (error) {
       console.log("Error on Service cancelPayment function");
       throw error;

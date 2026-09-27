@@ -116,7 +116,9 @@ export default class UsersModel {
         `UPDATE tbl_users SET updated_by = $1, date_updated = NOW() WHERE users_id = $2`,
         [updatedBy, userId],
       );
-      return { ...updatedData, users_id: result.rows[0].users_id };
+      // Never echo user_password (hashed or not) back in the response.
+      const { user_password: _omit, ...safeData } = updatedData;
+      return { ...safeData, users_id: result.rows[0].users_id };
     } catch (error) {
       console.log(`error occurred in Users Model: ${error}`);
       throw error;

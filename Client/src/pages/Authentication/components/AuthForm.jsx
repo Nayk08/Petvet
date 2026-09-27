@@ -185,6 +185,8 @@ export default function AuthForm() {
                 name="password"
                 type="password"
                 placeholder="••••••••"
+                required
+                minLength={isLogin ? undefined : 8}
                 className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
               />
             </div>
@@ -206,6 +208,8 @@ export default function AuthForm() {
                   name="confirmPassword"
                   type="password"
                   placeholder="••••••••"
+                  required
+                  minLength={8}
                   className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
                 />
               </div>

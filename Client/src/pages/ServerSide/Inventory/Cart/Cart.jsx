@@ -18,17 +18,23 @@ export default function Cart() {
   const addToCart = useCartStore((state) => state.addToCart);
   const navigate = useNavigate();
 
+  // Grouped by product_name — a product can have several batches (same
+  // name, different expiry dates) sharing one shelf quantity, and this page
+  // shouldn't show them as separate/duplicate tiles. Which real batch(es)
+  // actually get sold from (soonest expiry first) is resolved server-side
+  // at checkout, not here — see Payment_Model.js:checkout.
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["inventoryProducts", page, limit],
-    queryFn: ({ signal }) => fetchInventory({ page, limit, signal }),
+    queryFn: ({ signal }) =>
+      fetchInventory({ page, limit, grouped: true, signal }),
     staleTime: 5000,
     placeholderData: keepPreviousData,
   });
 
-  const getSelectedQty = (productId) => selectedQuantities[productId] ?? 1;
+  const getSelectedQty = (productName) => selectedQuantities[productName] ?? 1;
 
-  const getCartQty = (productId) => {
-    const item = cartItems.find((i) => i.product_id === productId);
+  const getCartQty = (productName) => {
+    const item = cartItems.find((i) => i.product_name === productName);
     return item ? item.quantity : 0;
   };
 
@@ -36,18 +42,19 @@ export default function Cart() {
   // availableStock (raw stock minus whatever's already in the cart)
   const handleIncreaseLocalQty = (product, availableStock) => {
     setSelectedQuantities((prev) => {
-      const current = prev[product.product_id] ?? 1;
+      const current = prev[product.product_name] ?? 1;
       return {
         ...prev,
-        [product.product_id]: current < availableStock ? current + 1 : current,
+        [product.product_name]:
+          current < availableStock ? current + 1 : current,
       };
     });
   };
 
-  const handleDecreaseLocalQty = (productId) => {
+  const handleDecreaseLocalQty = (productName) => {
     setSelectedQuantities((prev) => ({
       ...prev,
-      [productId]: Math.max(1, (prev[productId] ?? 1) - 1),
+      [productName]: Math.max(1, (prev[productName] ?? 1) - 1),
     }));
   };
 
@@ -55,23 +62,26 @@ export default function Cart() {
     const qty = parseInt(value, 10);
 
     if (isNaN(qty) || qty < 1) {
-      setSelectedQuantities((prev) => ({ ...prev, [product.product_id]: 1 }));
+      setSelectedQuantities((prev) => ({ ...prev, [product.product_name]: 1 }));
     } else if (qty > availableStock) {
       setSelectedQuantities((prev) => ({
         ...prev,
-        [product.product_id]: availableStock,
+        [product.product_name]: availableStock,
       }));
     } else {
-      setSelectedQuantities((prev) => ({ ...prev, [product.product_id]: qty }));
+      setSelectedQuantities((prev) => ({
+        ...prev,
+        [product.product_name]: qty,
+      }));
     }
   };
 
   // Explicitly commits the item + selected quantity to the cart
   // (cart-side stock; DB stock is never touched here)
   const handleAddToCart = (product) => {
-    const qtyToAdd = getSelectedQty(product.product_id);
+    const qtyToAdd = getSelectedQty(product.product_name);
     addToCart(product, qtyToAdd);
-    setSelectedQuantities((prev) => ({ ...prev, [product.product_id]: 1 }));
+    setSelectedQuantities((prev) => ({ ...prev, [product.product_name]: 1 }));
   };
 
   return (
@@ -103,9 +113,9 @@ export default function Cart() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {data.rows.map((product) => {
-                const localQty = getSelectedQty(product.product_id);
+                const localQty = getSelectedQty(product.product_name);
                 const rawStock = product.product_quantity ?? 0;
-                const currentCartQty = getCartQty(product.product_id);
+                const currentCartQty = getCartQty(product.product_name);
 
                 // Stock minus what's already committed to the cart —
                 // a display-only value, never written back to `data`
@@ -118,7 +128,7 @@ export default function Cart() {
 
                 return (
                   <div
-                    key={product.product_id}
+                    key={product.product_name}
                     className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md transition-all group relative shadow-sm"
                   >
                     {/* Image Container & Available Stock Badge */}
@@ -155,10 +165,16 @@ export default function Cart() {
                       {product.product_name}
                     </h4>
 
-                    {/* Price Display */}
+                    {/* Price Display — a range when this product's batches
+                        (different expiry dates) don't all share one price;
+                        the exact price actually charged per unit is
+                        resolved server-side at checkout (soonest-expiry
+                        batch first). */}
                     <div className="mb-2">
                       <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
-                        ${Number(product.product_price).toFixed(2)}
+                        {Number(product.min_price) === Number(product.max_price)
+                          ? `$${Number(product.min_price).toFixed(2)}`
+                          : `$${Number(product.min_price).toFixed(2)} – $${Number(product.max_price).toFixed(2)}`}
                       </span>
                     </div>
 
@@ -169,7 +185,7 @@ export default function Cart() {
                         <button
                           type="button"
                           onClick={() =>
-                            handleDecreaseLocalQty(product.product_id)
+                            handleDecreaseLocalQty(product.product_name)
                           }
                           disabled={isOutOfStock || localQty <= 1}
                           className="w-5 h-5 flex items-center justify-center rounded text-slate-500 dark:text-slate-400 hover:bg-red-100 dark:hover:bg-red-950/50 hover:text-red-600 dark:hover:text-red-400 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"

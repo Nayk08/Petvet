@@ -47,7 +47,7 @@ export function Component() {
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
             Are you sure you want to delete{" "}
             <span className="font-medium text-slate-900 dark:text-slate-200">
-              {data?.user_level}
+              {data?.name}
             </span>
             ? You can restore this later if needed.
           </DialogDescription>
@@ -78,7 +78,7 @@ export function Component() {
 
 export async function loader({ params }) {
   return queryClient.fetchQuery({
-    queryKey: ["inventory", params.client_id],
+    queryKey: ["client", params.client_id],
     queryFn: ({ signal }) =>
       fetchClientById({ client_id: params.client_id, signal }),
   });
@@ -88,7 +88,11 @@ export async function action({ params }) {
   try {
     const clientId = params.client_id;
     await deleteClient(clientId);
-    await queryClient.invalidateQueries(["client"]);
+    // "clients" (plural) is the list query's key — invalidating "client"
+    // (singular, this modal's own loader key) never touched the list, so
+    // the just-deleted client stayed visible until the list's staleTime
+    // lapsed on its own.
+    await queryClient.invalidateQueries({ queryKey: ["clients"] });
 
     toast.error("Successfully Deleted", {
       className:

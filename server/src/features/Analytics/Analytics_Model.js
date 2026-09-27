@@ -2,9 +2,9 @@ import pool from "../../config/db.js";
 
 export default class AnalyticsModel {
   // Daily revenue split Sales (cart checkout, INV) vs Services (appointment
-  // charge, APT) — same "count every non-deleted payment regardless of
-  // status" definition Payment_Model.js:getRevenueSummary already uses, so
-  // this chart's totals stay consistent with the Dashboard's revenue cards.
+  // charge, APT) — Completed only, matching Payment_Model.js:getRevenueSummary
+  // and Dashboard_Model.js's revenue cards: a Pending or Cancelled payment
+  // must not count as revenue just because a row exists for it.
   async getRevenueTrend({ startDate, endDate }) {
     const client = await pool.connect();
     try {
@@ -13,8 +13,9 @@ export default class AnalyticsModel {
            date_created::date AS day,
            COALESCE(SUM(total_amount) FILTER (WHERE appointment_id IS NULL), 0) AS sales,
            COALESCE(SUM(total_amount) FILTER (WHERE appointment_id IS NOT NULL), 0) AS services
-         FROM tbl_payments
+         FROM v_payments
          WHERE is_deleted = false
+           AND payment_status_name = 'Completed'
            AND date_created::date BETWEEN $1 AND $2
          GROUP BY date_created::date
          ORDER BY day ASC`,
@@ -64,6 +65,9 @@ export default class AnalyticsModel {
     }
   }
 
+  // Completed only — matches getProductMovers below and every other revenue
+  // figure in this app; a Pending or Cancelled cart order hasn't actually
+  // sold anything yet.
   async getTopProducts({ startDate, endDate, limit = 10 }) {
     const client = await pool.connect();
     try {
@@ -74,8 +78,9 @@ export default class AnalyticsModel {
            SUM(ci.subtotal) AS total_revenue
          FROM tbl_cart_items ci
          JOIN tbl_products p ON p.product_id = ci.product_id
-         JOIN tbl_payments pay ON pay.payment_id = ci.payment_id
+         JOIN v_payments pay ON pay.payment_id = ci.payment_id
          WHERE pay.is_deleted = false
+           AND pay.payment_status_name = 'Completed'
            AND pay.date_created::date BETWEEN $1 AND $2
          GROUP BY p.product_name
          ORDER BY total_revenue DESC

@@ -21,7 +21,12 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { useCartStore } from "@/stores/useCartStore.js";
 import { Input } from "@/components/ui/input.jsx";
-import { queryClient, checkoutOrder, completePayment } from "@/api/http.js";
+import {
+  queryClient,
+  checkoutOrder,
+  completePayment,
+  fetchPaymentById,
+} from "@/api/http.js";
 import PaymentMethodPicker from "@/components/ui/PaymentMethodPicker.jsx";
 import {
   evaluatePaymentAmount,
@@ -90,7 +95,11 @@ export function Component() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
 
-  const [paymentId, setPaymentId] = useState(null);
+  // The authoritative payment created by "start checkout" — its
+  // total_amount is what's actually validated/charged, since real batch
+  // prices (FEFO-resolved server-side) can differ from the estimate shown
+  // on the shopping grid.
+  const [payment, setPayment] = useState(null);
 
   // Checkout / payment state — kept locally only for the live "Change"
   // preview before submitting; the action re-validates authoritatively.
@@ -106,7 +115,7 @@ export function Component() {
     if (startFetcher.state !== "idle" || !startFetcher.data) return;
 
     if (startFetcher.data.payment) {
-      setPaymentId(startFetcher.data.payment.payment_id);
+      setPayment(startFetcher.data.payment);
       setShowCheckout(true);
     } else if (startFetcher.data.error) {
       toast.error("Could not start checkout", {
@@ -122,16 +131,16 @@ export function Component() {
   // Clamping to [1, product_quantity] lives in the store, so these
   // handlers just forward the intended delta/value straight through.
   const handleUpdateQuantity = (item, delta) => {
-    updateQuantity(item.product_id, item.quantity + delta);
+    updateQuantity(item.product_name, item.quantity + delta);
   };
 
   const handleSetQuantity = (item, newQty) => {
-    updateQuantity(item.product_id, newQty);
+    updateQuantity(item.product_name, newQty);
   };
 
   const handleRemoveItem = () => {
     if (!itemToDelete) return;
-    removeFromCart(itemToDelete.product_id);
+    removeFromCart(itemToDelete.product_name);
     setItemToDelete(null);
   };
 
@@ -144,10 +153,19 @@ export function Component() {
     (acc, item) => acc + item.quantity,
     0,
   );
-  const subtotal = cartItems.reduce(
-    (acc, item) => acc + item.product_price * item.quantity,
+  // An ESTIMATE only, shown before "start checkout" runs — a product's
+  // batches can carry different prices, so this uses each item's cheapest
+  // batch price as a lower-bound preview. The real total (payment.total_amount,
+  // below) is resolved server-side once checkout actually starts.
+  const estimatedSubtotal = cartItems.reduce(
+    (acc, item) => acc + Number(item.min_price ?? item.product_price ?? 0) * item.quantity,
     0,
   );
+  // Once checkout has started, the server-resolved total is authoritative —
+  // FEFO batch splitting can make the real total differ from the estimate.
+  const authoritativeTotal = payment
+    ? Number(payment.total_amount)
+    : estimatedSubtotal;
 
   const paidNumber = isSplit
     ? (parseFloat(splitCashPaid) || 0) + (parseFloat(splitGcashPaid) || 0)
@@ -155,7 +173,7 @@ export function Component() {
   const { isValid: hasValidPayment, change } = evaluatePaymentAmount({
     paymentMethod,
     receivedTotal: paidNumber,
-    total: subtotal,
+    total: authoritativeTotal,
   });
 
   // Starts checkout via the route action (intent: "start") instead of
@@ -177,7 +195,7 @@ export function Component() {
       setSplitCashPaid("");
       setSplitGcashPaid("");
       clearCart();
-      setPaymentId(null);
+      setPayment(null);
     }
   };
 
@@ -227,10 +245,16 @@ export function Component() {
                 const atMaxStock =
                   item.product_quantity != null &&
                   item.quantity >= item.product_quantity;
+                // Estimate only — a product's batches can carry different
+                // prices; the real per-unit price is resolved server-side
+                // (FEFO) once checkout starts.
+                const estimatedUnitPrice = Number(
+                  item.min_price ?? item.product_price ?? 0,
+                );
 
                 return (
                   <div
-                    key={item.product_id}
+                    key={item.product_name}
                     className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
                   >
                     <div className="w-12 h-12 shrink-0 overflow-hidden rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
@@ -246,7 +270,7 @@ export function Component() {
                         {item.product_name}
                       </p>
                       <p className="text-xs text-cyan-600 dark:text-teal-400 font-bold mt-0.5">
-                        ${item.product_price}
+                        ${estimatedUnitPrice.toFixed(2)}
                       </p>
                       {atMaxStock && (
                         <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
@@ -282,9 +306,9 @@ export function Component() {
                       </button>
                     </div>
 
-                    {/* Total per item */}
+                    {/* Total per item (estimate) */}
                     <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-slate-100 shrink-0">
-                      ${(item.product_price * item.quantity).toFixed(2)}
+                      ${(estimatedUnitPrice * item.quantity).toFixed(2)}
                     </span>
 
                     {/* Remove Button */}
@@ -302,14 +326,14 @@ export function Component() {
             )}
           </div>
 
-          {/* Footer Subtotal & Actions */}
+          {/* Footer Subtotal (estimate) & Actions */}
           <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm text-slate-500 dark:text-slate-400">
-                Subtotal
+                Subtotal (est.)
               </span>
               <span className="text-lg font-bold text-slate-950 dark:text-slate-100">
-                ${subtotal.toFixed(2)}
+                ${estimatedSubtotal.toFixed(2)}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -405,7 +429,7 @@ export function Component() {
         <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-md shadow-2xl transition-colors">
           <form onSubmit={handleConfirmOrder}>
             <input type="hidden" name="intent" value="confirm" />
-            <input type="hidden" name="payment_id" value={paymentId ?? ""} />
+            <input type="hidden" name="payment_id" value={payment?.payment_id ?? ""} />
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
                 Order Summary
@@ -416,9 +440,14 @@ export function Component() {
             </DialogHeader>
 
             <div className="space-y-3 py-2 border-y border-slate-200 dark:border-slate-800 max-h-52 overflow-y-auto pr-1">
-              {cartItems.map((item) => (
+              {/* The server may have split one product across two batches
+                  (soonest expiry first) if one alone didn't cover the
+                  quantity — payment.items is the real, resolved breakdown,
+                  so this can show more rows than cartItems for the same
+                  product name. That's expected, not a display bug. */}
+              {(payment?.items ?? []).map((item) => (
                 <div
-                  key={item.product_id}
+                  key={item.cart_item_id}
                   className="flex justify-between items-center text-sm"
                 >
                   <div className="truncate pr-4">
@@ -426,11 +455,11 @@ export function Component() {
                       {item.product_name}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Qty: {item.quantity}
+                      Qty: {item.quantity} × ${Number(item.item_price).toFixed(2)}
                     </p>
                   </div>
                   <span className="font-medium text-slate-700 dark:text-slate-300 shrink-0">
-                    ${(item.product_price * item.quantity).toFixed(2)}
+                    ${Number(item.subtotal).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -439,7 +468,7 @@ export function Component() {
             <div className="flex justify-between items-center font-bold text-base pt-3">
               <span className="text-slate-700 dark:text-slate-300">Total</span>
               <span className="text-cyan-600 dark:text-cyan-400 text-lg">
-                ${subtotal.toFixed(2)}
+                ${authoritativeTotal.toFixed(2)}
               </span>
             </div>
 
@@ -532,8 +561,8 @@ export function Component() {
                 : amountPaid !== "") && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 text-right pt-1">
                   {requiresExactAmount(paymentMethod)
-                    ? `Amount received must exactly equal $${subtotal.toFixed(2)} — GCash doesn't give change`
-                    : `Amount received must be at least $${subtotal.toFixed(2)}`}
+                    ? `Amount received must exactly equal $${authoritativeTotal.toFixed(2)} — GCash doesn't give change`
+                    : `Amount received must be at least $${authoritativeTotal.toFixed(2)}`}
                 </p>
               )}
 
@@ -611,14 +640,20 @@ export async function action({ request }) {
   const gcash_received = formData.get("gcash_received");
   const amountPaid = parseFloat(formData.get("amount_paid"));
 
-  const cartItems = useCartStore.getState().cartItems;
-  const subtotal = cartItems.reduce(
-    (acc, item) => acc + item.product_price * item.quantity,
-    0,
-  );
-
   if (!paymentId) {
     return { error: "No pending order found. Please reopen checkout." };
+  }
+
+  // The authoritative total — fetched fresh rather than recomputed from the
+  // client's cart snapshot, since a product's batches can carry different
+  // prices and the server already resolved (FEFO) which batch(es) this
+  // order actually draws from when "start checkout" ran.
+  let total;
+  try {
+    const pendingPayment = await fetchPaymentById(paymentId);
+    total = Number(pendingPayment.total_amount);
+  } catch (error) {
+    return { error: error.message || "Could not verify order total." };
   }
 
   const receivedTotal =
@@ -629,13 +664,13 @@ export async function action({ request }) {
   const { isValid } = evaluatePaymentAmount({
     paymentMethod: payment_method,
     receivedTotal,
-    total: subtotal,
+    total,
   });
   if (!isValid) {
     return {
       error: requiresExactAmount(payment_method)
-        ? `Amount received must exactly equal $${subtotal.toFixed(2)} — GCash doesn't give change`
-        : `Amount received must be at least $${subtotal.toFixed(2)}`,
+        ? `Amount received must exactly equal $${total.toFixed(2)} — GCash doesn't give change`
+        : `Amount received must be at least $${total.toFixed(2)}`,
     };
   }
 
@@ -652,7 +687,7 @@ export async function action({ request }) {
     return { error: errorMessage };
   }
 
-  const change = receivedTotal - subtotal;
+  const change = receivedTotal - total;
 
   await queryClient.invalidateQueries({ queryKey: ["inventoryProducts"] });
   await queryClient.invalidateQueries({ queryKey: ["Payments"] });

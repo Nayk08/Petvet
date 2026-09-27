@@ -34,7 +34,7 @@ export function Component() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["payment", paymentId],
+    queryKey: ["Payment", paymentId],
     queryFn: () => fetchPaymentById(paymentId),
     enabled: !!paymentId,
   });

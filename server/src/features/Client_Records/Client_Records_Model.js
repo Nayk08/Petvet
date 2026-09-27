@@ -63,7 +63,7 @@ export default class ClientRecordsModel {
 
     try {
       const res = await client.query(
-        `SELECT * FROM tbl_clients WHERE client_id = $1 `,
+        `SELECT * FROM tbl_clients WHERE client_id = $1 AND is_deleted IS NOT TRUE`,
         [client_id],
       );
 
@@ -105,10 +105,18 @@ export default class ClientRecordsModel {
   }) {
     const client = await pool.connect();
     try {
+      // editClientBodySchema allows a partial body (any one field) — an
+      // omitted field arrives here as undefined/null, so COALESCE keeps the
+      // existing column value instead of overwriting it with NULL.
       const res = await client.query(
         `UPDATE tbl_clients
-        SET name = $1, email = $2, mobile_no = $3, updated_by = $4, date_updated = NOW()
-        WHERE client_id = $5 RETURNING *`,
+        SET name = COALESCE($1, name),
+            email = COALESCE($2, email),
+            mobile_no = COALESCE($3, mobile_no),
+            updated_by = $4,
+            date_updated = NOW()
+        WHERE client_id = $5 AND is_deleted IS NOT TRUE
+        RETURNING *`,
         [client_name, client_email, contact_no, updated_by, client_id],
       );
 
@@ -267,7 +275,7 @@ export default class ClientRecordsModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `SELECT * FROM tbl_pets WHERE pets_id = $1`,
+        `SELECT * FROM tbl_pets WHERE pets_id = $1 AND is_deleted IS NOT TRUE`,
         [pets_id],
       );
       if (!res.rows.length) {

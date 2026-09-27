@@ -160,6 +160,11 @@ export default class InventoryModel {
     product_expiry_date,
     product_price,
   }) {
+    // "" (a blank date input) is not valid input for a timestamp column —
+    // only NULL represents "no expiry set". Normalized once here so both
+    // the match query below and the INSERT agree on what "no expiry" means.
+    const expiryDate = product_expiry_date || null;
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -171,7 +176,7 @@ export default class InventoryModel {
            AND product_name = $1
            AND product_expiry_date IS NOT DISTINCT FROM $2
          FOR UPDATE`,
-        [product_name, product_expiry_date || null],
+        [product_name, expiryDate],
       );
 
       let rows;
@@ -209,7 +214,7 @@ export default class InventoryModel {
             product_image,
             product_name,
             product_quantity,
-            product_expiry_date,
+            expiryDate,
             product_price,
           ],
         );
@@ -253,7 +258,7 @@ export default class InventoryModel {
           product_image,
           product_name,
           product_quantity,
-          product_expiry_date,
+          product_expiry_date || null, // "" is invalid for a timestamp column
           product_price,
           product_id,
         ],
@@ -261,6 +266,122 @@ export default class InventoryModel {
       return res.rows[0];
     } catch (error) {
       console.log("Error on Model updateProduct function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Dedicated restock action for one specific batch — adds to its existing
+  // quantity and always overwrites its price with whatever's submitted.
+  // Expiry is treated as the batch's identity, same as addProduct: keeping
+  // it unchanged just restocks this row in place, but entering a DIFFERENT
+  // expiry means the new stock is a genuinely different lot — this batch's
+  // own quantity/price/expiry are left untouched, and the new quantity
+  // either merges into an existing batch at that expiry or creates a new
+  // one. Mutating this batch's expiry in place would silently merge two
+  // different lots together and make the earlier one unrecoverable for
+  // expiry-based removal (Analytics' "Remove Expired").
+  async addQuantity({
+    product_id,
+    quantity,
+    product_price,
+    product_expiry_date,
+    updated_by,
+  }) {
+    const newExpiry = product_expiry_date || null;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const currentRes = await client.query(
+        `SELECT product_name, product_expiry_date, product_image
+         FROM tbl_products
+         WHERE product_id = $1 AND is_deleted = false
+         FOR UPDATE`,
+        [product_id],
+      );
+      if (!currentRes.rows.length) {
+        const err = new Error("Product not found");
+        err.status = 404;
+        throw err;
+      }
+      const current = currentRes.rows[0];
+      // Raw string from db.js's TIMESTAMP type parser ("YYYY-MM-DD HH:mm:ss"),
+      // never a Date — slicing avoids the timezone drift new Date(...) would
+      // introduce (see AddProductModal.jsx's expiry-display fix for why).
+      const currentExpiry = current.product_expiry_date
+        ? current.product_expiry_date.slice(0, 10)
+        : null;
+
+      let result;
+      if (currentExpiry === newExpiry) {
+        const res = await client.query(
+          `UPDATE tbl_products
+           SET product_quantity = product_quantity + $1,
+               product_price = $2,
+               updated_by = $3,
+               date_updated = NOW()
+           WHERE product_id = $4
+           RETURNING *`,
+          [quantity, product_price, updated_by, product_id],
+        );
+        result = res.rows[0];
+      } else {
+        const matchRes = await client.query(
+          `SELECT product_id, product_quantity
+           FROM tbl_products
+           WHERE is_deleted = false
+             AND product_name = $1
+             AND product_expiry_date IS NOT DISTINCT FROM $2
+             AND product_id != $3
+           FOR UPDATE`,
+          [current.product_name, newExpiry, product_id],
+        );
+
+        if (matchRes.rows.length > 0) {
+          const { product_id: matchId, product_quantity: matchQty } =
+            matchRes.rows[0];
+          const res = await client.query(
+            `UPDATE tbl_products
+             SET product_quantity = $1,
+                 product_price = $2,
+                 updated_by = $3,
+                 date_updated = NOW()
+             WHERE product_id = $4
+             RETURNING *`,
+            [
+              Number(matchQty) + Number(quantity),
+              product_price,
+              updated_by,
+              matchId,
+            ],
+          );
+          result = res.rows[0];
+        } else {
+          const res = await client.query(
+            `INSERT INTO tbl_products(created_by, product_image, product_name,
+              product_quantity, product_expiry_date, product_price)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+            [
+              updated_by,
+              current.product_image,
+              current.product_name,
+              quantity,
+              newExpiry,
+              product_price,
+            ],
+          );
+          result = res.rows[0];
+        }
+      }
+
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.log("Error on Model addQuantity function");
       throw error;
     } finally {
       client.release();

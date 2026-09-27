@@ -163,6 +163,11 @@ const router =
               import("./pages/ServerSide/Inventory/components/DeleteProductModal.jsx"),
           },
           {
+            path: "add-quantity/:product_id",
+            lazy: () =>
+              import("./pages/ServerSide/Inventory/components/AddQuantityModal.jsx"),
+          },
+          {
             path: "add-product",
             lazy: () =>
               import("./pages/ServerSide/Inventory/components/AddProductModal.jsx"),
