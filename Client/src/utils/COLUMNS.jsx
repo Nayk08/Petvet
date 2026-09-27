@@ -90,8 +90,34 @@ export const usersLevelColumns = [
 ];
 
 export const InventoryColumns = [
-  { key: "product_id", label: "PRODUCT ID" },
-  { key: "product_name", label: "PRODUCT NAME" },
+  {
+    key: "product_id",
+    label: "PRODUCT ID",
+    render: (value, row) =>
+      row.batch_count > 1 ? (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          {row.batch_count} batches
+        </span>
+      ) : (
+        <span className="font-mono text-xs text-slate-500 font-semibold dark:text-slate-400">
+          {value}
+        </span>
+      ),
+  },
+  {
+    key: "product_name",
+    label: "PRODUCT NAME",
+    render: (value, row) => (
+      <span className="inline-flex items-center gap-2">
+        <span>{value}</span>
+        {row.batch_count > 1 && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap">
+            ×{row.batch_count} batches
+          </span>
+        )}
+      </span>
+    ),
+  },
   {
     key: "product_image",
     label: "PRODUCT IMAGE",
@@ -112,14 +138,22 @@ export const InventoryColumns = [
   {
     key: "product_price",
     label: "PRODUCT PRICE",
-    render: (value) =>
-      value != null ? (
+    render: (value, row) => {
+      const min = row.min_price ?? value;
+      const max = row.max_price ?? value;
+      if (min == null) {
+        return <span className="text-slate-400 dark:text-slate-500">—</span>;
+      }
+      const fmt = (n) =>
+        Number(n).toLocaleString("en-US", { minimumFractionDigits: 2 });
+      return (
         <span className="font-medium text-slate-900 dark:text-slate-100">
-          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          {Number(min) === Number(max)
+            ? `₱${fmt(min)}`
+            : `₱${fmt(min)} – ₱${fmt(max)}`}
         </span>
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
-      ),
+      );
+    },
   },
   {
     key: "status_name",

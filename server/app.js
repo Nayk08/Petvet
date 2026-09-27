@@ -9,7 +9,10 @@ import pool from "./src/config/db.js";
 import { generateCsrfToken } from "./src/config/csrf.js";
 import isAuth from "./src/middleware/is-auth.js";
 import { doubleCsrfProtection } from "./src/config/csrf.js";
-import authLimiter from "./src/middleware/rate-Limiter.js";
+import authLimiter, {
+  apiLimiter,
+  csrfLimiter,
+} from "./src/middleware/rate-Limiter.js";
 
 import commonRoutes from "./src/features/Common/Common_Route.js";
 import userRoutes from "./src/features/Authenticator/Users_Management/Users/Users_Route.js";
@@ -44,6 +47,10 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Before the session store on purpose: a flooded request should be rejected
+// here, not after it has already cost a Postgres session lookup.
+app.use("/api", apiLimiter);
+
 // --- Session ---
 app.use(
   session({
@@ -67,7 +74,7 @@ app.use(
 app.use(cookieParser());
 
 // --- CSRF token endpoint (frontend calls this once to get a token) ---
-app.get("/api/csrf-token", (req, res) => {
+app.get("/api/csrf-token", csrfLimiter, (req, res) => {
   req.session.csrfInit = true; // forces the session to be saved/persisted
   const token = generateCsrfToken(req, res);
   res.status(200).json({ csrfToken: token });

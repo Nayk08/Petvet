@@ -3,13 +3,14 @@ import InventoryModel from "./Inventory_model.js";
 const inventoryModel = new InventoryModel();
 
 export default class InventoryService {
-  async getProducts({ page, limit, search, filters } = {}) {
+  async getProducts({ page, limit, search, filters, grouped } = {}) {
     try {
       return await inventoryModel.getProducts({
         page,
         limit,
         search,
         filters,
+        grouped,
       });
     } catch (error) {
       console.error("Error in InventoryService", error);
@@ -20,6 +21,15 @@ export default class InventoryService {
   async getProductsById(product_id) {
     try {
       return await inventoryModel.getProductsById(product_id);
+    } catch (error) {
+      console.error("Error in InventoryService", error);
+      throw error;
+    }
+  }
+
+  async getProductBatches(product_name) {
+    try {
+      return await inventoryModel.getProductBatches(product_name);
     } catch (error) {
       console.error("Error in InventoryService", error);
       throw error;
@@ -83,6 +93,15 @@ export default class InventoryService {
         deleted_by,
       });
       return deleteProductById;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async pullExpiredProducts({ deleted_by }) {
+    try {
+      return await inventoryModel.pullExpiredProducts({ deleted_by });
     } catch (error) {
       console.error(error);
       throw error;

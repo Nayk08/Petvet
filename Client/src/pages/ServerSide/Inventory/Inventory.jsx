@@ -8,6 +8,8 @@ import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
+import BatchesModal from "./components/BatchesModal.jsx";
+import { Layers } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 
@@ -23,6 +25,7 @@ export default function Inventory() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
   const debouncedSearch = useDebouncedValue(search, 400);
+  const [batchesFor, setBatchesFor] = useState(null);
 
   useEffect(() => {
     setPage(1);
@@ -32,7 +35,14 @@ export default function Inventory() {
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["inventory", page, limit, debouncedSearch, filters],
     queryFn: ({ signal }) =>
-      fetchInventory({ page, limit, search: debouncedSearch, filters, signal }),
+      fetchInventory({
+        page,
+        limit,
+        search: debouncedSearch,
+        filters,
+        grouped: true,
+        signal,
+      }),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
@@ -72,6 +82,22 @@ export default function Inventory() {
             buttonLink="add-product"
             onEdit={(row) => navigate(`edit-product/${row.product_id}`)}
             onDelete={(row) => navigate(`delete-product/${row.product_id}`)}
+            // A grouped row (same product name, different batch) has no
+            // single product_id to edit/delete directly — send those
+            // through the batches modal instead, where each batch is its
+            // own row with its own edit/delete.
+            canEdit={(row) => row.batch_count === 1}
+            canDelete={(row) => row.batch_count === 1}
+            actions={[
+              {
+                label: "View Batches",
+                icon: Layers,
+                className:
+                  "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
+                onClick: (row) => setBatchesFor(row.product_name),
+                show: (row) => row.batch_count > 1,
+              },
+            ]}
             limit={limit}
             search={search}
             onSearchChange={setSearch}
@@ -90,6 +116,12 @@ export default function Inventory() {
             limit={limit === "all" ? data?.pagination?.total : limit}
           />
         </>
+      )}
+      {batchesFor && (
+        <BatchesModal
+          productName={batchesFor}
+          onClose={() => setBatchesFor(null)}
+        />
       )}
       <Outlet />
     </div>

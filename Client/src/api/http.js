@@ -412,6 +412,10 @@ export async function fetchInventory({
   limit = 10,
   search = "",
   filters = {},
+  // Off by default so every existing caller (Cart/checkout) keeps getting
+  // flat, individual batch rows exactly as before. Only the admin
+  // Inventory list opts into the grouped-by-name view.
+  grouped = false,
   signal,
 }) {
   const effectiveLimit = limit === "all" ? 999999 : limit;
@@ -421,6 +425,7 @@ export async function fetchInventory({
     page: effectivePage,
     limit: effectiveLimit,
     ...(search && { search }),
+    ...(grouped && { grouped: "true" }),
   });
 
   Object.entries(filters).forEach(([key, value]) => {
@@ -444,6 +449,16 @@ export async function fetchInventoryById({ product_id, signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch inventory");
+}
+
+// The individual batches (own quantity/expiry/price) grouped under one
+// product name in the main inventory list.
+export async function fetchProductBatches({ product_name, signal } = {}) {
+  const response = await fetch(
+    `${baseUrl}/inventory/batches/${encodeURIComponent(product_name)}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch product batches");
 }
 
 export async function addProduct(formData) {
@@ -476,6 +491,17 @@ export async function deleteProduct(id) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to delete product");
+}
+
+// Bulk-removes every already-expired product batch in one call.
+export async function pullExpiredProducts() {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/inventory/pull-expired`, {
+    method: "DELETE",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to remove expired products");
 }
 
 // ─────────────────────────────

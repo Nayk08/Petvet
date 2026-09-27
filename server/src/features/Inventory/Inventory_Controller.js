@@ -5,7 +5,8 @@ const inventoryService = new InventoryService();
 export default class InventoryController {
   async getProducts(req, res) {
     try {
-      const { page, limit, search, status_name, is_expired } = req.query;
+      const { page, limit, search, status_name, is_expired, grouped } =
+        req.query;
       const filters = { status_name, is_expired };
 
       const { rows, pagination } = await inventoryService.getProducts({
@@ -13,6 +14,7 @@ export default class InventoryController {
         limit,
         search,
         filters,
+        grouped: grouped === "true",
       });
       return res.status(200).json({ rows, pagination });
     } catch (error) {
@@ -29,6 +31,19 @@ export default class InventoryController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Failed to fetch inventory." });
+    }
+  }
+
+  async getProductBatches(req, res) {
+    try {
+      const { product_name } = req.params;
+      const batches = await inventoryService.getProductBatches(product_name);
+      return res.status(200).json(batches);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ message: "Failed to fetch product batches." });
     }
   }
 
@@ -96,6 +111,20 @@ export default class InventoryController {
       return res
         .status(status)
         .json({ message: error.message || "Something went wrong" });
+    }
+  }
+
+  async pullExpiredProducts(req, res) {
+    try {
+      const removed = await inventoryService.pullExpiredProducts({
+        deleted_by: req.session.user.name,
+      });
+      return res.status(200).json({ removed });
+    } catch (error) {
+      const status = error.status || 500;
+      return res
+        .status(status)
+        .json({ message: error.message || "Failed to remove expired products" });
     }
   }
 }

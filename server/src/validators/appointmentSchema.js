@@ -129,7 +129,17 @@ export const bookAppointmentWithPaymentSchema = z
     payment_method: z.enum(["Cash", "GCash", "Split"], {
       errorMap: () => ({ message: "Invalid payment method" }),
     }),
-    gcash_reference_number: z.string().trim().max(50).optional().or(z.literal("")),
+    // Cash payments don't render a reference-number field at all, so the
+    // client submits it as JSON `null` rather than omitting the key —
+    // .optional() alone only tolerates the key being absent (undefined),
+    // not an explicit null, so it must be accepted here too.
+    gcash_reference_number: z
+      .string()
+      .trim()
+      .max(50)
+      .nullable()
+      .optional()
+      .or(z.literal("")),
     cash_received: z.coerce.number().min(0).optional(),
     gcash_received: z.coerce.number().min(0).optional(),
   })
@@ -142,7 +152,15 @@ export const completeAppointmentPaymentSchema = z
     payment_method: z.enum(["Cash", "GCash", "Split"], {
       errorMap: () => ({ message: "Invalid payment method" }),
     }),
-    gcash_reference_number: z.string().trim().max(50).optional().or(z.literal("")),
+    // See bookAppointmentWithPaymentSchema above for why .nullable() is
+    // needed here too.
+    gcash_reference_number: z
+      .string()
+      .trim()
+      .max(50)
+      .nullable()
+      .optional()
+      .or(z.literal("")),
     cash_received: z.coerce.number().min(0).optional(),
     gcash_received: z.coerce.number().min(0).optional(),
   })

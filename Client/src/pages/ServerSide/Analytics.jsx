@@ -1,6 +1,17 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Trash2, XCircle, CheckCircle2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button.jsx";
 import {
   fetchRevenueTrend,
   fetchAppointmentsBreakdown,
@@ -8,6 +19,7 @@ import {
   fetchClientGrowth,
   fetchProductMovers,
   fetchCriticalStock,
+  pullExpiredProducts,
   queryClient,
 } from "@/api/http.js";
 
@@ -551,6 +563,43 @@ export function Component() {
     queryFn: ({ signal }) => fetchCriticalStock({ signal }),
   });
 
+  const expiredCount =
+    criticalStockQuery.data?.filter((p) => p.is_expired).length ?? 0;
+
+  const rqClient = useQueryClient();
+  const [showPullExpired, setShowPullExpired] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+
+  async function handlePullExpired() {
+    setIsPulling(true);
+    try {
+      const { removed } = await pullExpiredProducts();
+      await rqClient.invalidateQueries({ queryKey: ["AnalyticsCriticalStock"] });
+      await rqClient.invalidateQueries({ queryKey: ["inventory"] });
+      await rqClient.invalidateQueries({ queryKey: ["inventory-batches"] });
+      setShowPullExpired(false);
+      toast.success("Expired products removed", {
+        className:
+          "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-500 flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: `${removed.length} expired product${removed.length === 1 ? "" : "s"} removed from inventory.`,
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 2500,
+        icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
+      });
+    } catch (err) {
+      toast.error("Failed to remove expired products", {
+        className:
+          "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: err.message || "Something went wrong.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 2500,
+        icon: <XCircle className="h-5 w-5 text-destructive" />,
+      });
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
   return (
     <div className="w-full space-y-6 py-8">
       <style>{`
@@ -748,12 +797,25 @@ export function Component() {
               within 5 months
             </p>
           </div>
-          <Link
-            to="/inventory"
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
-          >
-            View Inventory →
-          </Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={expiredCount === 0}
+              onClick={() => setShowPullExpired(true)}
+              className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 disabled:text-slate-400 disabled:border-slate-200 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/40 dark:disabled:text-slate-600 dark:disabled:border-slate-800"
+            >
+              <Trash2 size={14} />
+              <span>Remove Expired{expiredCount > 0 ? ` (${expiredCount})` : ""}</span>
+            </Button>
+            <Link
+              to="/inventory"
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
+            >
+              View Inventory →
+            </Link>
+          </div>
         </div>
 
         <div className="mt-4">
@@ -811,6 +873,45 @@ export function Component() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={showPullExpired}
+        onOpenChange={(isOpen) => !isOpen && !isPulling && setShowPullExpired(false)}
+      >
+        <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-sm shadow-xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-slate-950 dark:text-slate-50">
+              Remove expired products?
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
+              This removes {expiredCount} expired product
+              {expiredCount === 1 ? "" : "s"} from inventory — items that are
+              only low/out of stock or expiring soon are left alone. This
+              can't be undone from here.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
+            {!isPulling && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowPullExpired(false)}
+                className="text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isPulling}
+              onClick={handlePullExpired}
+            >
+              {isPulling ? "Removing..." : "Yes, remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

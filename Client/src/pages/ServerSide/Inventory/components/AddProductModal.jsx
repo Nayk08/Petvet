@@ -293,6 +293,9 @@ export async function action({ request, params }) {
   }
 
   await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+  // Broad prefix match — covers every product's batch list, not just this
+  // one, since editing can rename a batch out of (or into) any group.
+  await queryClient.invalidateQueries({ queryKey: ["inventory-batches"] });
 
   if (isEditMode) {
     await queryClient.invalidateQueries({

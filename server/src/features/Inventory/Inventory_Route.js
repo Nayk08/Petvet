@@ -21,6 +21,14 @@ router.get("/inventory", hasPermission("INVENTORY", "can_view"), (req, res) =>
   inventoryController.getProducts(req, res),
 );
 
+// Registered before /inventory/:product_id — otherwise Express would try to
+// match "batches" itself as the :product_id param and fail validation.
+router.get(
+  "/inventory/batches/:product_name",
+  hasPermission("INVENTORY", "can_view"),
+  (req, res) => inventoryController.getProductBatches(req, res),
+);
+
 router.get(
   "/inventory/:product_id",
   hasPermission("INVENTORY", "can_view", "can_edit"),
@@ -52,6 +60,14 @@ router.delete(
   hasPermission("INVENTORY", "can_view", "can_delete"),
   validateParams(productIdParamSchema),
   (req, res) => inventoryController.deleteProductById(req, res),
+);
+
+// Bulk-removes every batch already past its expiry date — no :product_id
+// collision since that route only matches GET, not DELETE.
+router.delete(
+  "/inventory/pull-expired",
+  hasPermission("INVENTORY", "can_delete"),
+  (req, res) => inventoryController.pullExpiredProducts(req, res),
 );
 
 export default router;

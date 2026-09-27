@@ -88,7 +88,8 @@ export async function action({ params }) {
   try {
     const productId = params.product_id;
     await deleteProduct(productId);
-    await queryClient.invalidateQueries(["inventoryData"]);
+    await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    await queryClient.invalidateQueries({ queryKey: ["inventory-batches"] });
 
     toast.error("Successfully Deleted", {
       className:
