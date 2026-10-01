@@ -139,6 +139,29 @@ export default class ClientPortalModel {
     }
   }
 
+  // A client adding their own pet has no business picking a clinical
+  // status (Active/Inactive is a staff concept, e.g. "deceased" or
+  // "no longer a patient") — every self-added pet just defaults to
+  // whichever status ISN'T "inactive". Matched by excluding "inactive"
+  // rather than matching "active" directly, since the seed data has a typo
+  // on that row ("Acticve") that a prefix match on "activ%" misses.
+  async getDefaultPetStatusId() {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT pet_status_id FROM tbl_pet_status
+         WHERE pet_status NOT ILIKE 'inactiv%'
+         ORDER BY pet_status_id ASC LIMIT 1`,
+      );
+      return res.rows[0]?.pet_status_id ?? null;
+    } catch (error) {
+      console.log("Error on Model getDefaultPetStatusId function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Powers the booking form's "disable already-booked slots" check. Only
   // returns the minimal fields needed for that (no client_name/pets_name)
   // since these rows may belong to OTHER clients entirely — a client

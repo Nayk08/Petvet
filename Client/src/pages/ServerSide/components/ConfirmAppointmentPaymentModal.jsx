@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Printer } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,6 @@ import {
   useSubmit,
   useNavigation,
   useActionData,
-  redirect,
 } from "react-router-dom";
 import {
   queryClient,
@@ -27,12 +26,15 @@ import {
   selectGroomingPriceTiers,
   applyOptimisticRevenue,
   estimatePaymentSplit,
+  fetchPaymentById,
+  fetchAppointmentById,
 } from "@/api/http";
 import PaymentMethodPicker from "@/components/ui/PaymentMethodPicker.jsx";
 import {
   evaluatePaymentAmount,
   requiresExactAmount,
 } from "@/utils/paymentValidation.js";
+import ReceiptContent from "@/pages/ServerSide/Payment/Components/ReceiptContent.jsx";
 
 function formatDateLabel(dateString) {
   if (!dateString) return "";
@@ -130,6 +132,19 @@ export function Component() {
   const [hasValidPayment, setHasValidPayment] = useState(false);
   const [change, setChange] = useState(0);
 
+  // Set once the action succeeds — holds the view-enriched payment +
+  // appointment (real control_number, joined display fields) so the dialog
+  // can swap from the payment form to a printable receipt in place, instead
+  // of redirecting away immediately with nothing to show for it. Mirrors
+  // CartModal.jsx's completedReceipt pattern.
+  const [completedReceipt, setCompletedReceipt] = useState(null);
+
+  useEffect(() => {
+    if (actionData?.success) {
+      setCompletedReceipt(actionData.receipt);
+    }
+  }, [actionData]);
+
   useEffect(() => {
     const hasAnyInput = isSplit
       ? splitCashReceived !== "" || splitGcashReceived !== ""
@@ -166,6 +181,13 @@ export function Component() {
     navigate(`../add-appointment${location.search}`);
   }
 
+  // Once a receipt is showing, "close" means leaving the flow entirely
+  // (back to the calendar) — reopening the now-stale booking form doesn't
+  // make sense for an appointment that's already paid and booked.
+  function closeAfterReceipt() {
+    navigate(`..${location.search}`);
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
     submit(event.currentTarget, { method: "post" });
@@ -200,8 +222,52 @@ export function Component() {
   }
 
   return (
-    <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
+    <Dialog
+      open
+      onOpenChange={(isOpen) =>
+        !isOpen && (completedReceipt ? closeAfterReceipt() : closeModal())
+      }
+    >
       <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6 transition-colors duration-200">
+        {completedReceipt ? (
+          <>
+            <DialogHeader className="mb-2 print:hidden">
+              <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                Appointment Booked
+              </DialogTitle>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Here's the receipt for this payment.
+              </p>
+            </DialogHeader>
+
+            <div className="max-h-[55vh] overflow-y-auto">
+              <ReceiptContent
+                payment={completedReceipt.payment}
+                appointment={completedReceipt.appointment}
+              />
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 mt-4 print:hidden">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={closeAfterReceipt}
+                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 h-10 rounded-lg"
+              >
+                Done
+              </Button>
+              <Button
+                type="button"
+                onClick={() => window.print()}
+                className="font-medium h-10 px-5 rounded-lg shadow-sm flex items-center gap-1.5"
+              >
+                <Printer size={15} />
+                Print Receipt
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
         <DialogHeader className="mb-2">
           <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
             Confirm Payment
@@ -506,6 +572,8 @@ export function Component() {
             </Button>
           </DialogFooter>
         </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -540,8 +608,9 @@ export async function action({ request }) {
     isAppointment: true,
   });
 
+  let result;
   try {
-    await completeAppointmentPayment(appointment_id, {
+    result = await completeAppointmentPayment(appointment_id, {
       ...(amount ? { amount } : {}),
       payment_method,
       gcash_reference_number,
@@ -585,5 +654,21 @@ export async function action({ request }) {
     icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
   });
 
-  return redirect("../");
+  // Fetched fresh (view-enriched: real control_number, joined client/pet/
+  // service/staff names) rather than reused from `result` directly, which
+  // only carries the raw tbl_payments/tbl_appointments rows — see
+  // CartModal.jsx's identical completedReceipt pattern.
+  let receipt = null;
+  try {
+    const [receiptPayment, receiptAppointment] = await Promise.all([
+      fetchPaymentById(result.payment.payment_id),
+      fetchAppointmentById(appointment_id),
+    ]);
+    receipt = { payment: receiptPayment, appointment: receiptAppointment };
+  } catch {
+    // The booking itself already succeeded above — a failed receipt fetch
+    // just means no receipt view this time, not a failed booking.
+  }
+
+  return { success: true, receipt };
 }

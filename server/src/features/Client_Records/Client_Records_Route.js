@@ -138,6 +138,13 @@ router.put(
   (req, res) => clientRecordsController.deletePet(req, res),
 );
 
+router.get(
+  "/pets/:pets_id/history",
+  hasPermission("C_P_RECORDS", "can_view"),
+  validateParams(petIdParamSchema),
+  (req, res) => clientRecordsController.getPetHistory(req, res),
+);
+
 router.put(
   "/pets/:pets_id/transfer-owner",
   hasPermission("C_P_RECORDS", "can_edit"),

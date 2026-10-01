@@ -280,6 +280,16 @@ export default class ClientRecordsController {
     }
   }
 
+  async getPetHistory(req, res) {
+    try {
+      const { pets_id } = req.params;
+      const history = await clientRecordsService.getPetHistory(pets_id);
+      return res.status(200).json(history);
+    } catch (error) {
+      return sendError(res, error, "Failed to load this pet's history.");
+    }
+  }
+
   async transferPetOwner(req, res) {
     try {
       const { pets_id } = req.params;

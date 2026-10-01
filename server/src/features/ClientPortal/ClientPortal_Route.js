@@ -5,6 +5,7 @@ import authLimiter from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
 import { validateBody } from "../../middleware/validate.js";
 import { clientPortalBookAppointmentSchema } from "../../validators/appointmentSchema.js";
+import { clientPortalAddPetSchema } from "../../validators/petSchema.js";
 import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
@@ -64,6 +65,9 @@ router.get("/clinic-schedule", isClientAuth, (req, res) =>
 router.get("/payments", isClientAuth, (req, res) =>
   clientPortalController.getMyPayments(req, res),
 );
+router.get("/payments/:id/receipt", isClientAuth, (req, res) =>
+  clientPortalController.getMyPaymentReceipt(req, res),
+);
 router.post(
   "/payments/:id/proof",
   isClientAuth,
@@ -76,6 +80,22 @@ router.get("/gcash-qr-code", isClientAuth, (req, res) =>
 );
 router.get("/pets", isClientAuth, (req, res) =>
   clientPortalController.getMyPets(req, res),
+);
+router.post(
+  "/pets",
+  isClientAuth,
+  doubleCsrfProtection,
+  validateBody(clientPortalAddPetSchema),
+  (req, res) => clientPortalController.addMyPet(req, res),
+);
+router.get("/pets/:pets_id/history", isClientAuth, (req, res) =>
+  clientPortalController.getMyPetHistory(req, res),
+);
+router.get("/species", isClientAuth, (req, res) =>
+  clientPortalController.selectSpecies(req, res),
+);
+router.get("/gender", isClientAuth, (req, res) =>
+  clientPortalController.selectGender(req, res),
 );
 router.get("/appointment-services", isClientAuth, (req, res) =>
   clientPortalController.selectAppointmentServices(req, res),

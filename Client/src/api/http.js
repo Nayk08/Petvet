@@ -1068,6 +1068,14 @@ export async function transferPetOwner(pets_id, new_client_id) {
   });
   return handleResponse(response, "Failed to transfer pet ownership");
 }
+
+export async function fetchPetHistory(pets_id, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/pets/${pets_id}/history`, {
+    credentials: "include",
+    signal,
+  });
+  return handleResponse(response, "Failed to load pet history");
+}
 export async function selectSpecies({ signal } = {}) {
   const response = await fetch(`${baseUrl}/species`, {
     signal,

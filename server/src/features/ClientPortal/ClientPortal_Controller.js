@@ -85,6 +85,19 @@ export default class ClientPortalController {
     }
   }
 
+  async getMyPaymentReceipt(req, res) {
+    try {
+      const receipt = await clientPortalService.getMyPaymentReceipt({
+        payment_id: req.params.id,
+        client_id: req.clientUser.client_id,
+      });
+      res.json(receipt);
+    } catch (error) {
+      console.log("Error on Controller getMyPaymentReceipt function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async getMyPets(req, res) {
     try {
       const { page, limit, search } = req.query;
@@ -97,6 +110,53 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getMyPets function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async getMyPetHistory(req, res) {
+    try {
+      const history = await clientPortalService.getMyPetHistory({
+        pets_id: req.params.pets_id,
+        client_id: req.clientUser.client_id,
+      });
+      res.json(history);
+    } catch (error) {
+      console.log("Error on Controller getMyPetHistory function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async addMyPet(req, res) {
+    try {
+      const {
+        pets_name,
+        breed,
+        is_spayed_neutered,
+        date_of_birth,
+        weight_kg,
+        species_id,
+        gender_id,
+        allergies,
+        medical_conditions,
+        temperament,
+      } = req.body;
+      const pet = await clientPortalService.addMyPet({
+        client_id: req.clientUser.client_id,
+        pets_name,
+        breed,
+        is_spayed_neutered,
+        date_of_birth,
+        weight_kg,
+        species_id,
+        gender_id,
+        allergies,
+        medical_conditions,
+        temperament,
+      });
+      res.status(201).json(pet);
+    } catch (error) {
+      console.log("Error on Controller addMyPet function");
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }
@@ -125,6 +185,26 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getStaffBookedSlots function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async selectSpecies(req, res) {
+    try {
+      const species = await clientPortalService.selectSpecies();
+      res.json(species);
+    } catch (error) {
+      console.log("Error on Controller selectSpecies function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async selectGender(req, res) {
+    try {
+      const gender = await clientPortalService.selectGender();
+      res.json(gender);
+    } catch (error) {
+      console.log("Error on Controller selectGender function");
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }

@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { Wallet } from "lucide-react";
+import { Wallet, Receipt } from "lucide-react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { Pagination } from "@/components/ui/Pagination";
 import { PaymentTransactionModalColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
 import { fetchMyPayments } from "@/api/clientPortal.js";
 import PortalPaySubmitModal from "./components/PortalPaySubmitModal.jsx";
+import PortalReceiptModal from "./components/PortalReceiptModal.jsx";
 
 export function Component() {
   const { page, limit, setPage, setLimit } = usePagination({ defaultLimit: 10 });
   const [payingPaymentId, setPayingPaymentId] = useState(null);
+  const [receiptPaymentId, setReceiptPaymentId] = useState(null);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["clientPortal", "payments", page, limit],
@@ -53,6 +55,14 @@ export function Component() {
                 onClick: (row) => setPayingPaymentId(row.payment_id),
                 show: (row) => row.payment_status_name === "Pending",
               },
+              {
+                label: "View Receipt",
+                icon: Receipt,
+                className:
+                  "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40",
+                onClick: (row) => setReceiptPaymentId(row.payment_id),
+                show: (row) => row.payment_status_name === "Completed",
+              },
             ]}
           />
           <Pagination
@@ -70,6 +80,13 @@ export function Component() {
         <PortalPaySubmitModal
           paymentId={payingPaymentId}
           onClose={() => setPayingPaymentId(null)}
+        />
+      )}
+
+      {receiptPaymentId && (
+        <PortalReceiptModal
+          paymentId={receiptPaymentId}
+          onClose={() => setReceiptPaymentId(null)}
         />
       )}
     </div>

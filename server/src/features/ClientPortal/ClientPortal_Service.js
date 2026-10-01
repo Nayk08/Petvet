@@ -86,12 +86,95 @@ export default class ClientPortalService {
     return clientPortalModel.getMyPayments({ client_id, page, limit });
   }
 
+  // Same ownership check as submitPaymentProof — the payment must be
+  // linked to an appointment belonging to the calling client. Bundles the
+  // appointment alongside the payment in one response since ReceiptContent
+  // (shared with the staff side) needs both to render client/pet/service
+  // details, and the client portal has no standalone "get my appointment
+  // by id" endpoint to make a second round trip to.
+  async getMyPaymentReceipt({ payment_id, client_id }) {
+    const payment = await paymentService.getPaymentById(payment_id); // throws 404 if missing
+
+    if (!payment.appointment_id) {
+      const err = new Error("Receipt not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const appointment = await appointmentService.getAppointmentById(
+      payment.appointment_id,
+    );
+    if (String(appointment.client_id) !== String(client_id)) {
+      const err = new Error("You don't have access to this payment.");
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (payment.payment_status_name !== "Completed") {
+      const err = new Error(
+        "A receipt is only available once this payment is completed.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    return { payment, appointment };
+  }
+
   async getMyPets({ client_id, page, limit, search }) {
     return clientRecordsService.getClienPetById({
       client_id,
       page,
       limit,
       search,
+    });
+  }
+
+  async getMyPetHistory({ pets_id, client_id }) {
+    const pet = await clientRecordsService.getPetById(pets_id); // throws if missing
+    if (String(pet.client_id) !== String(client_id)) {
+      const err = new Error("You don't have access to this pet's history.");
+      err.statusCode = 403;
+      throw err;
+    }
+    return appointmentService.getAppointmentHistoryForPet(pets_id);
+  }
+
+  async addMyPet({
+    client_id,
+    pets_name,
+    breed,
+    is_spayed_neutered,
+    date_of_birth,
+    weight_kg,
+    species_id,
+    gender_id,
+    allergies,
+    medical_conditions,
+    temperament,
+  }) {
+    const pet_status_id = await clientPortalModel.getDefaultPetStatusId();
+    if (!pet_status_id) {
+      const err = new Error("Pet status is not configured. Please contact the clinic.");
+      err.statusCode = 500;
+      throw err;
+    }
+
+    return clientRecordsService.addPet({
+      client_id,
+      pets_name,
+      breed,
+      is_spayed_neutered,
+      date_of_birth,
+      weight_kg,
+      pet_status_id,
+      species_id,
+      gender_id,
+      pet_image: null,
+      allergies,
+      medical_conditions,
+      temperament,
+      created_by: "Client Portal",
     });
   }
 
@@ -109,6 +192,14 @@ export default class ClientPortalService {
   // Read-only lookups the booking form needs — same underlying data the
   // staff booking form uses, just re-exposed behind client-portal auth
   // instead of staff RBAC permissions.
+  async selectSpecies() {
+    return clientRecordsService.selectSpecies();
+  }
+
+  async selectGender() {
+    return clientRecordsService.selectGender();
+  }
+
   async selectAppointmentServices() {
     return appointmentService.selectAppointmentServices();
   }
@@ -145,7 +236,7 @@ export default class ClientPortalService {
       throw err;
     }
 
-    return appointmentService.addAppointment({
+    const appointment = await appointmentService.addAppointment({
       client_id,
       pets_id,
       appointment_services_id,
@@ -156,6 +247,17 @@ export default class ClientPortalService {
       notes,
       created_by: "Client Portal",
     });
+
+    // addAppointment creates a Pending payment row as a side effect but
+    // doesn't return it (see Appointment_Model.js) — fetched separately so
+    // the portal can open the GCash payment modal immediately with a real
+    // payment_id, instead of the client having to find it later under
+    // Payment History.
+    const payment = await paymentService.getPaymentByAppointmentId(
+      appointment.appointment_id,
+    );
+
+    return { ...appointment, payment };
   }
 
   // Anyone with a valid client JWT could otherwise submit proof for ANY

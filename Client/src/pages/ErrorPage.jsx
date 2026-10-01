@@ -16,6 +16,11 @@ const errorConfig = {
     message: "You don't have permission to access this page.",
     icon: "🚫",
   },
+  429: {
+    title: "Slow Down",
+    message: "Too many requests in a short time. Please wait a moment and try again.",
+    icon: "⏳",
+  },
   500: {
     title: "Server Error",
     message: "Something went wrong on our end. Please try again later.",
@@ -26,7 +31,11 @@ const errorConfig = {
 export default function ErrorPage() {
   const error = useRouteError();
 
-  const status = error?.status || 500;
+  // Thrown Response objects (React Router's own convention) carry `.status`;
+  // thrown plain Errors from this app's API helpers (see clientPortal.js /
+  // http.js) carry `.code` instead — check both so a 429 surfaces its own
+  // message either way, rather than falling through to the generic 500.
+  const status = error?.status || error?.code || 500;
   const { title, message, icon } = errorConfig[status] || {
     title: "Unexpected Error",
     message: error?.message || "Something went wrong.",

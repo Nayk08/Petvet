@@ -464,6 +464,12 @@ const router =
             lazy: () =>
               import("./pages/ServerSide/Client_Records/Pet_Records/components/TransferPetOwnerModal.jsx"),
           },
+          {
+            path: "pets/:pets_id/history",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/PetHistoryModal.jsx"),
+          },
         ],
       },
 

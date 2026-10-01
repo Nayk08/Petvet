@@ -173,6 +173,16 @@ export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
   return handlePortalResponse(response, "Failed to fetch payment history");
 }
 
+// Returns { payment, appointment } — both needed by the shared
+// ReceiptContent component (see Payment/Components/ReceiptContent.jsx).
+export async function fetchMyPaymentReceipt(paymentId, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/payments/${paymentId}/receipt`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to load receipt");
+}
+
 // formData carries gcash_reference_number + the payment_proof_image file.
 // No Content-Type set — the browser fills in the multipart boundary.
 export async function submitPaymentProof(paymentId, formData) {
@@ -212,6 +222,43 @@ export async function fetchMyPets({
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch pets");
+}
+
+export async function addMyPet(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/pets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handlePortalResponse(response, "Failed to add pet");
+}
+
+// A simple timeline of this pet's past appointments (service, staff, date,
+// status, notes) — not a full EMR, just what's already on file.
+export async function fetchMyPetHistory(petsId, { signal } = {}) {
+  const response = await fetch(`${baseUrl}/pets/${petsId}/history`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to load pet history");
+}
+
+export async function fetchPortalSpecies({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/species`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to fetch species");
+}
+
+export async function fetchPortalGender({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/gender`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to fetch gender options");
 }
 
 // ── Booking form lookups ──────────────────────────────

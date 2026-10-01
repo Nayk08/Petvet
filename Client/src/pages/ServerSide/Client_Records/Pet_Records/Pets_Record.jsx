@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { fetchPetRecordsByClientId } from "@/api/http";
 import { PetRecordsColumns } from "@/utils/COLUMNS";
-import { ArrowLeft, User, PawPrint, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, User, PawPrint, ArrowRightLeft, History } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -89,6 +89,13 @@ export function Component() {
             onEdit={(row) => navigate(`pets/${row.pet_id}/edit-pet`)}
             onDelete={(row) => navigate(`pets/${row.pet_id}/delete-pet`)}
             actions={[
+              {
+                label: "View History",
+                icon: History,
+                className:
+                  "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
+                onClick: (row) => navigate(`pets/${row.pet_id}/history`),
+              },
               {
                 label: "Transfer Owner",
                 icon: ArrowRightLeft,

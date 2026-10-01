@@ -317,6 +317,10 @@ export default class AppointmentService {
     return appointmentModel.getGroomingPriceTiers();
   }
 
+  async getAppointmentHistoryForPet(pets_id) {
+    return appointmentModel.getAppointmentHistoryForPet(pets_id);
+  }
+
   async bookAppointmentWithPayment({
     client_id,
     pets_id,

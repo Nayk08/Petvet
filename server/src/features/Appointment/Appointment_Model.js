@@ -546,6 +546,29 @@ export default class AppointmentModel {
     }
   }
 
+  // Powers "pet medical history" — a simple timeline of this pet's past
+  // visits (service, staff, date, status, notes), shown both to staff (Pet
+  // Records) and the client (their own pet's history). Not a real EMR
+  // (vitals/diagnosis/prescriptions) — deliberately just the appointment
+  // record itself, which is all that exists right now.
+  async getAppointmentHistoryForPet(pets_id) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT * FROM v_appointments
+         WHERE pets_id = $1 AND is_deleted IS NOT TRUE
+         ORDER BY start_time DESC`,
+        [pets_id],
+      );
+      return res.rows;
+    } catch (error) {
+      console.log(`Error on Model getAppointmentHistoryForPet function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getGroomingPriceTiers() {
     const client = await pool.connect();
     try {

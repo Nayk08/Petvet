@@ -12,6 +12,7 @@ import {
   fetchStaffBookedSlots,
   bookMyAppointment,
 } from "@/api/clientPortal.js";
+import PortalPaySubmitModal from "./components/PortalPaySubmitModal.jsx";
 
 const BOOKING_START_HOUR = 9;
 const BOOKING_LAST_START_HOUR = 17;
@@ -64,6 +65,9 @@ export function Component() {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingError, setBookingError] = useState(null);
+  // Set once booking succeeds — opens the GCash payment modal immediately
+  // instead of sending the client to Payment History to find it themselves.
+  const [paymentId, setPaymentId] = useState(null);
 
   const { data: pets, isPending: isPetsPending } = useQuery({
     queryKey: ["clientPortal", "pets", "all"],
@@ -131,7 +135,7 @@ export function Component() {
     setBookingError(null);
     setIsSubmitting(true);
     try {
-      await bookMyAppointment({
+      const result = await bookMyAppointment({
         pets_id: selectedPetId,
         appointment_services_id: selectedServiceId,
         assigned_staff_id: selectedStaffId,
@@ -143,12 +147,25 @@ export function Component() {
       await queryClient.invalidateQueries({
         queryKey: ["clientPortal", "appointments"],
       });
-      navigate("/portal/appointments");
+      // Booking also opens a Pending payment row (see Appointment_Model.js:
+      // addAppointment) — if we got its id back, go straight into the GCash
+      // payment flow instead of leaving the client to find it later under
+      // Payment History.
+      if (result?.payment?.payment_id) {
+        setPaymentId(result.payment.payment_id);
+      } else {
+        navigate("/portal/appointments");
+      }
     } catch (error) {
       setBookingError(error.message || "Failed to book appointment.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function closeAfterPayment() {
+    setPaymentId(null);
+    navigate("/portal/appointments");
   }
 
   return (
@@ -366,6 +383,10 @@ export function Component() {
           </Button>
         </div>
       </form>
+
+      {paymentId && (
+        <PortalPaySubmitModal paymentId={paymentId} onClose={closeAfterPayment} />
+      )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import ClientRecordModel from "./Client_Records_Model.js";
+import AppointmentService from "../Appointment/Appointment_Service.js";
 
 const clientRecordModel = new ClientRecordModel();
+const appointmentService = new AppointmentService();
 export default class ClientRecordsService {
   async getClients({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     try {
@@ -194,6 +196,11 @@ export default class ClientRecordsService {
       console.log("Error in ClientRecordsService getPetById:", error);
       throw error;
     }
+  }
+
+  async getPetHistory(pets_id) {
+    await this.getPetById(pets_id); // throws if the pet doesn't exist
+    return appointmentService.getAppointmentHistoryForPet(pets_id);
   }
 
   async editPet(payload) {

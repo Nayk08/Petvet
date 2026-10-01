@@ -61,6 +61,15 @@ export const editPetSchema = z.object({
   ...medicalNoteFields,
 });
 
+// Client portal's own "add my pet" — same shape as addPetSchema minus
+// pet_status_id, which is a staff/clinical concept (the server always
+// defaults a self-added pet to "active"; see
+// ClientPortal_Model.js:getDefaultPetStatusId) rather than something a
+// client should be picking themselves.
+export const clientPortalAddPetSchema = addPetSchema.omit({
+  pet_status_id: true,
+});
+
 export const transferPetOwnerSchema = z.object({
   new_client_id: z.coerce
     .number({ error: "Please select the new owner" })

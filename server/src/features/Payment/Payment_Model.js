@@ -93,6 +93,28 @@ export default class PaymentModel {
     }
   }
 
+  // Used right after booking (addAppointment creates its own Pending
+  // payment row as a side effect, but doesn't return it — see
+  // Appointment_Model.js:addAppointment) so a caller that needs the
+  // payment_id for that new appointment doesn't have to re-derive it.
+  async getPaymentByAppointmentId(appointment_id) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT * FROM v_payments
+         WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+         ORDER BY payment_id DESC LIMIT 1`,
+        [appointment_id],
+      );
+      return res.rows[0];
+    } catch (error) {
+      console.log("Error on Model getPaymentByAppointmentId function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getCartItemsByPaymentId(payment_id) {
     const client = await pool.connect();
     try {

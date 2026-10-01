@@ -24,6 +24,10 @@ export default class PaymentService {
     return { ...payment, items };
   }
 
+  async getPaymentByAppointmentId(appointment_id) {
+    return paymentModel.getPaymentByAppointmentId(appointment_id);
+  }
+
   async getPaymentStatusId(status_name) {
     const statusId = await paymentModel.getPaymentStatusId(status_name);
     return statusId;
