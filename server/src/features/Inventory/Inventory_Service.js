@@ -43,6 +43,7 @@ export default class InventoryService {
     product_quantity,
     product_expiry_date,
     product_price,
+    category_id,
   }) {
     try {
       const newProduct = await inventoryModel.addProduct({
@@ -52,6 +53,7 @@ export default class InventoryService {
         product_quantity,
         product_expiry_date,
         product_price,
+        category_id,
       });
       return newProduct;
     } catch (error) {
@@ -68,6 +70,7 @@ export default class InventoryService {
     product_expiry_date,
     product_price,
     product_id,
+    category_id,
   }) {
     try {
       const updateProduct = await inventoryModel.updateProduct({
@@ -78,8 +81,30 @@ export default class InventoryService {
         product_expiry_date,
         product_price,
         product_id,
+        category_id,
       });
       return updateProduct;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async getProductCategories() {
+    try {
+      return await inventoryModel.getProductCategories();
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async addProductCategory({ category_name, created_by }) {
+    try {
+      return await inventoryModel.addProductCategory({
+        category_name,
+        created_by,
+      });
     } catch (error) {
       console.error(error);
       throw error;
@@ -101,6 +126,33 @@ export default class InventoryService {
         product_expiry_date,
         updated_by,
       });
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async getArchivedProducts({ page, limit, search } = {}) {
+    try {
+      return await inventoryModel.getArchivedProducts({ page, limit, search });
+    } catch (error) {
+      console.error("Error in InventoryService", error);
+      throw error;
+    }
+  }
+
+  async restoreProduct({ product_id, updated_by }) {
+    try {
+      return await inventoryModel.restoreProduct({ product_id, updated_by });
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async permanentlyDeleteProduct({ product_id }) {
+    try {
+      return await inventoryModel.permanentlyDeleteProduct({ product_id });
     } catch (error) {
       console.error(error);
       throw error;

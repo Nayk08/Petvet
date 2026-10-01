@@ -26,6 +26,7 @@ import AppointmentRoute from "./src/features/Appointment/Appointment_Route.js";
 import DashboardRoute from "./src/features/Dashboard/Dashboard_Route.js";
 import AnalyticsRoute from "./src/features/Analytics/Analytics_Route.js";
 import ClientPortalRoute from "./src/features/ClientPortal/ClientPortal_Route.js";
+import MaintenanceRoute from "./src/features/Maintenance/Maintenance_Route.js";
 
 const app = express();
 const PgSession = connectPgSimple(session);
@@ -111,6 +112,7 @@ app.use("/api", isAuth, doubleCsrfProtection, ClientRecordsRoute);
 app.use("/api", isAuth, doubleCsrfProtection, AppointmentRoute);
 app.use("/api", isAuth, doubleCsrfProtection, DashboardRoute);
 app.use("/api", isAuth, doubleCsrfProtection, AnalyticsRoute);
+app.use("/api", isAuth, doubleCsrfProtection, MaintenanceRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {
@@ -120,6 +122,13 @@ app.use((req, res) => {
 // --- Centralized error handler (must be last) ---
 app.use((err, req, res, next) => {
   console.error(err);
+
+  if (err.code === "EBADCSRFTOKEN") {
+    return res.status(403).json({
+      message: "Your session has expired. Please refresh the page and try again.",
+    });
+  }
+
   const status = err.statusCode || err.status || 500;
   const message = status < 500 ? err.message : "Something went wrong";
   res.status(status).json({ message });

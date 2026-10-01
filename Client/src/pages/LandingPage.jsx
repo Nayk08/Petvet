@@ -20,9 +20,13 @@ import {
   Maximize2,
   Sun,
   Moon,
+  ChevronLeft,
+  ChevronRight,
+  CalendarClock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
+import { fetchPublicClinicSchedule } from "@/api/clientPortal.js";
 
 import petvetA1 from "../assets/petVet/petvet-img.jpg";
 import petvetA2 from "../assets/petVet/petvet-img2.jpg";
@@ -103,6 +107,12 @@ export default function LandingPage() {
               Services & Hours
             </a>
             <a
+              href="#calendar"
+              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Live Calendar
+            </a>
+            <a
               href="#announcements"
               className="hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
@@ -170,7 +180,7 @@ export default function LandingPage() {
               className="h-12 px-6 text-base gap-2 bg-green-600 hover:bg-green-700 text-white"
               asChild
             >
-              <Link to="/register">
+              <Link to="/login">
                 Book An Appointment <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -289,6 +299,29 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </section>
+
+        <hr className="border-zinc-200 dark:border-zinc-800" />
+
+        {/* Live Calendar Section */}
+        <section
+          id="calendar"
+          className="container px-4 md:px-6 py-20 max-w-4xl mx-auto"
+        >
+          <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-10">
+            <div className="p-2 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 mb-3">
+              <CalendarClock className="h-6 w-6" />
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
+              Live Clinic Calendar
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400 mt-2">
+              See how busy we are before you visit — this updates in real
+              time as appointments get booked. Sign in to reserve an open
+              slot for yourself.
+            </p>
+          </div>
+          <LiveCalendar />
         </section>
 
         <hr className="border-zinc-200 dark:border-zinc-800" />
@@ -468,6 +501,217 @@ export default function LandingPage() {
 }
 
 // Sub-components
+
+function toDateString(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Bucketed rather than an exact "X of N slots" count — the schedule spans
+// every staff member at once, so a raw appointment count isn't a slot
+// fraction of any one person's day; this is a rough at-a-glance signal for
+// visitors deciding when to visit or book, not a precise capacity meter.
+function busyLevel(count) {
+  if (count === 0) return { label: "Open", dot: "bg-green-500", text: "text-green-600 dark:text-green-400" };
+  if (count <= 3) return { label: "Some bookings", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" };
+  return { label: "Busy", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" };
+}
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function LiveCalendar() {
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
+  const [schedule, setSchedule] = useState([]);
+  const [isPending, setIsPending] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const viewedMonth = new Date();
+  viewedMonth.setDate(1);
+  viewedMonth.setMonth(viewedMonth.getMonth() + monthOffset);
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+
+    setIsPending(true);
+    setError(null);
+    setSelectedDate(null);
+    fetchPublicClinicSchedule({
+      start_date: toDateString(start),
+      end_date: toDateString(end),
+      signal: controller.signal,
+    })
+      .then((rows) => setSchedule(rows))
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => setIsPending(false));
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset]);
+
+  const byDate = schedule.reduce((acc, row) => {
+    (acc[row.appointment_date] ??= []).push(row);
+    return acc;
+  }, {});
+
+  const todayStr = toDateString(new Date());
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const selectedRows = selectedDate ? byDate[selectedDate] ?? [] : [];
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          type="button"
+          onClick={() => setMonthOffset((o) => Math.max(0, o - 1))}
+          disabled={monthOffset === 0}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          aria-label="Previous month"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <h3 className="font-bold text-zinc-900 dark:text-white">
+          {viewedMonth.toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+          })}
+        </h3>
+        <button
+          type="button"
+          onClick={() => setMonthOffset((o) => o + 1)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          aria-label="Next month"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isPending ? (
+        <div className="h-64 flex items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
+          Loading calendar...
+        </div>
+      ) : error ? (
+        <div className="h-64 flex items-center justify-center text-sm text-rose-500 dark:text-rose-400">
+          {error}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-1.5 text-center">
+            {WEEKDAY_LABELS.map((label) => (
+              <div
+                key={label}
+                className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 pb-1"
+              >
+                {label}
+              </div>
+            ))}
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`blank-${i}`} />;
+              const dateStr = toDateString(new Date(year, month, day));
+              const isPast = dateStr < todayStr;
+              const count = byDate[dateStr]?.length ?? 0;
+              const level = busyLevel(count);
+              const isSelected = selectedDate === dateStr;
+
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => setSelectedDate(dateStr)}
+                  className={`aspect-square rounded-lg border flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${
+                    isPast
+                      ? "border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-default"
+                      : isSelected
+                        ? "border-green-500 bg-green-500/10 text-zinc-900 dark:text-white cursor-pointer"
+                        : "border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 text-zinc-800 dark:text-zinc-100 hover:border-green-500 hover:bg-green-500/5 cursor-pointer"
+                  }`}
+                >
+                  <span className="font-semibold">{day}</span>
+                  {!isPast && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${level.dot}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-5 mt-5 text-xs text-zinc-500 dark:text-zinc-400">
+            {["Open", "Some bookings", "Busy"].map((label) => {
+              const level = busyLevel(label === "Open" ? 0 : label === "Busy" ? 99 : 1);
+              return (
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${level.dot}`} />
+                  {label}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selected day detail */}
+          {selectedDate && (
+            <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0e1121] p-4">
+              <h4 className="font-bold text-sm text-zinc-900 dark:text-white mb-2">
+                {new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
+                  "en-US",
+                  { weekday: "long", month: "long", day: "numeric" },
+                )}
+              </h4>
+              {selectedRows.length === 0 ? (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  No appointments booked yet — wide open.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {selectedRows
+                    .slice()
+                    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+                    .map((row, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between text-sm text-zinc-700 dark:text-zinc-300"
+                      >
+                        <span>
+                          {new Date(row.start_time.replace(" ", "T")).toLocaleTimeString(
+                            "en-US",
+                            { hour: "numeric", minute: "2-digit" },
+                          )}
+                        </span>
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {row.service_name}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+              <Button
+                size="sm"
+                className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
+                asChild
+              >
+                <Link to="/login">Sign in to book this day</Link>
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function FeatureCard({ icon, title, description }) {
   return (
     <Card className="bg-zinc-50 dark:bg-[#0e1121] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white">

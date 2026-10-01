@@ -20,6 +20,7 @@ import {
   editPetSchema,
   petIdParamSchema,
   petImageSchema,
+  transferPetOwnerSchema,
 } from "../../validators/petSchema.js";
 
 const router = express.Router();
@@ -27,6 +28,28 @@ const clientRecordsController = new ClientRecordsController();
 
 router.get("/client", hasPermission("C_P_RECORDS", "can_view"), (req, res) =>
   clientRecordsController.getClients(req, res),
+);
+
+// Registered before /client/:client_id — otherwise Express would try to
+// match "archived" itself as the :client_id param and fail validation.
+router.get(
+  "/client/archived",
+  hasPermission("C_P_RECORDS", "can_view"),
+  (req, res) => clientRecordsController.getArchivedClients(req, res),
+);
+
+router.put(
+  "/client/:client_id/restore",
+  hasPermission("C_P_RECORDS", "can_delete"),
+  validateParams(clientIdParamSchema),
+  (req, res) => clientRecordsController.restoreClient(req, res),
+);
+
+router.delete(
+  "/client/:client_id/permanent",
+  hasPermission("C_P_RECORDS", "can_delete"),
+  validateParams(clientIdParamSchema),
+  (req, res) => clientRecordsController.permanentlyDeleteClient(req, res),
 );
 
 router.get(
@@ -113,6 +136,14 @@ router.put(
   hasPermission("C_P_RECORDS", "can_delete"),
   validateParams(petIdParamSchema),
   (req, res) => clientRecordsController.deletePet(req, res),
+);
+
+router.put(
+  "/pets/:pets_id/transfer-owner",
+  hasPermission("C_P_RECORDS", "can_edit"),
+  validateParams(petIdParamSchema),
+  validateBody(transferPetOwnerSchema),
+  (req, res) => clientRecordsController.transferPetOwner(req, res),
 );
 
 export default router;

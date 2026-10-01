@@ -19,6 +19,10 @@ const StatusBadge = ({ label, variant = "default" }) => {
       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
     cancelled:
       "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+    no_show:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+    refund:
+      "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800",
     default:
       "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
   };
@@ -67,6 +71,29 @@ export const usersColumns = [
   },
 ];
 
+// Archive tab — deliberately lighter than usersColumns: is_active reflects
+// the joined role's status, not the archived user's own, so showing it here
+// would misleadingly read as "Active"/"Inactive" for a soft-deleted account.
+export const ArchivedUsersColumns = [
+  { key: "user_name", label: "NAME" },
+  { key: "user_email", label: "EMAIL" },
+  { key: "user_level", label: "ROLE" },
+  {
+    key: "deleted_by",
+    label: "ARCHIVED BY",
+    render: (value) => value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+  },
+  {
+    key: "date_updated",
+    label: "DATE ARCHIVED",
+    render: (value) => (
+      <span className="text-slate-700 dark:text-slate-300">
+        {formatDate(value)}
+      </span>
+    ),
+  },
+];
+
 export const usersLevelColumns = [
   { key: "user_level", label: "ROLE" },
   { key: "description", label: "DESCRIPTION" },
@@ -89,7 +116,11 @@ export const usersLevelColumns = [
   },
 ];
 
-export const InventoryColumns = [
+// A function rather than a plain array — categories are user-created at
+// runtime, so the "Category" filter's options can't be a fixed list like
+// status_name's; the caller fetches categories and passes them in.
+export function getInventoryColumns(categories = []) {
+  return [
   {
     key: "product_id",
     label: "PRODUCT ID",
@@ -156,6 +187,25 @@ export const InventoryColumns = [
     },
   },
   {
+    key: "category_name",
+    label: "Category",
+    filterOptions: categories.map((c) => ({
+      key: c.category_id,
+      value: c.category_name,
+      label: c.category_name,
+    })),
+    render: (value) =>
+      value ? (
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 whitespace-nowrap">
+          {value}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          Uncategorized
+        </span>
+      ),
+  },
+  {
     key: "status_name",
     label: "Status",
     multiSelect: true,
@@ -197,7 +247,48 @@ export const InventoryColumns = [
       );
     },
   },
-];
+  {
+    key: "expiring_soon",
+    label: "Expiring Soon",
+    filterOptions: [
+      { key: "expiring_soon", value: "true", label: "Expiring Soon" },
+      { key: "not_expiring_soon", value: "false", label: "Not Expiring Soon" },
+    ],
+    // Only ever true for a batch that ISN'T already expired (within 5
+    // months of its expiry date) — a product that's already expired shows
+    // that via the Expired column instead, not both at once.
+    render: (value) => {
+      const isExpiringSoon = value === true || value === "true";
+      return isExpiringSoon ? (
+        <StatusBadge label="Expiring Soon" variant="average" />
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      );
+    },
+  },
+  ];
+}
+
+// Archive tab — the same product columns plus who archived it and when.
+export function getArchivedInventoryColumns(categories = []) {
+  return [
+    ...getInventoryColumns(categories),
+    {
+      key: "deleted_by",
+      label: "ARCHIVED BY",
+      render: (value) => value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+    },
+    {
+      key: "date_updated",
+      label: "DATE ARCHIVED",
+      render: (value) => (
+        <span className="text-slate-700 dark:text-slate-300">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+  ];
+}
 
 export const PaymentColumns = [
   {
@@ -266,6 +357,7 @@ export const PaymentColumns = [
       },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+      { key: "refund_needed", value: "Refund Needed", label: "Refund Needed" },
     ],
     render: (value) => {
       const variantMap = {
@@ -273,6 +365,7 @@ export const PaymentColumns = [
         "Awaiting Verification": "awaiting",
         Completed: "completed",
         Cancelled: "cancelled",
+        "Refund Needed": "refund",
       };
       return (
         <StatusBadge
@@ -301,6 +394,24 @@ export const ClientRecordsColumns = [
   { key: "name", label: "CLIENT NAME" },
   { key: "mobile_no", label: "CONTACT NUMBER" },
   { key: "email", label: "EMAIL" },
+];
+
+export const ArchivedClientRecordsColumns = [
+  ...ClientRecordsColumns,
+  {
+    key: "deleted_by",
+    label: "ARCHIVED BY",
+    render: (value) => value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+  },
+  {
+    key: "date_updated",
+    label: "DATE ARCHIVED",
+    render: (value) => (
+      <span className="text-slate-700 dark:text-slate-300">
+        {formatDate(value)}
+      </span>
+    ),
+  },
 ];
 
 export const PetRecordsColumns = [
@@ -386,6 +497,7 @@ export const AppointmentColumns = [
       { key: "in_queue", value: "In Queue", label: "In Queue" },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+      { key: "no_show", value: "No Show", label: "No Show" },
     ],
     render: (value) => {
       const variantMap = {
@@ -393,6 +505,7 @@ export const AppointmentColumns = [
         "In Queue": "active",
         Completed: "completed",
         Cancelled: "cancelled",
+        "No Show": "no_show",
       };
       return (
         <StatusBadge
@@ -455,6 +568,7 @@ export const TodayQueueColumns = [
       { key: "in_queue", value: "In Queue", label: "In Queue" },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
+      { key: "no_show", value: "No Show", label: "No Show" },
     ],
     render: (value) => {
       const variantMap = {
@@ -462,6 +576,7 @@ export const TodayQueueColumns = [
         "In Queue": "active",
         Completed: "completed",
         Cancelled: "cancelled",
+        "No Show": "no_show",
       };
       return (
         <StatusBadge
@@ -470,5 +585,139 @@ export const TodayQueueColumns = [
         />
       );
     },
+  },
+];
+
+// ── Maintenance (service catalog) ──────────────────────
+
+export const MaintenanceServiceColumns = [
+  { key: "appointment_services", label: "SERVICE NAME" },
+  {
+    key: "category",
+    label: "CATEGORY",
+    render: (value) =>
+      value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+  },
+  {
+    key: "description",
+    label: "DESCRIPTION",
+    render: (value) => (
+      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 max-w-xs block">
+        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+      </span>
+    ),
+  },
+  {
+    key: "service_price",
+    label: "PRICE",
+    render: (value, row) => {
+      if (value != null) {
+        return (
+          <span className="font-medium text-slate-900 dark:text-slate-100">
+            ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </span>
+        );
+      }
+      // No fixed price — either weight-tier priced (Grooming) or a manual
+      // amount entered at booking time, with an optional configured floor.
+      return row.min_price != null ? (
+        <span className="text-slate-600 dark:text-slate-300">
+          From ₱{Number(row.min_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        </span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          Set at booking
+        </span>
+      );
+    },
+  },
+  {
+    key: "duration_minutes",
+    label: "DURATION",
+    render: (value) =>
+      value ? (
+        <span className="text-slate-700 dark:text-slate-300">{value} min</span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      ),
+  },
+  {
+    key: "allowed_roles",
+    label: "ASSIGNED PERSONNEL",
+    render: (value) =>
+      Array.isArray(value) && value.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {value.map((role) => (
+            <span
+              key={role}
+              className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 whitespace-nowrap"
+            >
+              {role}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          Unassigned
+        </span>
+      ),
+  },
+  {
+    key: "is_active",
+    label: "STATUS",
+    filterOptions: [
+      { key: "active", value: "true", label: "Active" },
+      { key: "inactive", value: "false", label: "Inactive" },
+    ],
+    render: (value) => (
+      <StatusBadge
+        label={value ? "Active" : "Inactive"}
+        variant={value ? "active" : "inactive"}
+      />
+    ),
+  },
+];
+
+export const MaintenanceGroomingTierColumns = [
+  { key: "tier_name", label: "TIER" },
+  {
+    key: "max_weight_kg",
+    label: "MAX WEIGHT",
+    render: (value) =>
+      value != null ? (
+        <span className="text-slate-700 dark:text-slate-300">{value} kg</span>
+      ) : (
+        <span className="text-slate-500 dark:text-slate-400 italic text-xs">
+          No limit
+        </span>
+      ),
+  },
+  {
+    key: "price",
+    label: "PRICE",
+    render: (value) => (
+      <span className="font-medium text-slate-900 dark:text-slate-100">
+        ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+      </span>
+    ),
+  },
+  {
+    key: "duration_minutes",
+    label: "DURATION",
+    render: (value) =>
+      value ? (
+        <span className="text-slate-700 dark:text-slate-300">{value} min</span>
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      ),
+  },
+  {
+    key: "description",
+    label: "DESCRIPTION",
+    render: (value) => (
+      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 max-w-xs block">
+        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
+      </span>
+    ),
   },
 ];

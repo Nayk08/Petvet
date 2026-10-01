@@ -214,6 +214,62 @@ export function Component() {
               />
             </div>
 
+            {/* Address */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="address"
+                className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400"
+              >
+                Address
+              </label>
+              <Input
+                id="address"
+                name="address"
+                placeholder="House/Street, Barangay, City"
+                autoComplete="off"
+                defaultValue={data?.address}
+                className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 h-10 rounded-lg"
+              />
+            </div>
+
+            {/* Emergency Contact */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="emergency_contact_name"
+                  className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400"
+                >
+                  Emergency Contact Name
+                </label>
+                <Input
+                  id="emergency_contact_name"
+                  name="emergency_contact_name"
+                  placeholder="Optional"
+                  autoComplete="off"
+                  defaultValue={data?.emergency_contact_name}
+                  className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="emergency_contact_number"
+                  className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400"
+                >
+                  Emergency Contact No.
+                </label>
+                <Input
+                  id="emergency_contact_number"
+                  name="emergency_contact_number"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="09171234567"
+                  defaultValue={data?.emergency_contact_number}
+                  className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 h-10 rounded-lg"
+                />
+              </div>
+            </div>
+
             {/* Error Message Section */}
             {isActionError && (
               <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border border-red-500/20 dark:border-red-500/30 bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-xs leading-relaxed">

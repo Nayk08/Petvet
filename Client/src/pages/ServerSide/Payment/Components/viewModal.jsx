@@ -127,8 +127,8 @@ export function Component() {
                   </span>
                   <span className="text-2xl font-bold text-slate-950 dark:text-slate-100 tracking-tight">
                     {payment.total_amount
-                      ? `$${payment.total_amount}`
-                      : "$0.00"}
+                      ? `₱${payment.total_amount}`
+                      : "₱0.00"}
                   </span>
                 </div>
 
@@ -185,7 +185,7 @@ export function Component() {
                       label="Cash Portion"
                       value={
                         payment.cash_amount != null
-                          ? `$${payment.cash_amount}`
+                          ? `₱${payment.cash_amount}`
                           : "—"
                       }
                     />
@@ -196,7 +196,7 @@ export function Component() {
                       label="GCash Portion"
                       value={
                         payment.gcash_amount != null
-                          ? `$${payment.gcash_amount}`
+                          ? `₱${payment.gcash_amount}`
                           : "—"
                       }
                     />
@@ -233,7 +233,7 @@ export function Component() {
                           </p>
                         </div>
                         <span className="text-xs font-semibold font-mono text-slate-800 dark:text-slate-200 shrink-0">
-                          ${item.item_price}
+                          ₱{item.item_price}
                         </span>
                       </div>
                     ))}

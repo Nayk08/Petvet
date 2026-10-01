@@ -34,19 +34,26 @@ function toTimestampString(appointment_date, timeStr) {
   return `${dateStr} ${normalizedTime}`;
 }
 
-// Maps the partial-unique-index violation on tbl_appointments to a
-// friendly, user-facing message. Returns the error to throw, or null if
-// this isn't that constraint. (A second index used to also block booking
-// the same SERVICE type twice in one slot regardless of staff — dropped
-// because a clinic can have multiple staff each independently handling,
-// say, a Grooming appointment at 9-10; only double-booking the same
-// PERSON is an actual conflict.)
+// Maps a partial-unique-index violation on tbl_appointments to a friendly,
+// user-facing message. Returns the error to throw, or null if this isn't
+// one of those constraints. Two are enforced: the same STAFF member can't
+// be double-booked into one slot, and the same PET can't be booked into two
+// simultaneous appointments with two different staff — physically
+// impossible even though staff-scoped uniqueness alone wouldn't catch it.
 function mapSlotConflictError(error) {
   if (error.code !== "23505") return null;
 
   if (error.constraint === "uq_appointments_staff_slot") {
     const err = new Error(
       "This staff member is already booked for this date and time slot.",
+    );
+    err.statusCode = 409;
+    return err;
+  }
+
+  if (error.constraint === "uq_appointments_pet_slot") {
+    const err = new Error(
+      "This pet already has another appointment booked at this date and time.",
     );
     err.statusCode = 409;
     return err;
@@ -64,13 +71,13 @@ export default class AppointmentModel {
   // job scheduler. A no-show can still be cancelled after the fact via the
   // Cancel action for as long as it stays Pending/In Queue.
   //
-  // NOTE: NOW() is a TIMESTAMPTZ; end_time is a naive TIMESTAMP now storing
-  // genuine Manila wall-clock values. Comparing them makes Postgres cast
-  // end_time using the session's TimeZone setting — on Render that's likely
-  // UTC, which would make this comparison run 8 hours off from the fixed
-  // display values. Worth revisiting once the display fix is confirmed:
-  // either set the DB/session TimeZone to Asia/Manila, or compare against
-  // an explicit Manila-anchored expression instead of bare NOW().
+  // FIXED: end_time is a naive TIMESTAMP holding genuine Manila wall-clock
+  // values, while NOW() is a TIMESTAMPTZ — comparing them directly made
+  // Postgres cast end_time using the session's TimeZone setting (UTC on
+  // Render), running this up to 8 hours early/late. `NOW() AT TIME ZONE
+  // 'Asia/Manila'` converts the current instant to the equivalent Manila
+  // wall-clock naive timestamp first, so the comparison is correct
+  // regardless of what timezone the DB session itself is set to.
   async autoCompletePastAppointments() {
     const client = await pool.connect();
     try {
@@ -83,7 +90,7 @@ export default class AppointmentModel {
             updated_by = 'System',
             date_updated = NOW()
         WHERE is_deleted IS NOT TRUE
-          AND end_time < NOW()
+          AND end_time < (NOW() AT TIME ZONE 'Asia/Manila')
           AND appointment_status_id IN (
                 SELECT appointment_status_id FROM tbl_appointment_status
                 WHERE LOWER(TRIM(appointment_status_name)) IN ('pending', 'in queue')
@@ -398,9 +405,7 @@ export default class AppointmentModel {
 
       // A cancelled appointment that was never paid shouldn't leave an
       // orphaned Pending payment sitting in the Payment module — cancel it
-      // alongside the appointment. An In Queue appointment's Completed
-      // payment is left untouched; voiding real money is a refund
-      // decision, not an automatic side effect of cancelling.
+      // alongside the appointment.
       await client.query(
         `UPDATE tbl_payments
          SET is_deleted = true,
@@ -416,6 +421,31 @@ export default class AppointmentModel {
            AND payment_status_id = (
              SELECT payment_status_id FROM tbl_payment_status
              WHERE LOWER(TRIM(payment_status_name)) = 'pending'
+           )`,
+        [appointment_id, deleted_by],
+      );
+
+      // FIXED: an In Queue appointment's Completed payment used to be left
+      // untouched on cancel — money already collected for a visit that's
+      // now marked Cancelled, with nothing anywhere flagging it needs to go
+      // back. This doesn't auto-refund (that's a real bank/GCash action a
+      // human has to actually do) — it flips the payment to "Refund Needed"
+      // so it surfaces in the Payment module instead of silently sitting as
+      // "Completed" forever. The row stays (not soft-deleted) so it's still
+      // visible to process.
+      await client.query(
+        `UPDATE tbl_payments
+         SET payment_status_id = (
+               SELECT payment_status_id FROM tbl_payment_status
+               WHERE LOWER(TRIM(payment_status_name)) = 'refund needed'
+             ),
+             updated_by = $2,
+             date_updated = NOW()
+         WHERE appointment_id = $1
+           AND is_deleted IS NOT TRUE
+           AND payment_status_id = (
+             SELECT payment_status_id FROM tbl_payment_status
+             WHERE LOWER(TRIM(payment_status_name)) = 'completed'
            )`,
         [appointment_id, deleted_by],
       );
@@ -478,10 +508,15 @@ export default class AppointmentModel {
     }
   }
 
+  // Only active services — a deactivated one (see Maintenance module) drops
+  // out of the booking dropdown and can't be newly booked, without losing
+  // its data or breaking FK references from past appointments.
   async selectAppointmentServices() {
     const client = await pool.connect();
     try {
-      const res = await client.query(`SELECT * FROM tbl_appointment_services`);
+      const res = await client.query(
+        `SELECT * FROM tbl_appointment_services WHERE is_active = true ORDER BY appointment_services ASC`,
+      );
       return res.rows;
     } catch (error) {
       console.log(
@@ -546,6 +581,8 @@ export default class AppointmentModel {
     gcash_reference_number,
     cash_received,
     gcash_received,
+    additional_fee_label,
+    additional_fee_amount,
     created_by,
   }) {
     const client = await pool.connect();
@@ -594,6 +631,12 @@ export default class AppointmentModel {
         total_amount = amount;
       }
 
+      // An add-on fee (de-matting, handling an aggressive pet, after-hours
+      // service) is layered on top of the service's own price — added here,
+      // after the base price is resolved, so it never affects grooming
+      // weight-tier lookup or the fixed Consultation price above.
+      total_amount = Number(total_amount) + Number(additional_fee_amount || 0);
+
       const { cash_amount, gcash_amount } = resolvePaymentSplit({
         payment_method,
         total_amount,
@@ -638,8 +681,8 @@ export default class AppointmentModel {
 
       const paymentRes = await client.query(
         `INSERT INTO tbl_payments
-          (total_amount, payment_status_id, appointment_id, payment_method, gcash_reference_number, cash_amount, gcash_amount, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          (total_amount, payment_status_id, appointment_id, payment_method, gcash_reference_number, cash_amount, gcash_amount, additional_fee_label, additional_fee_amount, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           total_amount,
@@ -649,6 +692,8 @@ export default class AppointmentModel {
           gcash_reference_number || null,
           cash_amount,
           gcash_amount,
+          additional_fee_label || null,
+          additional_fee_amount || null,
           created_by,
         ],
       );
@@ -682,6 +727,8 @@ export default class AppointmentModel {
     gcash_reference_number,
     cash_received,
     gcash_received,
+    additional_fee_label,
+    additional_fee_amount,
     updated_by,
   }) {
     const client = await pool.connect();
@@ -757,6 +804,8 @@ export default class AppointmentModel {
         total_amount = amount;
       }
 
+      total_amount = Number(total_amount) + Number(additional_fee_amount || 0);
+
       const { cash_amount, gcash_amount } = resolvePaymentSplit({
         payment_method,
         total_amount,
@@ -791,9 +840,11 @@ export default class AppointmentModel {
            gcash_reference_number = $4,
            cash_amount = $5,
            gcash_amount = $6,
-           updated_by = $7,
+           additional_fee_label = $7,
+           additional_fee_amount = $8,
+           updated_by = $9,
            date_updated = NOW()
-         WHERE payment_id = $8
+         WHERE payment_id = $10
          RETURNING *`,
         [
           total_amount,
@@ -802,6 +853,8 @@ export default class AppointmentModel {
           gcash_reference_number || null,
           cash_amount,
           gcash_amount,
+          additional_fee_label || null,
+          additional_fee_amount || null,
           updated_by,
           paymentRow.payment_id,
         ],

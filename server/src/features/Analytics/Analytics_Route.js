@@ -36,6 +36,12 @@ router.get(
 );
 
 router.get(
+  "/analytics/peak-times",
+  hasPermission("ANALYTICS", "can_view"),
+  (req, res) => analyticsController.getPeakTimes(req, res),
+);
+
+router.get(
   "/analytics/critical-stock",
   hasPermission("ANALYTICS", "can_view"),
   (req, res) => analyticsController.getCriticalStock(req, res),

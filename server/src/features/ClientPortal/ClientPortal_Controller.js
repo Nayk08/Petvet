@@ -1,6 +1,18 @@
 import ClientPortalService from "./ClientPortal_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
+import { CLIENT_TOKEN_COOKIE } from "../../middleware/is-client-auth.js";
 
 const clientPortalService = new ClientPortalService();
+
+// Same security properties as the staff session cookie (see app.js) —
+// httpOnly so no script on the page can read it, secure in production,
+// sameSite matching. 7 days to match the JWT's own expiresIn.
+const CLIENT_TOKEN_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  maxAge: 1000 * 60 * 60 * 24 * 7,
+};
 
 export default class ClientPortalController {
   async loginWithGoogle(req, res) {
@@ -9,12 +21,21 @@ export default class ClientPortalController {
       if (!credential) {
         return res.status(400).json({ message: "Missing Google credential" });
       }
-      const result = await clientPortalService.loginWithGoogle(credential);
-      res.json(result);
+      const { token, client } = await clientPortalService.loginWithGoogle(credential);
+      res.cookie(CLIENT_TOKEN_COOKIE, token, CLIENT_TOKEN_COOKIE_OPTIONS);
+      // Deliberately NOT echoing the token back in the body — an httpOnly
+      // cookie the browser stores for us defeats the purpose if the JSON
+      // response then hands the same token to page JS anyway.
+      res.json({ client });
     } catch (error) {
       console.log("Error on Controller loginWithGoogle function");
-      res.status(error.statusCode || 401).json({ message: error.message });
+      sendError(res, error, "Could not sign in with Google. Please try again.");
     }
+  }
+
+  async logout(req, res) {
+    res.clearCookie(CLIENT_TOKEN_COOKIE, CLIENT_TOKEN_COOKIE_OPTIONS);
+    res.json({ message: "Logged out" });
   }
 
   async getMe(req, res) {
@@ -23,7 +44,7 @@ export default class ClientPortalController {
       res.json(client);
     } catch (error) {
       console.log("Error on Controller getMe function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -45,7 +66,7 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getMyAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -60,7 +81,7 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getMyPayments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -76,7 +97,7 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getMyPets function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -90,7 +111,7 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getClinicSchedule function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -104,7 +125,7 @@ export default class ClientPortalController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getStaffBookedSlots function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -114,7 +135,7 @@ export default class ClientPortalController {
       res.json(services);
     } catch (error) {
       console.log("Error on Controller selectAppointmentServices function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -124,7 +145,7 @@ export default class ClientPortalController {
       res.json(staff);
     } catch (error) {
       console.log("Error on Controller selectStaff function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -134,7 +155,7 @@ export default class ClientPortalController {
       res.json(tiers);
     } catch (error) {
       console.log("Error on Controller getGroomingPriceTiers function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -162,7 +183,7 @@ export default class ClientPortalController {
       res.status(201).json(appointment);
     } catch (error) {
       console.log("Error on Controller bookAppointment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -181,7 +202,7 @@ export default class ClientPortalController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller submitPaymentProof function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -191,7 +212,7 @@ export default class ClientPortalController {
       res.json(settings);
     } catch (error) {
       console.log("Error on Controller getGcashQrCode function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 }

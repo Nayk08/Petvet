@@ -2,7 +2,7 @@ import DynamicGrid from "@/components/ui/DynamicGrid";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { FileDown, QrCode, ShieldCheck } from "lucide-react";
+import { FileDown, QrCode, ShieldCheck, Printer } from "lucide-react";
 import {
   fetchPayments,
   fetchRevenueSummary,
@@ -277,6 +277,18 @@ export function Component() {
                     search: window.location.search,
                   }),
                 show: (row) => row.payment_status_name === "Awaiting Verification",
+              },
+              {
+                label: "Print Receipt",
+                icon: Printer,
+                className:
+                  "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40",
+                onClick: (row) =>
+                  navigate({
+                    pathname: `receipt/${row.payment_id}`,
+                    search: window.location.search,
+                  }),
+                show: (row) => row.payment_status_name === "Completed",
               },
             ]}
             limit={limit}

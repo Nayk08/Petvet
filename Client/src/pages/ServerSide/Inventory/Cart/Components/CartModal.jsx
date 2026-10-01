@@ -5,10 +5,10 @@ import {
   useNavigation,
   useActionData,
   useFetcher,
-  redirect,
 } from "react-router-dom";
 import { toast } from "sonner";
-import { Minus, Plus, Trash2, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Minus, Plus, Trash2, ShoppingCart, AlertTriangle, Printer } from "lucide-react";
+import ReceiptContent from "@/pages/ServerSide/Payment/Components/ReceiptContent.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import petVet from "@/assets/petVet/icons8-no-image-80.png";
 import {
@@ -101,6 +101,12 @@ export function Component() {
   // on the shopping grid.
   const [payment, setPayment] = useState(null);
 
+  // Set once "confirm" succeeds — holds the fully-resolved payment (fresh
+  // from the server, with its real control_number and items) so DIALOG 3
+  // can swap from the order-summary form to a printable receipt in place,
+  // instead of redirecting away immediately with nothing to show for it.
+  const [completedReceipt, setCompletedReceipt] = useState(null);
+
   // Checkout / payment state — kept locally only for the live "Change"
   // preview before submitting; the action re-validates authoritatively.
   const [paymentMethod, setPaymentMethod] = useState("Cash");
@@ -123,6 +129,15 @@ export function Component() {
       });
     }
   }, [startFetcher.state, startFetcher.data]);
+
+  // "confirm" succeeded (a real navigation submission, via useSubmit — not
+  // the fetcher above) — swap the checkout dialog over to a receipt instead
+  // of navigating away immediately.
+  useEffect(() => {
+    if (actionData?.success) {
+      setCompletedReceipt(actionData.payment);
+    }
+  }, [actionData]);
 
   const closeModal = () => {
     navigate(`..${location.search}`); // Go back to the main items catalog
@@ -188,15 +203,24 @@ export function Component() {
   };
 
   const handleCheckoutOpenChange = (open) => {
-    setShowCheckout(open);
-    if (!open) {
-      setPaymentMethod("Cash");
-      setAmountPaid("");
-      setSplitCashPaid("");
-      setSplitGcashPaid("");
-      clearCart();
-      setPayment(null);
+    if (open) {
+      setShowCheckout(true);
+      return;
     }
+    // Dismissing (backdrop click / Escape) after a completed order means
+    // "done looking at the receipt" — nothing left to go back to, so leave
+    // the cart screen entirely, same as the old redirect("../") did.
+    if (completedReceipt) {
+      closeModal();
+      return;
+    }
+    setShowCheckout(false);
+    setPaymentMethod("Cash");
+    setAmountPaid("");
+    setSplitCashPaid("");
+    setSplitGcashPaid("");
+    clearCart();
+    setPayment(null);
   };
 
   // Submits the confirm-order form to the route action (intent: "confirm").
@@ -270,7 +294,7 @@ export function Component() {
                         {item.product_name}
                       </p>
                       <p className="text-xs text-cyan-600 dark:text-teal-400 font-bold mt-0.5">
-                        ${estimatedUnitPrice.toFixed(2)}
+                        ₱{estimatedUnitPrice.toFixed(2)}
                       </p>
                       {atMaxStock && (
                         <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
@@ -308,7 +332,7 @@ export function Component() {
 
                     {/* Total per item (estimate) */}
                     <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-slate-100 shrink-0">
-                      ${(estimatedUnitPrice * item.quantity).toFixed(2)}
+                      ₱{(estimatedUnitPrice * item.quantity).toFixed(2)}
                     </span>
 
                     {/* Remove Button */}
@@ -333,7 +357,7 @@ export function Component() {
                 Subtotal (est.)
               </span>
               <span className="text-lg font-bold text-slate-950 dark:text-slate-100">
-                ${estimatedSubtotal.toFixed(2)}
+                ₱{estimatedSubtotal.toFixed(2)}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -424,9 +448,44 @@ export function Component() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG 3: Checkout Modal */}
+      {/* DIALOG 3: Checkout Modal — swaps to a receipt once "confirm" succeeds */}
       <Dialog open={showCheckout} onOpenChange={handleCheckoutOpenChange}>
         <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-md shadow-2xl transition-colors">
+          {completedReceipt ? (
+            <>
+              <DialogHeader className="print:hidden">
+                <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
+                  Order Complete
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 dark:text-slate-400">
+                  Here's the receipt for this order.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="max-h-[55vh] overflow-y-auto">
+                <ReceiptContent payment={completedReceipt} />
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0 mt-4 print:hidden">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeModal}
+                  className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-slate-100"
+                >
+                  Done
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                >
+                  <Printer size={15} />
+                  Print Receipt
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
           <form onSubmit={handleConfirmOrder}>
             <input type="hidden" name="intent" value="confirm" />
             <input type="hidden" name="payment_id" value={payment?.payment_id ?? ""} />
@@ -455,11 +514,11 @@ export function Component() {
                       {item.product_name}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Qty: {item.quantity} × ${Number(item.item_price).toFixed(2)}
+                      Qty: {item.quantity} × ₱{Number(item.item_price).toFixed(2)}
                     </p>
                   </div>
                   <span className="font-medium text-slate-700 dark:text-slate-300 shrink-0">
-                    ${Number(item.subtotal).toFixed(2)}
+                    ₱{Number(item.subtotal).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -468,7 +527,7 @@ export function Component() {
             <div className="flex justify-between items-center font-bold text-base pt-3">
               <span className="text-slate-700 dark:text-slate-300">Total</span>
               <span className="text-cyan-600 dark:text-cyan-400 text-lg">
-                ${authoritativeTotal.toFixed(2)}
+                ₱{authoritativeTotal.toFixed(2)}
               </span>
             </div>
 
@@ -485,7 +544,7 @@ export function Component() {
                   </label>
                   <div className="flex items-center gap-1 w-36">
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
-                      $
+                      ₱
                     </span>
                     <Input
                       id="amount-paid-cash"
@@ -510,7 +569,7 @@ export function Component() {
                   </label>
                   <div className="flex items-center gap-1 w-36">
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
-                      $
+                      ₱
                     </span>
                     <Input
                       id="amount-paid-gcash"
@@ -537,7 +596,7 @@ export function Component() {
                 </label>
                 <div className="flex items-center gap-1 w-36">
                   <span className="text-slate-500 dark:text-slate-400 text-sm">
-                    $
+                    ₱
                   </span>
                   <Input
                     id="amount-paid"
@@ -561,15 +620,15 @@ export function Component() {
                 : amountPaid !== "") && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 text-right pt-1">
                   {requiresExactAmount(paymentMethod)
-                    ? `Amount received must exactly equal $${authoritativeTotal.toFixed(2)} — GCash doesn't give change`
-                    : `Amount received must be at least $${authoritativeTotal.toFixed(2)}`}
+                    ? `Amount received must exactly equal ₱${authoritativeTotal.toFixed(2)} — GCash doesn't give change`
+                    : `Amount received must be at least ₱${authoritativeTotal.toFixed(2)}`}
                 </p>
               )}
 
             <div className="flex justify-between items-center font-bold text-base pt-3">
               <span className="text-slate-700 dark:text-slate-300">Change</span>
               <span className="text-cyan-600 dark:text-cyan-400 text-lg">
-                ${change.toFixed(2)}
+                ₱{change.toFixed(2)}
               </span>
             </div>
 
@@ -599,6 +658,7 @@ export function Component() {
               </Button>
             </DialogFooter>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </>
@@ -669,8 +729,8 @@ export async function action({ request }) {
   if (!isValid) {
     return {
       error: requiresExactAmount(payment_method)
-        ? `Amount received must exactly equal $${total.toFixed(2)} — GCash doesn't give change`
-        : `Amount received must be at least $${total.toFixed(2)}`,
+        ? `Amount received must exactly equal ₱${total.toFixed(2)} — GCash doesn't give change`
+        : `Amount received must be at least ₱${total.toFixed(2)}`,
     };
   }
 
@@ -697,8 +757,20 @@ export async function action({ request }) {
   useCartStore.getState().clearCart();
 
   toast.success("Order placed", {
-    description: `Change due: $${change.toFixed(2)}`,
+    description: `Change due: ₱${change.toFixed(2)}`,
   });
 
-  return redirect("../");
+  // FIXED: used to redirect("../") straight back to the catalog — fetching
+  // the completed payment fresh (now carrying its real control_number and
+  // resolved items) lets the component show a receipt instead of just
+  // bouncing the cashier away with nothing to hand the customer.
+  let receiptPayment = null;
+  try {
+    receiptPayment = await fetchPaymentById(paymentId);
+  } catch {
+    // The order itself already succeeded above — a failed receipt fetch
+    // just means no receipt view this time, not a failed checkout.
+  }
+
+  return { success: true, payment: receiptPayment };
 }

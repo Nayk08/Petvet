@@ -1,4 +1,5 @@
 import AnalyticsService from "./Analytics_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 
 const analyticsService = new AnalyticsService();
 
@@ -13,7 +14,7 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getRevenueTrend function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -27,7 +28,7 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getAppointmentsBreakdown function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -42,7 +43,7 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getTopProducts function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -56,7 +57,7 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getClientGrowth function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -67,7 +68,18 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getProductMovers function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async getPeakTimes(req, res) {
+    try {
+      const { start_date, end_date } = req.query;
+      const result = await analyticsService.getPeakTimes({ start_date, end_date });
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller getPeakTimes function");
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -77,7 +89,7 @@ export default class AnalyticsController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getCriticalStock function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 }

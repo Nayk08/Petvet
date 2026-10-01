@@ -1,15 +1,14 @@
 import { redirect } from "react-router-dom";
-import { getClientToken } from "@/api/clientPortal.js";
+import { fetchMyProfile } from "@/api/clientPortal.js";
 
-// Unlike requireAuth (staff/admin, session-based — needs a round trip to
-// /api/auth/me to know if you're logged in), the client portal's JWT
-// either exists in localStorage or it doesn't; no server round trip is
-// needed just to gate rendering. An expired/invalid token is caught later
-// by the first API call's 401 handling (clientPortal.js), which redirects
-// the same way.
-export function requireClientAuth() {
-  if (!getClientToken()) {
+// The client portal's auth cookie is httpOnly (see is-client-auth.js), so
+// unlike the old localStorage token, there's no way to check client-side
+// whether it's present — this now needs the same kind of round trip
+// requireAuth (staff/admin) already does via /api/auth/me.
+export async function requireClientAuth() {
+  const profile = await fetchMyProfile().catch(() => null);
+  if (!profile) {
     throw redirect("/login");
   }
-  return null;
+  return profile;
 }

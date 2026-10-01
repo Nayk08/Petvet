@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { CheckCircle2 } from "lucide-react";
 import {
   fetchGroomingAppointments,
   selectAppointmentStaff,
   fetchCurrentUser,
+  completeAppointment,
+  invalidateAppointmentQueries,
 } from "@/api/http";
 import { AppointmentColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
@@ -12,13 +16,16 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 
-// Read-only: booking and status changes happen from the general
-// Appointments page (gated under APPOINTMENT, not G_APPOINTMENT).
+// Booking/rescheduling still only happens from the general Appointments
+// page (gated under APPOINTMENT, not G_APPOINTMENT) — but the assigned
+// groomer DOES get one action here: marking their own in-queue appointment
+// done once the job is finished.
 const READ_ONLY_COLUMNS = AppointmentColumns.filter(
   (col) => col.key !== "service_name",
 );
 
 export default function Grooming_Appointment() {
+  const queryClient = useQueryClient();
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
@@ -89,6 +96,20 @@ export default function Grooming_Appointment() {
     gcTime: 1000 * 60 * 10,
   });
 
+  const completeMutation = useMutation({
+    mutationFn: completeAppointment,
+    onSuccess: () => {
+      toast.success("Appointment marked completed");
+      invalidateAppointmentQueries();
+      queryClient.invalidateQueries({ queryKey: ["TodayQueue"] });
+    },
+    onError: (error) => {
+      toast.error("Could not complete appointment", {
+        description: error.message,
+      });
+    },
+  });
+
   return (
     <div className="w-full space-y-4 py-6">
       <QueryState
@@ -104,6 +125,19 @@ export default function Grooming_Appointment() {
             data={data?.rows ?? []}
             columnsConfig={columnsConfig}
             title="Grooming Appointments"
+            actions={[
+              {
+                label: "Mark Completed",
+                icon: CheckCircle2,
+                className:
+                  "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
+                onClick: (row) => completeMutation.mutate(row.appointment_id),
+                show: (row) => row.appointment_status_name === "In Queue",
+                isLoading: (row) =>
+                  completeMutation.isPending &&
+                  completeMutation.variables === row.appointment_id,
+              },
+            ]}
             limit={limit}
             search={search}
             onSearchChange={setSearch}

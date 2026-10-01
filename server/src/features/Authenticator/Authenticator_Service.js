@@ -6,12 +6,18 @@ export default class AuthenticatorService {
   async login({ email, password }) {
     const user = await authModel.findEmail(email);
 
-    if (!user) throw new Error("Invalid email or password");
+    if (!user) {
+      const err = new Error("Invalid email or password");
+      err.status = 401;
+      throw err;
+    }
 
     const isPasswordValid = await bcrypt.compare(password, user.user_password);
 
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+      const err = new Error("Invalid email or password");
+      err.status = 401;
+      throw err;
     }
 
     const profile = await authModel.findUserProfile(user.users_id);
@@ -29,45 +35,5 @@ export default class AuthenticatorService {
 
   async updateMyPicture(users_id, user_picture) {
     return authModel.updateUserPicture(users_id, user_picture);
-  }
-
-  async registerUser(email, password, confirmPassword, firstName, lastName) {
-    if (!password || password.length < 8) {
-      throw new Error("Password must be at least 8 characters");
-    }
-
-    if (password !== confirmPassword) {
-      throw new Error("Passwords do not match");
-    }
-
-    const userName = [firstName, lastName]
-      .map((name) => name?.trim())
-      .filter(Boolean)
-      .join(" ");
-
-    if (!userName) {
-      throw new Error("Name is required");
-    }
-
-    const existingUser = await authModel.findEmail(email);
-    if (existingUser) {
-      throw new Error("Email already exists");
-    }
-
-    const defaultUserLevelId = await authModel.findUserLevelId("Client");
-
-    if (!defaultUserLevelId) {
-      throw new Error("Default user role not found");
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await authModel.registerUser(
-      userName,
-      email,
-      hashedPassword,
-      defaultUserLevelId,
-    );
-
-    return newUser;
   }
 }

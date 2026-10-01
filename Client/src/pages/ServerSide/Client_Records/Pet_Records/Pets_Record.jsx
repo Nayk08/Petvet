@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { fetchPetRecordsByClientId } from "@/api/http";
 import { PetRecordsColumns } from "@/utils/COLUMNS";
-import { ArrowLeft, User, PawPrint } from "lucide-react";
+import { ArrowLeft, User, PawPrint, ArrowRightLeft } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -88,6 +88,15 @@ export function Component() {
             buttonLink="add-pet"
             onEdit={(row) => navigate(`pets/${row.pet_id}/edit-pet`)}
             onDelete={(row) => navigate(`pets/${row.pet_id}/delete-pet`)}
+            actions={[
+              {
+                label: "Transfer Owner",
+                icon: ArrowRightLeft,
+                className:
+                  "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50",
+                onClick: (row) => navigate(`pets/${row.pet_id}/transfer-owner`),
+              },
+            ]}
             limit={limit}
             onLimitChange={setLimit}
             search={search}

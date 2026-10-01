@@ -1,4 +1,5 @@
 import AppointmentService from "./Appointment_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 
 const appointmentService = new AppointmentService();
 
@@ -30,7 +31,7 @@ export default class AppointmentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -64,7 +65,7 @@ export default class AppointmentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getConsultationAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -88,7 +89,7 @@ export default class AppointmentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getGroomingAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -112,7 +113,7 @@ export default class AppointmentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getOperationAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -124,7 +125,7 @@ export default class AppointmentController {
       res.json(appointment);
     } catch (error) {
       console.log("Error on Controller getAppointmentById function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -155,7 +156,7 @@ export default class AppointmentController {
       res.status(201).json(appointment);
     } catch (error) {
       console.log("Error on Controller addAppointment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -187,7 +188,7 @@ export default class AppointmentController {
       res.json(appointment);
     } catch (error) {
       console.log("Error on Controller editAppointment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -195,12 +196,38 @@ export default class AppointmentController {
     try {
       const appointment = await appointmentService.cancelAppointment(
         req.params.appointment_id,
-        req.session.user.name,
+        req.session.user,
       );
       res.json(appointment);
     } catch (error) {
       console.log("Error on Controller cancelAppointment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async markNoShow(req, res) {
+    try {
+      const appointment = await appointmentService.markNoShow(
+        req.params.appointment_id,
+        req.session.user.name,
+      );
+      res.json(appointment);
+    } catch (error) {
+      console.log("Error on Controller markNoShow function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async completeAppointment(req, res) {
+    try {
+      const appointment = await appointmentService.completeAppointment(
+        req.params.appointment_id,
+        req.session.user,
+      );
+      res.json(appointment);
+    } catch (error) {
+      console.log("Error on Controller completeAppointment function");
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -210,7 +237,7 @@ export default class AppointmentController {
       res.json(services);
     } catch (error) {
       console.log("Error on Controller selectAppointmentServices function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -220,7 +247,7 @@ export default class AppointmentController {
       res.json(staff);
     } catch (error) {
       console.log("Error on Controller selectStaff function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -230,7 +257,7 @@ export default class AppointmentController {
       res.json(tiers);
     } catch (error) {
       console.log("Error on Controller getGroomingPriceTiers function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -250,6 +277,8 @@ export default class AppointmentController {
         gcash_reference_number,
         cash_received,
         gcash_received,
+        additional_fee_label,
+        additional_fee_amount,
       } = req.body;
 
       const result = await appointmentService.bookAppointmentWithPayment({
@@ -265,13 +294,15 @@ export default class AppointmentController {
         gcash_reference_number,
         cash_received,
         gcash_received,
+        additional_fee_label,
+        additional_fee_amount,
         amount,
         created_by: req.session.user.name,
       });
       res.status(201).json(result);
     } catch (error) {
       console.log("Error on Controller bookAppointmentWithPayment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -283,6 +314,8 @@ export default class AppointmentController {
         gcash_reference_number,
         cash_received,
         gcash_received,
+        additional_fee_label,
+        additional_fee_amount,
       } = req.body;
 
       const result = await appointmentService.completeAppointmentPayment({
@@ -292,12 +325,14 @@ export default class AppointmentController {
         gcash_reference_number,
         cash_received,
         gcash_received,
+        additional_fee_label,
+        additional_fee_amount,
         updated_by: req.session.user.name,
       });
       res.json(result);
     } catch (error) {
       console.log("Error on Controller completeAppointmentPayment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 }

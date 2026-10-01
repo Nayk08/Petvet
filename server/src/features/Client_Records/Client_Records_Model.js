@@ -80,12 +80,30 @@ export default class ClientRecordsModel {
     }
   }
 
-  async addClient({ client_name, client_email, contact_no, created_by }) {
+  async addClient({
+    client_name,
+    client_email,
+    contact_no,
+    emergency_contact_name,
+    emergency_contact_number,
+    address,
+    created_by,
+  }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `INSERT INTO tbl_clients (name, email, mobile_no, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
-        [client_name, client_email, contact_no, created_by],
+        `INSERT INTO tbl_clients
+          (name, email, mobile_no, emergency_contact_name, emergency_contact_number, address, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [
+          client_name,
+          client_email,
+          contact_no,
+          emergency_contact_name || null,
+          emergency_contact_number || null,
+          address || null,
+          created_by,
+        ],
       );
       return res.rows[0];
     } catch (error) {
@@ -101,6 +119,9 @@ export default class ClientRecordsModel {
     client_name,
     client_email,
     contact_no,
+    emergency_contact_name,
+    emergency_contact_number,
+    address,
     updated_by,
   }) {
     const client = await pool.connect();
@@ -113,11 +134,23 @@ export default class ClientRecordsModel {
         SET name = COALESCE($1, name),
             email = COALESCE($2, email),
             mobile_no = COALESCE($3, mobile_no),
-            updated_by = $4,
+            emergency_contact_name = COALESCE($4, emergency_contact_name),
+            emergency_contact_number = COALESCE($5, emergency_contact_number),
+            address = COALESCE($6, address),
+            updated_by = $7,
             date_updated = NOW()
-        WHERE client_id = $5 AND is_deleted IS NOT TRUE
+        WHERE client_id = $8 AND is_deleted IS NOT TRUE
         RETURNING *`,
-        [client_name, client_email, contact_no, updated_by, client_id],
+        [
+          client_name,
+          client_email,
+          contact_no,
+          emergency_contact_name || null,
+          emergency_contact_number || null,
+          address || null,
+          updated_by,
+          client_id,
+        ],
       );
 
       if (res.rows.length === 0) {
@@ -137,7 +170,8 @@ export default class ClientRecordsModel {
     try {
       const res = await client.query(
         `UPDATE tbl_clients
-        SET is_deleted = true, deleted_by = $2 WHERE client_id = $1 RETURNING *`,
+        SET is_deleted = true, deleted_by = $2, date_updated = NOW()
+        WHERE client_id = $1 RETURNING *`,
         [client_id, deleted_by],
       );
 
@@ -147,6 +181,88 @@ export default class ClientRecordsModel {
       return res.rows[0];
     } catch (error) {
       console.log(`Error in deleteClient: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getArchivedClients({ page = 1, limit = 10, search = "" } = {}) {
+    const client = await pool.connect();
+    try {
+      const values = [];
+      const conditions = ["is_deleted = true"];
+
+      if (search && search.trim()) {
+        values.push(`%${search.trim()}%`);
+        const idx = values.length;
+        conditions.push(
+          `(name ILIKE $${idx} OR email ILIKE $${idx} OR client_id::text ILIKE $${idx})`,
+        );
+      }
+
+      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+
+      return await paginateQuery(client, {
+        baseQuery: `SELECT * FROM tbl_clients ${whereClause} ORDER BY date_updated DESC NULLS LAST, client_id DESC`,
+        countQuery: `SELECT COUNT(*) AS total FROM tbl_clients ${whereClause}`,
+        values,
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.log("Error on Model getArchivedClients function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async restoreClient({ client_id, updated_by }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `UPDATE tbl_clients
+        SET is_deleted = false, deleted_by = NULL, updated_by = $2, date_updated = NOW()
+        WHERE client_id = $1 AND is_deleted = true
+        RETURNING *`,
+        [client_id, updated_by],
+      );
+
+      if (res.rows.length === 0) {
+        throw new Error(`Archived client with id ${client_id} not found`);
+      }
+      return res.rows[0];
+    } catch (error) {
+      console.log(`Error in restoreClient: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Hard delete — only ever called on an already-archived row (the WHERE
+  // clause is the actual guarantee, not just the route it's wired behind).
+  // tbl_pets and tbl_appointments both reference client_id with
+  // ON DELETE NO ACTION, so Postgres blocks this rather than silently
+  // orphaning pet/appointment history — caught below as a friendly message.
+  async permanentlyDeleteClient({ client_id }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `DELETE FROM tbl_clients WHERE client_id = $1 AND is_deleted = true RETURNING client_id`,
+        [client_id],
+      );
+      return res.rows[0];
+    } catch (error) {
+      if (error.code === "23503") {
+        const err = new Error(
+          "This client can't be permanently deleted — they still have pets or appointment history. They will remain archived instead.",
+        );
+        err.status = 409;
+        throw err;
+      }
+      console.log(`Error in permanentlyDeleteClient: ${error}`);
       throw error;
     } finally {
       client.release();
@@ -219,6 +335,9 @@ export default class ClientRecordsModel {
     species_id,
     gender_id,
     pet_image,
+    allergies,
+    medical_conditions,
+    temperament,
     created_by,
   }) {
     const client = await pool.connect();
@@ -232,9 +351,10 @@ export default class ClientRecordsModel {
           const res = await client.query(
             `INSERT INTO tbl_pets
               (pets_name, breed, is_spayed_neutered, date_of_birth, weight_kg,
-               microchip_number, pet_status_id, species_id, gender_id, client_id, pet_image, created_by)
+               microchip_number, pet_status_id, species_id, gender_id, client_id, pet_image,
+               allergies, medical_conditions, temperament, created_by)
              VALUES
-              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
              RETURNING *`,
             [
               pets_name,
@@ -248,6 +368,9 @@ export default class ClientRecordsModel {
               gender_id,
               client_id,
               pet_image,
+              allergies || null,
+              medical_conditions || null,
+              temperament || null,
               created_by,
             ],
           );
@@ -301,6 +424,9 @@ export default class ClientRecordsModel {
     species_id,
     gender_id,
     pet_image,
+    allergies,
+    medical_conditions,
+    temperament,
     updated_by,
   }) {
     const client = await pool.connect();
@@ -310,8 +436,9 @@ export default class ClientRecordsModel {
         SET pets_name = $1, breed = $2, is_spayed_neutered = $3,
             date_of_birth = $4, weight_kg = $5, pet_status_id = $6,
             species_id = $7, gender_id = $8, pet_image = $9,
-            updated_by = $10, date_updated = NOW()
-        WHERE pets_id = $11
+            allergies = $10, medical_conditions = $11, temperament = $12,
+            updated_by = $13, date_updated = NOW()
+        WHERE pets_id = $14
         RETURNING *`,
         [
           pets_name,
@@ -323,6 +450,9 @@ export default class ClientRecordsModel {
           species_id,
           gender_id,
           pet_image,
+          allergies || null,
+          medical_conditions || null,
+          temperament || null,
           updated_by,
           pets_id,
         ],
@@ -333,6 +463,29 @@ export default class ClientRecordsModel {
       return res.rows[0];
     } catch (error) {
       console.log(`Error in editPet: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async transferPetOwner({ pets_id, new_client_id, updated_by }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `UPDATE tbl_pets
+        SET client_id = $1, updated_by = $2, date_updated = NOW()
+        WHERE pets_id = $3 AND is_deleted IS NOT TRUE
+        RETURNING *`,
+        [new_client_id, updated_by, pets_id],
+      );
+
+      if (res.rows.length === 0) {
+        throw new Error(`Pet with id ${pets_id} not found`);
+      }
+      return res.rows[0];
+    } catch (error) {
+      console.log(`Error in transferPetOwner: ${error}`);
       throw error;
     } finally {
       client.release();

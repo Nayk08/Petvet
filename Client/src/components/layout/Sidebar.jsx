@@ -33,6 +33,7 @@ import {
   Menu,
   X,
   Settings,
+  Wrench,
 } from "lucide-react";
 import ProfilePictureModal from "./ProfilePictureModal.jsx";
 
@@ -47,6 +48,7 @@ const MODULE_ICONS = {
   PAYMENTS: CreditCard,
   INVENTORY: Package,
   ANALYTICS: BarChart3,
+  MAINTENANCE: Wrench,
 
   USER_MGMT: Users,
   USER_MGMT_USERS: User,

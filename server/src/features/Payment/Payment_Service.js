@@ -99,6 +99,21 @@ export default class PaymentService {
       throw err;
     }
     validatePaymentMethod({ payment_method, gcash_reference_number });
+
+    if (
+      gcash_reference_number &&
+      (await paymentModel.isGcashReferenceInUse({
+        gcash_reference_number,
+        excludePaymentId: payment_id,
+      }))
+    ) {
+      const err = new Error(
+        "This GCash reference number has already been used for another payment.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
     const { cash_amount, gcash_amount } = resolvePaymentSplit({
       payment_method,
       total_amount: payment.total_amount,
@@ -257,6 +272,19 @@ export default class PaymentService {
       payment_method: "GCash",
       gcash_reference_number,
     });
+
+    if (
+      await paymentModel.isGcashReferenceInUse({
+        gcash_reference_number,
+        excludePaymentId: payment_id,
+      })
+    ) {
+      const err = new Error(
+        "This GCash reference number has already been used for another payment. Please double-check the number, or contact the clinic if you believe this is an error.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
 
     const awaitingVerificationStatusId = await paymentModel.getPaymentStatusId(
       "Awaiting Verification",

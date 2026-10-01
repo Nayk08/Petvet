@@ -19,17 +19,24 @@ export default function hasPermission(moduleCode, ...actions) {
   const conditions = actions.map((action) => `${action} = true`).join(" AND ");
 
   return async (req, res, next) => {
-    if (!req.session?.user?.level_ids?.length) {
+    if (!req.session?.user?.id) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
+      // Deliberately re-derives the user's CURRENT active roles from the DB
+      // on every request instead of trusting req.session.user.level_ids
+      // (cached at login) — otherwise revoking/demoting a user's role
+      // wouldn't take effect until they logged out and back in, leaving an
+      // already-open session with stale, higher-than-intended access.
       const { rows } = await pool.query(
-        `SELECT 1 FROM v_user_permissions
-         WHERE user_level_id = ANY($1::int[]) AND module_code = $2
+        `SELECT 1 FROM v_user_permissions vp
+         JOIN tbl_user_level_assignments a
+           ON a.user_level_id = vp.user_level_id AND a.is_active = true
+         WHERE a.users_id = $1 AND vp.module_code = $2
          AND ${conditions}
          LIMIT 1`,
-        [req.session.user.level_ids, moduleCode],
+        [req.session.user.id, moduleCode],
       );
 
       if (rows.length === 0) {

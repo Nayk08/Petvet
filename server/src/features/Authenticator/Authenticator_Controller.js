@@ -1,27 +1,8 @@
 import AuthenticatorService from "./Authenticator_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 const authService = new AuthenticatorService();
 
 export default class AuthenticatorController {
-  async registerUser(req, res) {
-    try {
-      const { email, password, confirmPassword, firstName, lastName } =
-        req.body;
-      const newUser = await authService.registerUser(
-        email,
-        password,
-        confirmPassword,
-        firstName,
-        lastName,
-      );
-
-      res
-        .status(201)
-        .json({ message: "User registered successfully", user: newUser });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  }
-
   async login(req, res) {
     try {
       const { email, password } = req.body;
@@ -46,7 +27,10 @@ export default class AuthenticatorController {
           .json({ message: "Login successful", user: req.session.user });
       });
     } catch (error) {
-      res.status(401).json({ error: error.message });
+      const status = error.status || 500;
+      const message =
+        error.status ? error.message : "Could not log in. Please try again.";
+      res.status(status).json({ error: message, message });
     }
   }
 
@@ -64,7 +48,8 @@ export default class AuthenticatorController {
         res.status(200).json({ message: "Logout successful" });
       });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      console.error(error);
+      res.status(500).json({ error: "Failed to logout" });
     }
   }
 
@@ -94,8 +79,7 @@ export default class AuthenticatorController {
         res.status(200).json({ user: req.session.user });
       });
     } catch (error) {
-      const status = error.status || 500;
-      res.status(status).json({ message: error.message || "Something went wrong" });
+      return sendError(res, error, "Failed to update profile picture.");
     }
   }
 }

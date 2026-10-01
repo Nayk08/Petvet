@@ -6,7 +6,10 @@ const MOBILE_REGEX = /^(\+63[\s-]?9\d{2}[\s-]?\d{3}[\s-]?\d{4}|09\d{9})$/;
 
 export const addClientPetSchema = z.object({
   // Owner / client contact info carried on the pet record
-  client_id: z.coerce.number().int().positive("Invalid client ID"),
+  client_id: z.coerce
+    .number({ error: "Invalid client ID" })
+    .int()
+    .positive("Invalid client ID"),
   name: z.string().trim().min(1, "Owner name is required").max(255),
   email: z.string().trim().email(EMAIL_MSG),
   mobile_no: z
@@ -27,7 +30,7 @@ export const addClientPetSchema = z.object({
       return new Date(val).getTime() <= Date.now();
     }, "Birth date cannot be in the future"),
   weight: z.coerce
-    .number({ invalid_type_error: "Weight must be a number" })
+    .number({ error: "Weight must be a valid number" })
     .positive("Weight must be greater than 0")
     .optional(),
 });
@@ -40,5 +43,8 @@ export const updateClientPetSchema = addClientPetSchema
   });
 
 export const clientPetIdParamSchema = z.object({
-  pet_id: z.coerce.number().int().positive("Invalid pet ID"),
+  pet_id: z.coerce
+    .number({ error: "Invalid pet ID" })
+    .int()
+    .positive("Invalid pet ID"),
 });

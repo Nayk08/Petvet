@@ -1,6 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, ImageIcon, AlertTriangle } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  ImageIcon,
+  AlertTriangle,
+  Plus,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +30,69 @@ import {
   fetchInventoryById,
   addProduct,
   updateProduct,
+  fetchProductCategories,
+  addProductCategory,
 } from "@/api/http";
+
+// A small inline "add a category" form, opened next to the Category select
+// instead of navigating anywhere — categories are just a name, no reason to
+// leave the product form to create one.
+function AddCategoryInline({ onCreated, onCancel }) {
+  const rqClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleAdd(event) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const category = await addProductCategory(name.trim());
+      await rqClient.invalidateQueries({ queryKey: ["product-categories"] });
+      onCreated(category);
+    } catch (err) {
+      setError(err.message || "Failed to add category.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleAdd} className="flex items-center gap-1.5 mt-1.5">
+      <Input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="New category name"
+        className="h-8 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100"
+      />
+      <Button
+        type="submit"
+        size="sm"
+        disabled={!name.trim() || isSubmitting}
+        className="h-8 px-2.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white"
+      >
+        {isSubmitting ? "..." : "Add"}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onCancel}
+        className="h-8 px-2.5 text-xs text-slate-500 dark:text-slate-400"
+      >
+        Cancel
+      </Button>
+      {error && (
+        <p className="text-[11px] text-red-500 dark:text-red-400 ml-1">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
 
 export function Component() {
   const submit = useSubmit();
@@ -37,6 +105,8 @@ export function Component() {
   const actionError = actionData?.error;
 
   const [imagePreview, setImagePreview] = useState(null);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
 
   function closeModal() {
     navigate(`..${location.search}`);
@@ -50,9 +120,17 @@ export function Component() {
     enabled: isEditMode,
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["product-categories"],
+    queryFn: ({ signal }) => fetchProductCategories({ signal }),
+  });
+
   useEffect(() => {
     if (data?.product_image) {
       setImagePreview(data.product_image);
+    }
+    if (data?.category_id) {
+      setSelectedCategoryId(String(data.category_id));
     }
   }, [data]);
 
@@ -209,6 +287,46 @@ export function Component() {
                 }
                 className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
               />
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                  Category
+                </label>
+                {!isAddingCategory && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategory(true)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 bg-transparent border-none cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> Add category
+                  </button>
+                )}
+              </div>
+              <select
+                name="category_id"
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="w-full h-10 rounded-lg border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 px-3 text-sm focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 focus:outline-none"
+              >
+                <option value="">No category</option>
+                {categories.map((c) => (
+                  <option key={c.category_id} value={c.category_id}>
+                    {c.category_name}
+                  </option>
+                ))}
+              </select>
+              {isAddingCategory && (
+                <AddCategoryInline
+                  onCancel={() => setIsAddingCategory(false)}
+                  onCreated={(category) => {
+                    setSelectedCategoryId(String(category.category_id));
+                    setIsAddingCategory(false);
+                  }}
+                />
+              )}
             </div>
 
             {/* Error Message Section */}

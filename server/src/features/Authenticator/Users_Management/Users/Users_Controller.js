@@ -1,4 +1,6 @@
 import UsersService from "./Users_Service.js";
+import { sendError } from "../../../../../utils/errorResponse.js";
+
 const userService = new UsersService();
 export default class UsersController {
   async getUsers(req, res) {
@@ -18,7 +20,7 @@ export default class UsersController {
       console.error(error);
       res
         .status(500)
-        .json({ message: "An error occurred while fetching users." });
+        .json({ message: "Failed to fetch users." });
     }
   }
   async getUserById(req, res) {
@@ -35,7 +37,7 @@ export default class UsersController {
       console.error(error);
       res
         .status(500)
-        .json({ message: "An error occurred while fetching the user." });
+        .json({ message: "Failed to fetch user." });
     }
   }
 
@@ -47,10 +49,7 @@ export default class UsersController {
       );
       return res.status(201).json(user);
     } catch (error) {
-      const status = error.status || 500;
-      return res
-        .status(status)
-        .json({ message: error.message || "Something went wrong" });
+      return sendError(res, error, "Failed to add user.");
     }
   }
 
@@ -65,19 +64,61 @@ export default class UsersController {
       );
       res.json(user);
     } catch (error) {
+      return sendError(res, error, "Failed to update user.");
+    }
+  }
+
+  async getArchivedUsers(req, res) {
+    try {
+      const { page, limit, search } = req.query;
+      const { rows, pagination } = await userService.getArchivedUsers({
+        page,
+        limit,
+        search,
+      });
+      res.json({ rows, pagination });
+    } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "An error occurred while updating user." });
+      res
+        .status(500)
+        .json({ message: "Failed to fetch archived users." });
+    }
+  }
+
+  async restoreUser(req, res) {
+    try {
+      const userId = req.params.user_id;
+      await userService.restoreUser(userId, req.session.user.name);
+      res.json({ ok: true, message: "User restored" });
+    } catch (error) {
+      return sendError(res, error, "Failed to restore user.");
+    }
+  }
+
+  async permanentlyDeleteUser(req, res) {
+    try {
+      const userId = req.params.user_id;
+      const deleted = await userService.permanentlyDeleteUser(userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Archived user not found." });
+      }
+      res.json(deleted);
+    } catch (error) {
+      return sendError(res, error, "Failed to permanently delete user.");
     }
   }
 
   async deleteUser(req, res) {
     try {
       const userId = req.params.user_id;
-      await userService.deleteUser(userId, req.session.user.name);
+      await userService.deleteUser(
+        userId,
+        req.session.user.name,
+        req.session.user.id,
+      );
       res.json({ ok: true, message: "User deactivated" });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "An error occurred while deleting user." });
+      return sendError(res, error, "Failed to delete user.");
     }
   }
 }

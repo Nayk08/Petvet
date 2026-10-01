@@ -41,3 +41,24 @@
   --color-neon: oklch(0.75 0.25 190);
   --color-neon-foreground: oklch(0.1 0.05 190);
 }
+
+/* Printing a receipt: hide everything on the page except the one element
+   marked [data-receipt-print] (see ReceiptContent.jsx) — window.print()
+   otherwise prints the entire app shell (sidebar, dialog chrome, etc.)
+   around it. Scoped to an attribute rather than a class so it can never
+   collide with an app class of the same name. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-receipt-print],
+  [data-receipt-print] * {
+    visibility: visible;
+  }
+  [data-receipt-print] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

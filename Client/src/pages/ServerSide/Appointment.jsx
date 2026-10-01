@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Outlet, useNavigate, Link } from "react-router-dom";
-import { fetchAppointments } from "@/api/http";
+import { toast } from "sonner";
+import { fetchAppointments, markNoShow } from "@/api/http";
 import QueryState from "@/components/ui/QueryState";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronLeft, ChevronRight, Pencil, XCircle } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Pencil, XCircle, UserX } from "lucide-react";
 
 const SERVICE_DOT = {
   Grooming: "bg-indigo-500",
@@ -17,6 +18,7 @@ const STATUS_BADGE = {
   "In Queue": "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800",
   Completed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
   Cancelled: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+  "No Show": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
 };
 
 function formatTime(value) {
@@ -46,6 +48,7 @@ function isPastDay(date) {
 
 export function Component() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
@@ -54,6 +57,19 @@ export function Component() {
     queryFn: ({ signal }) => fetchAppointments({ limit: "all", signal }),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
+  });
+
+  const noShowMutation = useMutation({
+    mutationFn: markNoShow,
+    onSuccess: () => {
+      toast.success("Appointment marked as a no-show");
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+    onError: (error) => {
+      toast.error("Could not mark as a no-show", {
+        description: error.message,
+      });
+    },
   });
 
   const appointments = data?.rows ?? [];
@@ -231,12 +247,16 @@ export function Component() {
                   {selectedDayAppointments
                     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
                     .map((appt) => {
-                      const isFinal = ["Completed", "Cancelled"].includes(
-                        appt.appointment_status_name,
-                      );
+                      const isFinal = [
+                        "Completed",
+                        "Cancelled",
+                        "No Show",
+                      ].includes(appt.appointment_status_name);
                       const isPastAppointment = isPastDay(
                         new Date(appt.appointment_date),
                       );
+                      const hasStartTimePassed =
+                        new Date(appt.start_time).getTime() < Date.now();
                       return (
                         <div
                           key={appt.appointment_id}
@@ -283,17 +303,34 @@ export function Component() {
                                   <Pencil size={12} /> Edit
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `${appt.appointment_id}/cancel-appointment`,
-                                  )
-                                }
-                                className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-md transition-colors"
-                              >
-                                <XCircle size={12} /> Cancel
-                              </button>
+                              {hasStartTimePassed ? (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    noShowMutation.isPending &&
+                                    noShowMutation.variables ===
+                                      appt.appointment_id
+                                  }
+                                  onClick={() =>
+                                    noShowMutation.mutate(appt.appointment_id)
+                                  }
+                                  className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
+                                >
+                                  <UserX size={12} /> Mark No Show
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    navigate(
+                                      `${appt.appointment_id}/cancel-appointment`,
+                                    )
+                                  }
+                                  className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-md transition-colors"
+                                >
+                                  <XCircle size={12} /> Cancel
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

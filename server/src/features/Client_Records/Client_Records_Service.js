@@ -27,12 +27,23 @@ export default class ClientRecordsService {
     }
   }
 
-  async addClient({ client_name, client_email, contact_no, created_by }) {
+  async addClient({
+    client_name,
+    client_email,
+    contact_no,
+    emergency_contact_name,
+    emergency_contact_number,
+    address,
+    created_by,
+  }) {
     try {
       const res = await clientRecordModel.addClient({
         client_name,
         client_email,
         contact_no,
+        emergency_contact_name,
+        emergency_contact_number,
+        address,
         created_by,
       });
 
@@ -48,6 +59,9 @@ export default class ClientRecordsService {
     client_name,
     client_email,
     contact_no,
+    emergency_contact_name,
+    emergency_contact_number,
+    address,
     updated_by,
   }) {
     try {
@@ -56,6 +70,9 @@ export default class ClientRecordsService {
         client_name,
         client_email,
         contact_no,
+        emergency_contact_name,
+        emergency_contact_number,
+        address,
         updated_by,
       });
       return res;
@@ -74,6 +91,42 @@ export default class ClientRecordsService {
       return res;
     } catch (error) {
       console.log(`Error on deleteClient Service ${error}`);
+      throw error;
+    }
+  }
+
+  async getArchivedClients({ page = 1, limit = 10, search = "" } = {}) {
+    try {
+      const result = await clientRecordModel.getArchivedClients({
+        page,
+        limit,
+        search,
+      });
+      return result;
+    } catch (error) {
+      console.error("Error in ClientRecordsService getArchivedClients:", error);
+      throw error;
+    }
+  }
+
+  async restoreClient({ client_id, updated_by }) {
+    try {
+      const res = await clientRecordModel.restoreClient({
+        client_id,
+        updated_by,
+      });
+      return res;
+    } catch (error) {
+      console.log(`Error on restoreClient Service ${error}`);
+      throw error;
+    }
+  }
+
+  async permanentlyDeleteClient({ client_id }) {
+    try {
+      return await clientRecordModel.permanentlyDeleteClient({ client_id });
+    } catch (error) {
+      console.log(`Error on permanentlyDeleteClient Service ${error}`);
       throw error;
     }
   }
@@ -104,6 +157,9 @@ export default class ClientRecordsService {
     species_id,
     gender_id,
     pet_image,
+    allergies,
+    medical_conditions,
+    temperament,
     created_by,
   }) {
     try {
@@ -119,6 +175,9 @@ export default class ClientRecordsService {
         species_id,
         gender_id,
         pet_image,
+        allergies,
+        medical_conditions,
+        temperament,
         created_by,
       });
       return res;
@@ -144,6 +203,30 @@ export default class ClientRecordsService {
       console.log(`Error on editPet Service ${error}`);
       throw error;
     }
+  }
+
+  async transferPetOwner({ pets_id, new_client_id, updated_by }) {
+    let newOwner;
+    try {
+      newOwner = await clientRecordModel.getClientById(new_client_id);
+    } catch {
+      const err = new Error("Selected client not found.");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const pet = await clientRecordModel.getPetById(pets_id);
+    if (String(pet.client_id) === String(newOwner.client_id)) {
+      const err = new Error("This pet is already owned by that client.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    return clientRecordModel.transferPetOwner({
+      pets_id,
+      new_client_id,
+      updated_by,
+    });
   }
 
   async deletePet({ pets_id, deleted_by }) {

@@ -1,4 +1,5 @@
 import DashboardService from "./Dashboard_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 
 const dashboardService = new DashboardService();
 
@@ -30,7 +31,7 @@ export default class DashboardController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getTodayAppointments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -46,7 +47,7 @@ export default class DashboardController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getTodayPayments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -63,7 +64,7 @@ export default class DashboardController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getTodayRevenueTransactions function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 }

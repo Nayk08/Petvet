@@ -12,6 +12,7 @@ import {
   addProductSchema,
   updateProductSchema,
   addQuantitySchema,
+  addProductCategorySchema,
   productIdParamSchema,
 } from "../../validators/productSchema.js";
 
@@ -28,6 +29,28 @@ router.get(
   "/inventory/batches/:product_name",
   hasPermission("INVENTORY", "can_view"),
   (req, res) => inventoryController.getProductBatches(req, res),
+);
+
+// Same ordering reason as /inventory/batches above — "categories" would
+// otherwise be captured by /inventory/:product_id.
+router.get(
+  "/inventory/categories",
+  hasPermission("INVENTORY", "can_view"),
+  (req, res) => inventoryController.getProductCategories(req, res),
+);
+router.post(
+  "/inventory/categories",
+  hasPermission("INVENTORY", "can_view", "can_create"),
+  validateBody(addProductCategorySchema),
+  (req, res) => inventoryController.addProductCategory(req, res),
+);
+
+// Same ordering reason as /inventory/batches above — "archived" would
+// otherwise be captured by /inventory/:product_id.
+router.get(
+  "/inventory/archived",
+  hasPermission("INVENTORY", "can_view"),
+  (req, res) => inventoryController.getArchivedProducts(req, res),
 );
 
 router.get(
@@ -69,6 +92,20 @@ router.delete(
   hasPermission("INVENTORY", "can_view", "can_delete"),
   validateParams(productIdParamSchema),
   (req, res) => inventoryController.deleteProductById(req, res),
+);
+
+router.patch(
+  "/inventory/:product_id/restore",
+  hasPermission("INVENTORY", "can_view", "can_delete"),
+  validateParams(productIdParamSchema),
+  (req, res) => inventoryController.restoreProduct(req, res),
+);
+
+router.delete(
+  "/inventory/:product_id/permanent",
+  hasPermission("INVENTORY", "can_view", "can_delete"),
+  validateParams(productIdParamSchema),
+  (req, res) => inventoryController.permanentlyDeleteProduct(req, res),
 );
 
 // Bulk-removes every batch already past its expiry date — no :product_id

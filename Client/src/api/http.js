@@ -302,6 +302,50 @@ export async function deleteUser(id) {
   return handleResponse(response, "Failed to delete user");
 }
 
+export async function fetchArchivedUsers({
+  page,
+  limit,
+  search = "",
+  signal,
+}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  const response = await fetch(`${baseUrl}/users/archived?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch archived users");
+}
+
+export async function restoreUser(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/users/${id}/restore`, {
+    method: "PUT",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to restore user");
+}
+
+// Hard delete — only succeeds on an already-archived user with no
+// appointment history (the backend rejects it with a 409 otherwise).
+export async function permanentlyDeleteUser(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/users/${id}/permanent`, {
+    method: "DELETE",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to permanently delete user");
+}
+
 // ─────────────────────────────
 // User Levels
 // ─────────────────────────────
@@ -474,6 +518,25 @@ export async function fetchProductBatches({ product_name, signal } = {}) {
   return handleResponse(response, "Failed to fetch product batches");
 }
 
+export async function fetchProductCategories({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/inventory/categories`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch product categories");
+}
+
+export async function addProductCategory(category_name) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/inventory/categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify({ category_name }),
+  });
+  return handleResponse(response, "Failed to add category");
+}
+
 export async function addProduct(formData) {
   const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/inventory/add-product`, {
@@ -520,6 +583,50 @@ export async function deleteProduct(id) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to delete product");
+}
+
+export async function fetchArchivedProducts({
+  page,
+  limit,
+  search = "",
+  signal,
+}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  const response = await fetch(`${baseUrl}/inventory/archived?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch archived products");
+}
+
+export async function restoreProduct(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/inventory/${id}/restore`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to restore product");
+}
+
+// Hard delete — only succeeds on an already-archived product with no sales
+// history (the backend rejects it with a 409 otherwise).
+export async function permanentlyDeleteProduct(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/inventory/${id}/permanent`, {
+    method: "DELETE",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to permanently delete product");
 }
 
 // Bulk-removes every already-expired product batch in one call.
@@ -840,6 +947,50 @@ export async function deleteClient(id) {
   return handleResponse(response, "Failed to delete client");
 }
 
+export async function fetchArchivedClients({
+  page,
+  limit,
+  search = "",
+  signal,
+}) {
+  const effectiveLimit = limit === "all" ? 999999 : limit;
+  const effectivePage = limit === "all" ? 1 : page;
+
+  const params = new URLSearchParams({
+    page: effectivePage,
+    limit: effectiveLimit,
+    ...(search && { search }),
+  });
+
+  const response = await fetch(`${baseUrl}/client/archived?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch archived client records");
+}
+
+export async function restoreClient(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/${id}/restore`, {
+    method: "PUT",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to restore client");
+}
+
+// Hard delete — only succeeds on an already-archived client with no pets
+// or appointment history (the backend rejects it with a 409 otherwise).
+export async function permanentlyDeleteClient(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/client/${id}/permanent`, {
+    method: "DELETE",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to permanently delete client");
+}
+
 // ─────────────────────────────
 // Pet Records
 // ─────────────────────────────
@@ -902,6 +1053,20 @@ export async function deletePet(pets_id) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to delete pet");
+}
+
+export async function transferPetOwner(pets_id, new_client_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/pets/${pets_id}/transfer-owner`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    credentials: "include",
+    body: JSON.stringify({ new_client_id }),
+  });
+  return handleResponse(response, "Failed to transfer pet ownership");
 }
 export async function selectSpecies({ signal } = {}) {
   const response = await fetch(`${baseUrl}/species`, {
@@ -1118,6 +1283,35 @@ export async function cancelAppointment(appointment_id) {
   return handleResponse(response, "Failed to cancel appointment");
 }
 
+export async function markNoShow(appointment_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(
+    `${baseUrl}/appointments/${appointment_id}/mark-no-show`,
+    {
+      method: "PUT",
+      headers: { "x-csrf-token": csrfToken },
+      credentials: "include",
+    },
+  );
+  return handleResponse(response, "Failed to mark appointment as a no-show");
+}
+
+// The assigned groomer/veterinarian marking their own in-queue appointment
+// done (or an Admin, for any appointment) — see Appointment_Route.js for
+// why this isn't gated by a module permission like the others here.
+export async function completeAppointment(appointment_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(
+    `${baseUrl}/appointments/${appointment_id}/complete-appointment`,
+    {
+      method: "PUT",
+      headers: { "x-csrf-token": csrfToken },
+      credentials: "include",
+    },
+  );
+  return handleResponse(response, "Failed to complete appointment");
+}
+
 export async function selectAppointmentServices({ signal } = {}) {
   const response = await fetch(`${baseUrl}/appointment-services`, {
     signal,
@@ -1140,6 +1334,91 @@ export async function selectGroomingPriceTiers({ signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch grooming price tiers");
+}
+
+// ─────────────────────────────
+// Maintenance (services & grooming tiers catalog)
+// ─────────────────────────────
+
+export async function fetchMaintenanceServices({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/maintenance/services`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch services");
+}
+
+export async function addMaintenanceService(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/services`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to add service");
+}
+
+export async function updateMaintenanceService(id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/services/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to update service");
+}
+
+export async function setMaintenanceServiceActive(id, is_active) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/services/${id}/active`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify({ is_active }),
+  });
+  return handleResponse(response, "Failed to update service status");
+}
+
+export async function fetchMaintenanceGroomingTiers({ signal } = {}) {
+  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch grooming tiers");
+}
+
+export async function addMaintenanceGroomingTier(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to add grooming tier");
+}
+
+export async function updateMaintenanceGroomingTier(id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to update grooming tier");
+}
+
+export async function deleteMaintenanceGroomingTier(id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers/${id}`, {
+    method: "DELETE",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to delete grooming tier");
 }
 
 // ─────────────────────────────
@@ -1227,4 +1506,13 @@ export async function fetchCriticalStock({ signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch critical stock");
+}
+
+export async function fetchPeakTimes({ start_date, end_date, signal } = {}) {
+  const params = buildDateRangeParams({ start_date, end_date });
+  const response = await fetch(`${baseUrl}/analytics/peak-times?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch peak times");
 }

@@ -244,6 +244,8 @@ export function Component() {
                   ? "Leave blank to keep current password"
                   : "Min. 8 characters"
               }
+              required={!isEditMode}
+              minLength={formData.password || !isEditMode ? 8 : undefined}
               className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
             />
           </div>

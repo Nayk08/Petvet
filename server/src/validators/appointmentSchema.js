@@ -108,9 +108,18 @@ const gcashReferenceNumberSchema = z
 // the body) — so both get the exact same business-hour/slot enforcement
 // instead of the portal route having none at all.
 const baseAppointmentSlotFields = {
-  pets_id: z.coerce.number().int().positive(),
-  appointment_services_id: z.coerce.number().int().positive(),
-  assigned_staff_id: z.coerce.number().int().positive(),
+  pets_id: z.coerce
+    .number({ error: "Please select a pet" })
+    .int()
+    .positive("Please select a pet"),
+  appointment_services_id: z.coerce
+    .number({ error: "Please select a service" })
+    .int()
+    .positive("Please select a service"),
+  assigned_staff_id: z.coerce
+    .number({ error: "Please select a staff member" })
+    .int()
+    .positive("Please select a staff member"),
   appointment_date: z.coerce.date({
     error: "Invalid appointment date",
   }),
@@ -121,7 +130,10 @@ const baseAppointmentSlotFields = {
 
 export const addAppointmentSchema = z
   .object({
-    client_id: z.coerce.number().int().positive(),
+    client_id: z.coerce
+      .number({ error: "Please select a client" })
+      .int()
+      .positive("Please select a client"),
     ...baseAppointmentSlotFields,
   })
   .superRefine(validateSlot);
@@ -135,15 +147,24 @@ export const clientPortalBookAppointmentSchema = z
 
 export const editAppointmentSchema = z
   .object({
-    pets_id: z.coerce.number().int().positive(),
-    appointment_services_id: z.coerce.number().int().positive(),
-    assigned_staff_id: z.coerce.number().int().positive(),
+    pets_id: z.coerce
+      .number({ error: "Please select a pet" })
+      .int()
+      .positive("Please select a pet"),
+    appointment_services_id: z.coerce
+      .number({ error: "Please select a service" })
+      .int()
+      .positive("Please select a service"),
+    assigned_staff_id: z.coerce
+      .number({ error: "Please select a staff member" })
+      .int()
+      .positive("Please select a staff member"),
     appointment_date: z.coerce.date({
       error: "Invalid appointment date",
     }),
     start_time: timeOfDaySchema,
     end_time: timeOfDaySchema,
-    status_name: z.enum(["Pending", "In Queue", "Completed"], {
+    status_name: z.enum(["Pending", "In Queue", "Completed", "No Show"], {
       error: "Invalid status",
     }),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -174,41 +195,109 @@ function validatePaymentFields(data, ctx) {
   }
 }
 
+// An optional add-on charge (de-matting, handling an aggressive pet,
+// after-hours service) layered on top of the service's own price — both
+// fields travel together so a bare amount with no label (or vice versa)
+// never ends up on a receipt.
+const additionalFeeFields = {
+  additional_fee_label: z.string().trim().max(100).optional().or(z.literal("")),
+  additional_fee_amount: z.coerce
+    .number({ error: "Additional fee amount must be a valid number" })
+    .min(0, "Additional fee amount must be 0 or more")
+    .optional(),
+};
+
+function validateAdditionalFee(data, ctx) {
+  const hasLabel = Boolean(data.additional_fee_label?.trim());
+  const hasAmount = data.additional_fee_amount != null;
+  if (hasLabel && !hasAmount) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "An amount is required for the additional fee.",
+      path: ["additional_fee_amount"],
+    });
+  }
+  if (hasAmount && !hasLabel) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A label is required for the additional fee.",
+      path: ["additional_fee_label"],
+    });
+  }
+}
+
 export const bookAppointmentWithPaymentSchema = z
   .object({
-    client_id: z.coerce.number().int().positive(),
-    pets_id: z.coerce.number().int().positive(),
-    appointment_services_id: z.coerce.number().int().positive(),
-    assigned_staff_id: z.coerce.number().int().positive(),
+    client_id: z.coerce
+      .number({ error: "Please select a client" })
+      .int()
+      .positive("Please select a client"),
+    pets_id: z.coerce
+      .number({ error: "Please select a pet" })
+      .int()
+      .positive("Please select a pet"),
+    appointment_services_id: z.coerce
+      .number({ error: "Please select a service" })
+      .int()
+      .positive("Please select a service"),
+    assigned_staff_id: z.coerce
+      .number({ error: "Please select a staff member" })
+      .int()
+      .positive("Please select a staff member"),
     appointment_date: z.coerce.date({
       error: "Invalid appointment date",
     }),
     start_time: timeOfDaySchema,
     end_time: timeOfDaySchema,
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
-    amount: z.coerce.number().positive().optional(),
+    amount: z.coerce
+      .number({ error: "Amount must be a valid number" })
+      .positive("Amount must be greater than 0")
+      .optional(),
     payment_method: z.enum(["Cash", "GCash", "Split"], {
       error: "Invalid payment method",
     }),
     gcash_reference_number: gcashReferenceNumberSchema,
-    cash_received: z.coerce.number().min(0).optional(),
-    gcash_received: z.coerce.number().min(0).optional(),
+    cash_received: z.coerce
+      .number({ error: "Cash received must be a valid number" })
+      .min(0, "Cash received must be 0 or more")
+      .optional(),
+    gcash_received: z.coerce
+      .number({ error: "GCash received must be a valid number" })
+      .min(0, "GCash received must be 0 or more")
+      .optional(),
+    ...additionalFeeFields,
   })
   .superRefine(validateSlot)
-  .superRefine(validatePaymentFields);
+  .superRefine(validatePaymentFields)
+  .superRefine(validateAdditionalFee);
 
 export const completeAppointmentPaymentSchema = z
   .object({
-    amount: z.coerce.number().positive().optional(),
+    amount: z.coerce
+      .number({ error: "Amount must be a valid number" })
+      .positive("Amount must be greater than 0")
+      .optional(),
     payment_method: z.enum(["Cash", "GCash", "Split"], {
       error: "Invalid payment method",
     }),
     gcash_reference_number: gcashReferenceNumberSchema,
-    cash_received: z.coerce.number().min(0).optional(),
-    gcash_received: z.coerce.number().min(0).optional(),
+    cash_received: z.coerce
+      .number({ error: "Cash received must be a valid number" })
+      .min(0, "Cash received must be 0 or more")
+      .optional(),
+    gcash_received: z.coerce
+      .number({ error: "GCash received must be a valid number" })
+      .min(0, "GCash received must be 0 or more")
+      .optional(),
+    ...additionalFeeFields,
   })
-  .superRefine(validatePaymentFields);
+  .superRefine(validatePaymentFields)
+  .superRefine(validateAdditionalFee);
 
 export const appointmentIdParamSchema = z.object({
-  appointment_id: z.coerce.number().int().positive(),
+  appointment_id: z.coerce
+    .number({ error: "Invalid appointment ID" })
+    .int()
+    .positive("Invalid appointment ID"),
 });

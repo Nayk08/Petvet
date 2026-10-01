@@ -22,13 +22,33 @@ const authLimiter = rateLimit({
   message: { message: "Too many attempts, please try again later." },
 });
 
+// POST /login specifically needs a much tighter budget than the rest of
+// /api/auth (session checks, logout) — this is the actual credential
+// brute-force surface, and 100 guesses/15min per IP was realistically
+// crackable against a weak password. 8 attempts is enough for a real user
+// to mistype a password a couple of times without hitting it.
+export const loginLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: {
+    message: "Too many login attempts. Please wait a few minutes and try again.",
+  },
+});
+
 // Global ceiling for every /api route, mounted before the session store so a
-// flood is rejected before it costs a Postgres query. Set high enough for
-// several staff sharing one clinic IP (a page load fires ~10 requests).
+// flood is rejected before it costs a Postgres query. 300/min undercounted
+// real usage badly: React Router re-runs every ancestor loader (e.g.
+// requireClientAuth's /me check) on EVERY navigation, and StrictMode
+// double-invokes queries/effects in dev — so just signing in, browsing a
+// few pages, and booking one appointment can legitimately fire well past
+// 300 requests in a minute. This still blocks a genuine flood, just with
+// real headroom for one actively-used session (several staff sharing one
+// clinic IP, or a client portal session).
 export const apiLimiter = rateLimit({
   ...baseOptions,
   windowMs: 60 * 1000,
-  max: 300,
+  max: 1000,
   message: { message: "Too many requests, please slow down." },
 });
 

@@ -37,13 +37,6 @@ import { formatDate } from "@/utils/COLUMNS";
 
 const STATUS_OPTIONS = ["Pending", "In Queue", "Completed"];
 
-// Which staff roles can be assigned to each service type.
-const SERVICE_STAFF_ROLES = {
-  Grooming: ["Groomer"],
-  Consultation: ["Veterinarian"],
-  Operation: ["Veterinarian"],
-};
-
 const BOOKING_START_HOUR = 9; // 9 AM
 const BOOKING_LAST_START_HOUR = 17; // 5 PM start -> 6 PM end is the last slot
 
@@ -205,10 +198,14 @@ export function Component() {
     queryFn: ({ signal }) => selectAppointmentStaff({ signal }),
   });
 
-  const selectedServiceName = services?.find(
+  const selectedService = services?.find(
     (s) => String(s.appointment_services_id) === selectedServiceId,
-  )?.appointment_services;
-  const allowedStaffRoles = SERVICE_STAFF_ROLES[selectedServiceName] ?? [];
+  );
+  const selectedServiceName = selectedService?.appointment_services;
+  // Set via the Maintenance module (tbl_appointment_services.allowed_roles)
+  // — not a hardcoded map, so a newly added service just works once an
+  // admin configures who can perform it.
+  const allowedStaffRoles = selectedService?.allowed_roles ?? [];
   const filteredStaff = (staff ?? []).filter((s) =>
     allowedStaffRoles.includes(s.user_level?.trim()),
   );
@@ -553,6 +550,11 @@ export function Component() {
                     </option>
                   ))}
                 </select>
+                {selectedService?.duration_minutes && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Estimated duration: {selectedService.duration_minutes} min
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">

@@ -99,4 +99,55 @@ export default class AnalyticsService {
   async getCriticalStock() {
     return analyticsModel.getCriticalStock();
   }
+
+  // Fills in every bookable hour (9 AM-5 PM start, matching the fixed
+  // one-hour slot rule in appointmentSchema.js) and every day of the week
+  // with a 0 count when nothing was booked then — a bar chart with a gap
+  // reads as missing data, not "zero," so this fills the gap explicitly
+  // instead of only returning whatever GROUP BY happened to find rows for.
+  async getPeakTimes({ start_date, end_date }) {
+    const { startDate, endDate } = resolveDateRange({ start_date, end_date });
+    const { byHour, byDay } = await analyticsModel.getPeakTimes({
+      startDate,
+      endDate,
+    });
+
+    const hourCounts = new Map(byHour.map((r) => [r.hour, r.count]));
+    const filledByHour = Array.from({ length: 9 }, (_, i) => {
+      const hour = 9 + i; // 9 AM through 5 PM (the last bookable start hour)
+      return { hour, count: hourCounts.get(hour) ?? 0 };
+    });
+
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const dayCounts = new Map(byDay.map((r) => [r.day_of_week, r.count]));
+    const filledByDay = DAY_NAMES.map((day_name, day_of_week) => ({
+      day_of_week,
+      day_name,
+      count: dayCounts.get(day_of_week) ?? 0,
+    }));
+
+    const peakHour = filledByHour.reduce(
+      (max, r) => (r.count > max.count ? r : max),
+      filledByHour[0],
+    );
+    const peakDay = filledByDay.reduce(
+      (max, r) => (r.count > max.count ? r : max),
+      filledByDay[0],
+    );
+
+    return {
+      byHour: filledByHour,
+      byDay: filledByDay,
+      peakHour: peakHour.count > 0 ? peakHour : null,
+      peakDay: peakDay.count > 0 ? peakDay : null,
+    };
+  }
 }

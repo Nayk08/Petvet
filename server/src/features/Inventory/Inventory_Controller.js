@@ -1,13 +1,21 @@
 import InventoryService from "./Inventory_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 
 const inventoryService = new InventoryService();
 
 export default class InventoryController {
   async getProducts(req, res) {
     try {
-      const { page, limit, search, status_name, is_expired, grouped } =
-        req.query;
-      const filters = { status_name, is_expired };
+      const {
+        page,
+        limit,
+        search,
+        status_name,
+        is_expired,
+        category_name,
+        grouped,
+      } = req.query;
+      const filters = { status_name, is_expired, category_name };
 
       const { rows, pagination } = await inventoryService.getProducts({
         page,
@@ -58,10 +66,7 @@ export default class InventoryController {
 
       return res.status(201).json(product);
     } catch (error) {
-      const status = error.status || 500;
-      return res
-        .status(status)
-        .json({ message: error.message || "Something went wrong" });
+      return sendError(res, error, "Failed to add product.");
     }
   }
 
@@ -89,10 +94,7 @@ export default class InventoryController {
 
       return res.status(200).json(product);
     } catch (error) {
-      const status = error.status || 500;
-      return res
-        .status(status)
-        .json({ message: error.message || "Something went wrong" });
+      return sendError(res, error, "Failed to update product.");
     }
   }
 
@@ -108,10 +110,80 @@ export default class InventoryController {
       });
       return res.status(200).json(product);
     } catch (error) {
-      const status = error.status || 500;
+      return sendError(res, error, "Failed to add quantity.");
+    }
+  }
+
+  async getProductCategories(req, res) {
+    try {
+      const categories = await inventoryService.getProductCategories();
+      return res.status(200).json(categories);
+    } catch (error) {
+      console.error(error);
       return res
-        .status(status)
-        .json({ message: error.message || "Something went wrong" });
+        .status(500)
+        .json({ message: "Failed to fetch product categories." });
+    }
+  }
+
+  async addProductCategory(req, res) {
+    try {
+      const { category_name } = req.body;
+      const category = await inventoryService.addProductCategory({
+        category_name,
+        created_by: req.session.user.name,
+      });
+      return res.status(201).json(category);
+    } catch (error) {
+      return sendError(res, error, "Failed to add category.");
+    }
+  }
+
+  async getArchivedProducts(req, res) {
+    try {
+      const { page, limit, search } = req.query;
+      const { rows, pagination } = await inventoryService.getArchivedProducts({
+        page,
+        limit,
+        search,
+      });
+      return res.status(200).json({ rows, pagination });
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ message: "Failed to fetch archived products." });
+    }
+  }
+
+  async restoreProduct(req, res) {
+    try {
+      const restored = await inventoryService.restoreProduct({
+        product_id: req.params.product_id,
+        updated_by: req.session.user.name,
+      });
+      if (!restored) {
+        return res.status(404).json({ message: "Archived product not found" });
+      }
+      return res.status(200).json(restored);
+    } catch (error) {
+      return sendError(res, error, "Failed to restore product.");
+    }
+  }
+
+  async permanentlyDeleteProduct(req, res) {
+    try {
+      const deleted = await inventoryService.permanentlyDeleteProduct({
+        product_id: req.params.product_id,
+      });
+      if (!deleted) {
+        return res
+          .status(404)
+          .json({ message: "Archived product not found" });
+      }
+      return res.status(200).json(deleted);
+    } catch (error) {
+      return sendError(res, error, "Failed to permanently delete product.");
     }
   }
 
@@ -126,10 +198,7 @@ export default class InventoryController {
       }
       return res.status(200).json(deleteProductById);
     } catch (error) {
-      const status = error.status || 500;
-      return res
-        .status(status)
-        .json({ message: error.message || "Something went wrong" });
+      return sendError(res, error, "Failed to delete product.");
     }
   }
 
@@ -140,10 +209,7 @@ export default class InventoryController {
       });
       return res.status(200).json({ removed });
     } catch (error) {
-      const status = error.status || 500;
-      return res
-        .status(status)
-        .json({ message: error.message || "Failed to remove expired products" });
+      return sendError(res, error, "Failed to remove expired products.");
     }
   }
 }

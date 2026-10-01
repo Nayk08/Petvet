@@ -73,6 +73,28 @@ router.put(
   (req, res) => appointmentController.cancelAppointment(req, res),
 );
 
+router.put(
+  "/appointments/:appointment_id/mark-no-show",
+  hasPermission("APPOINTMENT", "can_edit"),
+  validateParams(appointmentIdParamSchema),
+  (req, res) => appointmentController.markNoShow(req, res),
+);
+
+// No hasPermission gate — same reasoning as Authenticator_Route.js's
+// /me/picture: "mark MY OWN assigned appointment done" is an identity-based
+// action, not a module CRUD permission a Groomer/Veterinarian would
+// otherwise need granted (the G_APPOINTMENT/C_APPOINTMENT/O_APPOINTMENT
+// modules are deliberately view-only — see Grooming_Appointment.jsx). The
+// real authorization is the ownership check inside
+// Appointment_Service.js:completeAppointment (assigned_staff_id must match
+// the caller, or they must be Admin) — already covered by the global
+// isAuth this whole router sits behind.
+router.put(
+  "/appointments/:appointment_id/complete-appointment",
+  validateParams(appointmentIdParamSchema),
+  (req, res) => appointmentController.completeAppointment(req, res),
+);
+
 router.get(
   "/appointment-services",
   hasPermission("APPOINTMENT", "can_view"),

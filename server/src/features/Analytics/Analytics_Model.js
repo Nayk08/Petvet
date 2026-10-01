@@ -145,6 +145,46 @@ export default class AnalyticsModel {
     }
   }
 
+  // Booking demand by hour-of-day and day-of-week — same scope as
+  // getAppointmentsBreakdown (every non-deleted appointment in range,
+  // regardless of status: this is about when people book/show up, not
+  // whether the visit was completed). Both are filled in with every
+  // possible hour/day (zero-count included) in the Service layer, so the
+  // chart never silently drops a slow slot instead of showing it at 0.
+  async getPeakTimes({ startDate, endDate }) {
+    const client = await pool.connect();
+    try {
+      const byHour = await client.query(
+        `SELECT EXTRACT(HOUR FROM start_time)::int AS hour, COUNT(*)::int AS count
+         FROM v_appointments
+         WHERE is_deleted IS NOT TRUE
+           AND appointment_date BETWEEN $1 AND $2
+         GROUP BY EXTRACT(HOUR FROM start_time)
+         ORDER BY hour ASC`,
+        [startDate, endDate],
+      );
+
+      const byDay = await client.query(
+        `SELECT
+           EXTRACT(DOW FROM appointment_date)::int AS day_of_week,
+           COUNT(*)::int AS count
+         FROM v_appointments
+         WHERE is_deleted IS NOT TRUE
+           AND appointment_date BETWEEN $1 AND $2
+         GROUP BY EXTRACT(DOW FROM appointment_date)
+         ORDER BY day_of_week ASC`,
+        [startDate, endDate],
+      );
+
+      return { byHour: byHour.rows, byDay: byDay.rows };
+    } catch (error) {
+      console.log(`Error on Model getPeakTimes function: ${error}`);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Current-state snapshot (not date-ranged) — reuses v_products' existing
   // stock-tier logic (Inventory.jsx already shows the same tiers) rather
   // than inventing a separate "critical" threshold. A product also counts

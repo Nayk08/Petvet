@@ -11,6 +11,14 @@ export const addClientSchema = z.object({
     .string()
     .trim()
     .regex(MOBILE_REGEX, "Invalid mobile number format"),
+  emergency_contact_name: z.string().trim().max(100).optional().or(z.literal("")),
+  emergency_contact_number: z
+    .string()
+    .trim()
+    .regex(MOBILE_REGEX, "Invalid mobile number format")
+    .optional()
+    .or(z.literal("")),
+  address: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
 export const editClientBodySchema = addClientSchema
@@ -20,7 +28,10 @@ export const editClientBodySchema = addClientSchema
   });
 
 export const clientIdParamSchema = z.object({
-  client_id: z.coerce.number().int().positive("Invalid client ID"),
+  client_id: z.coerce
+    .number({ error: "Invalid client ID" })
+    .int()
+    .positive("Invalid client ID"),
 });
 
 // Alias kept for the edit route, since the client_id comes from req.params there too

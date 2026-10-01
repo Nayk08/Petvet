@@ -19,6 +19,7 @@ import {
   fetchClientGrowth,
   fetchProductMovers,
   fetchCriticalStock,
+  fetchPeakTimes,
   pullExpiredProducts,
   queryClient,
 } from "@/api/http.js";
@@ -485,6 +486,12 @@ function RankedBarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) 
 
 const formatCurrency = (v) => `₱${Number(v).toLocaleString()}`;
 const formatCount = (v) => Number(v).toLocaleString();
+const formatHourLabel = (hour) => {
+  const period = hour < 12 ? "AM" : "PM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display} ${period}`;
+};
+const formatDayShort = (dayName) => dayName.slice(0, 3);
 
 const STATUS_COLOR_VAR = {
   Pending: "--status-warning",
@@ -541,6 +548,11 @@ export function Component() {
   const appointmentsQuery = useQuery({
     queryKey: ["AnalyticsAppointments", range.start_date, range.end_date],
     queryFn: ({ signal }) => fetchAppointmentsBreakdown({ ...range, signal }),
+  });
+
+  const peakTimesQuery = useQuery({
+    queryKey: ["AnalyticsPeakTimes", range.start_date, range.end_date],
+    queryFn: ({ signal }) => fetchPeakTimes({ ...range, signal }),
   });
 
   const topProductsQuery = useQuery({
@@ -692,6 +704,67 @@ export function Component() {
             labelKey="appointment_status_name"
             colorVar={(d) =>
               STATUS_COLOR_VAR[d.appointment_status_name] ?? "--slot-1"
+            }
+            formatValue={formatCount}
+          />
+        </ChartCard>
+      </div>
+
+      {/* Peak hours + Peak days — booking demand, not just completed visits,
+          same scope as Appointments by Service/Status above (every
+          non-deleted appointment in range, any status). */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Peak Hours"
+          subtitle={
+            peakTimesQuery.data?.peakHour
+              ? `Busiest: ${formatHourLabel(peakTimesQuery.data.peakHour.hour)} (${formatCount(peakTimesQuery.data.peakHour.count)} bookings)`
+              : "Bookings by hour of day"
+          }
+          isPending={peakTimesQuery.isPending}
+          isError={peakTimesQuery.isError}
+          error={peakTimesQuery.error}
+          isEmpty={(peakTimesQuery.data?.byHour?.length ?? 0) === 0}
+        >
+          <BarChart
+            data={(peakTimesQuery.data?.byHour ?? []).map((d) => ({
+              ...d,
+              label: formatHourLabel(d.hour),
+            }))}
+            valueKey="count"
+            labelKey="label"
+            colorVar={(d) =>
+              peakTimesQuery.data?.peakHour?.hour === d.hour
+                ? "--status-good"
+                : "--slot-1"
+            }
+            formatValue={formatCount}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Peak Days"
+          subtitle={
+            peakTimesQuery.data?.peakDay
+              ? `Busiest: ${peakTimesQuery.data.peakDay.day_name} (${formatCount(peakTimesQuery.data.peakDay.count)} bookings)`
+              : "Bookings by day of week"
+          }
+          isPending={peakTimesQuery.isPending}
+          isError={peakTimesQuery.isError}
+          error={peakTimesQuery.error}
+          isEmpty={(peakTimesQuery.data?.byDay?.length ?? 0) === 0}
+        >
+          <BarChart
+            data={(peakTimesQuery.data?.byDay ?? []).map((d) => ({
+              ...d,
+              label: formatDayShort(d.day_name),
+            }))}
+            valueKey="count"
+            labelKey="label"
+            colorVar={(d) =>
+              peakTimesQuery.data?.peakDay?.day_of_week === d.day_of_week
+                ? "--status-good"
+                : "--slot-2"
             }
             formatValue={formatCount}
           />

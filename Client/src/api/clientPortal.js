@@ -1,29 +1,19 @@
 // Client-portal API — deliberately separate from http.js, which uses
 // cookie sessions (credentials: "include") for staff/admin. This module
-// uses a JWT bearer token instead, stored in localStorage, since the
-// client portal is a completely independent auth system.
+// used to use a JWT bearer token stored in localStorage (readable by any
+// script on the page — a single XSS anywhere meant full account takeover).
+// It now uses an httpOnly cookie instead (see is-client-auth.js), issued by
+// the server on login — no client-side token handling at all, just
+// `credentials: "include"` on every request, same as the staff side.
 import { queryClient } from "./http.js";
 
-const baseUrl = `${import.meta.env.VITE_API_BASE_URL}/client-portal`;
-const TOKEN_KEY = "clientToken";
-
-export function getClientToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setClientToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearClientToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
+const rootBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const baseUrl = `${rootBaseUrl}/client-portal`;
 
 async function handlePortalResponse(response, fallbackMessage) {
   if (response.status === 401) {
-    // The token is missing/expired/invalid — cached portal data is now
+    // The cookie is missing/expired/invalid — cached portal data is now
     // stale for a session that no longer exists server-side.
-    clearClientToken();
     queryClient.removeQueries({ queryKey: ["clientPortal"] });
     if (
       typeof window !== "undefined" &&
@@ -44,9 +34,21 @@ async function handlePortalResponse(response, fallbackMessage) {
   return response.json();
 }
 
-function authHeaders() {
-  const token = getClientToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+// Every mutating request needs a fresh CSRF token, same shared endpoint and
+// mechanism the staff side (http.js) already uses — the httpOnly auth
+// cookie is attached automatically by the browser, so unlike the old
+// bearer-token approach, these routes are now a real CSRF target without
+// this.
+async function getCsrfToken() {
+  const response = await fetch(`${rootBaseUrl}/csrf-token`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error("Could not fetch CSRF token.");
+  }
+  const { csrfToken } = await response.json();
+  return csrfToken;
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -55,14 +57,25 @@ export async function loginWithGoogle(credential) {
   const response = await fetch(`${baseUrl}/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ credential }),
   });
   return handlePortalResponse(response, "Failed to sign in with Google");
 }
 
+export async function logoutClient() {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`${baseUrl}/logout`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handlePortalResponse(response, "Failed to log out");
+}
+
 export async function fetchMyProfile({ signal } = {}) {
   const response = await fetch(`${baseUrl}/me`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch profile");
@@ -87,16 +100,18 @@ export async function fetchMyAppointments({
   });
 
   const response = await fetch(`${baseUrl}/appointments?${params}`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch appointments");
 }
 
 export async function bookMyAppointment(payload) {
+  const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/appointments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   return handlePortalResponse(response, "Failed to book appointment");
@@ -110,7 +125,7 @@ export async function fetchStaffBookedSlots({
   const params = new URLSearchParams({ assigned_staff_id, appointment_date });
   const response = await fetch(
     `${baseUrl}/appointments/booked-slots?${params}`,
-    { headers: authHeaders(), signal },
+    { credentials: "include", signal },
   );
   return handlePortalResponse(response, "Failed to fetch booked slots");
 }
@@ -120,10 +135,31 @@ export async function fetchStaffBookedSlots({
 export async function fetchClinicSchedule({ start_date, end_date, signal } = {}) {
   const params = new URLSearchParams({ start_date, end_date });
   const response = await fetch(`${baseUrl}/clinic-schedule?${params}`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch clinic schedule");
+}
+
+// Public version for the landing page — no auth, since a visitor here isn't
+// signed in at all. Deliberately does NOT go through handlePortalResponse:
+// that helper bounces to /login on a 401, which would be wrong for a page
+// anonymous visitors land on directly.
+export async function fetchPublicClinicSchedule({
+  start_date,
+  end_date,
+  signal,
+} = {}) {
+  const params = new URLSearchParams({ start_date, end_date });
+  const response = await fetch(
+    `${baseUrl}/public/clinic-schedule?${params}`,
+    { signal },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message || "Failed to fetch clinic schedule");
+  }
+  return response.json();
 }
 
 // ── Payments ──────────────────────────────────────────
@@ -131,7 +167,7 @@ export async function fetchClinicSchedule({ start_date, end_date, signal } = {})
 export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
   const params = new URLSearchParams({ page, limit });
   const response = await fetch(`${baseUrl}/payments?${params}`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch payment history");
@@ -140,9 +176,11 @@ export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
 // formData carries gcash_reference_number + the payment_proof_image file.
 // No Content-Type set — the browser fills in the multipart boundary.
 export async function submitPaymentProof(paymentId, formData) {
+  const csrfToken = await getCsrfToken();
   const response = await fetch(`${baseUrl}/payments/${paymentId}/proof`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
     body: formData,
   });
   return handlePortalResponse(response, "Failed to submit payment proof");
@@ -150,7 +188,7 @@ export async function submitPaymentProof(paymentId, formData) {
 
 export async function fetchClinicQrCode({ signal } = {}) {
   const response = await fetch(`${baseUrl}/gcash-qr-code`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch QR code");
@@ -170,7 +208,7 @@ export async function fetchMyPets({
     ...(search && { search }),
   });
   const response = await fetch(`${baseUrl}/pets?${params}`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch pets");
@@ -180,7 +218,7 @@ export async function fetchMyPets({
 
 export async function fetchPortalAppointmentServices({ signal } = {}) {
   const response = await fetch(`${baseUrl}/appointment-services`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch services");
@@ -188,7 +226,7 @@ export async function fetchPortalAppointmentServices({ signal } = {}) {
 
 export async function fetchPortalAppointmentStaff({ signal } = {}) {
   const response = await fetch(`${baseUrl}/appointment-staff`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch staff");
@@ -196,7 +234,7 @@ export async function fetchPortalAppointmentStaff({ signal } = {}) {
 
 export async function fetchPortalGroomingPriceTiers({ signal } = {}) {
   const response = await fetch(`${baseUrl}/grooming-price-tiers`, {
-    headers: authHeaders(),
+    credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch grooming price tiers");

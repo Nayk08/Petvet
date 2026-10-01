@@ -5,18 +5,37 @@ import authLimiter from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
 import { validateBody } from "../../middleware/validate.js";
 import { clientPortalBookAppointmentSchema } from "../../validators/appointmentSchema.js";
+import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
 const clientPortalController = new ClientPortalController();
 
-// Public — no client session/token exists yet at this point. Not behind
-// doubleCsrfProtection either: this issues a bearer token, not a cookie,
-// and the request body is a Google-signed ID token that can't be forged
-// by a cross-site request, so CSRF isn't a meaningful threat here.
+// Public — no client session/token exists yet at this point. The request
+// body is a Google-signed ID token that can't be forged by a cross-site
+// request, so CSRF isn't a meaningful threat for THIS specific request —
+// but everything after login now runs on an httpOnly cookie (see
+// is-client-auth.js), which the browser attaches automatically, so those
+// routes need doubleCsrfProtection same as the staff side.
 router.post(
   "/auth/google",
   authLimiter,
   (req, res) => clientPortalController.loginWithGoogle(req, res),
+);
+
+router.post(
+  "/logout",
+  doubleCsrfProtection,
+  (req, res) => clientPortalController.logout(req, res),
+);
+
+// Public — powers the landing page's "live calendar" for visitors who
+// aren't signed in at all. Reuses the exact same controller method as the
+// authenticated /clinic-schedule below: it already excludes every
+// client/pet/staff-identifying field (see ClientPortal_Model.js) and
+// hard-floors the range at today server-side, so there's nothing here that
+// needs an auth gate.
+router.get("/public/clinic-schedule", (req, res) =>
+  clientPortalController.getClinicSchedule(req, res),
 );
 
 // Everything below requires a valid client JWT.
@@ -32,6 +51,7 @@ router.get("/appointments", isClientAuth, (req, res) =>
 router.post(
   "/appointments",
   isClientAuth,
+  doubleCsrfProtection,
   validateBody(clientPortalBookAppointmentSchema),
   (req, res) => clientPortalController.bookAppointment(req, res),
 );
@@ -47,6 +67,7 @@ router.get("/payments", isClientAuth, (req, res) =>
 router.post(
   "/payments/:id/proof",
   isClientAuth,
+  doubleCsrfProtection,
   uploadPaymentProof.single("payment_proof_image"),
   (req, res) => clientPortalController.submitPaymentProof(req, res),
 );

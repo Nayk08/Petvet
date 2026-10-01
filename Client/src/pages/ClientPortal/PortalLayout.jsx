@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { LogOut, Calendar, Cat, CreditCard, Sun, Moon } from "lucide-react";
-import { fetchMyProfile, clearClientToken } from "@/api/clientPortal.js";
+import { fetchMyProfile, logoutClient } from "@/api/clientPortal.js";
+import { queryClient } from "@/api/http.js";
 import petvetLogo from "@/assets/petvet_icon.svg";
 
 const NAV_ITEMS = [
@@ -46,8 +47,16 @@ export function Component() {
     staleTime: 1000 * 60 * 5,
   });
 
-  function handleLogout() {
-    clearClientToken();
+  async function handleLogout() {
+    try {
+      await logoutClient();
+    } catch {
+      // Cookie clearing is best-effort from the UI's perspective — even if
+      // this request fails, sending the client back to /login is still the
+      // right outcome (and an expired/invalid cookie is no worse than one
+      // that failed to clear).
+    }
+    queryClient.removeQueries({ queryKey: ["clientPortal"] });
     navigate("/login");
   }
 

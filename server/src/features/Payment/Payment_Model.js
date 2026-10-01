@@ -509,6 +509,33 @@ export default class PaymentModel {
     }
   }
 
+  // A real GCash transaction has exactly one reference number — if it's
+  // already attached to another Completed or Awaiting-Verification payment,
+  // someone is reusing proof of a single real transfer to claim a second
+  // (or third...) payment. Excludes the payment's own row so resubmitting
+  // the same proof for the same payment isn't blocked.
+  async isGcashReferenceInUse({ gcash_reference_number, excludePaymentId }) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT 1 FROM tbl_payments p
+         JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+         WHERE p.gcash_reference_number = $1
+           AND p.is_deleted IS NOT TRUE
+           AND p.payment_id IS DISTINCT FROM $2
+           AND ps.payment_status_name IN ('Completed', 'Awaiting Verification')
+         LIMIT 1`,
+        [gcash_reference_number, excludePaymentId ?? null],
+      );
+      return res.rows.length > 0;
+    } catch (error) {
+      console.log("Error on Model isGcashReferenceInUse function");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Client-portal self-service GCash payment: stores the reference number
   // + uploaded screenshot and moves the payment to "Awaiting Verification"
   // — no stock/appointment side effects here, since nothing is actually

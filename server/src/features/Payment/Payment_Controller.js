@@ -1,4 +1,5 @@
 import PaymentService from "./Payment_Service.js";
+import { sendError } from "../../../utils/errorResponse.js";
 
 const paymentService = new PaymentService();
 
@@ -15,7 +16,7 @@ export default class PaymentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getPayments function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -25,7 +26,7 @@ export default class PaymentController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller getPaymentById function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -37,7 +38,7 @@ export default class PaymentController {
       res.status(201).json(payment);
     } catch (error) {
       console.log("Error on Controller checkout function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -63,7 +64,7 @@ export default class PaymentController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller completePayment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
   async cancelPayment(req, res) {
@@ -76,7 +77,7 @@ export default class PaymentController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller cancelPayment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -86,7 +87,7 @@ export default class PaymentController {
       res.json(revenueSummary);
     } catch (error) {
       console.log("Error on Controller getRevenueSummary function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -96,7 +97,7 @@ export default class PaymentController {
       res.json(todayRevenue);
     } catch (error) {
       console.log("Error on Controller getTodayRevenue function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -113,7 +114,7 @@ export default class PaymentController {
       res.json(result);
     } catch (error) {
       console.log("Error on Controller getRevenueTransactions function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -129,7 +130,7 @@ export default class PaymentController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller verifyPayment function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -139,7 +140,7 @@ export default class PaymentController {
       res.json(settings);
     } catch (error) {
       console.log("Error on Controller getGcashQrCode function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 
@@ -156,7 +157,7 @@ export default class PaymentController {
       res.json(settings);
     } catch (error) {
       console.log("Error on Controller updateGcashQrCode function");
-      res.status(error.statusCode || 500).json({ message: error.message });
+      sendError(res, error, "Something went wrong. Please try again.");
     }
   }
 }

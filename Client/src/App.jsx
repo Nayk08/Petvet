@@ -253,6 +253,12 @@ const router =
               import("./pages/ServerSide/Payment/Components/viewModal.jsx"),
             loader: requirePermission("PAYMENTS", "can_view"),
           },
+          {
+            path: "receipt/:payment_id",
+            lazy: () =>
+              import("./pages/ServerSide/Payment/Components/ReceiptModal.jsx"),
+            loader: requirePermission("PAYMENTS", "can_view"),
+          },
 
           {
             path: "delete-payment/:payment_id",
@@ -398,6 +404,11 @@ const router =
         },
       },
       {
+        path: "maintenance",
+        loader: requirePermission("MAINTENANCE"),
+        lazy: () => import("./pages/ServerSide/Maintenance/Maintenance.jsx"),
+      },
+      {
         path: "client-record",
         loader: requirePermission("C_P_RECORDS"),
         lazy: () =>
@@ -446,6 +457,12 @@ const router =
             loader: requirePermission("C_P_RECORDS"),
             lazy: () =>
               import("./pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx"),
+          },
+          {
+            path: "pets/:pets_id/transfer-owner",
+            loader: requirePermission("C_P_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/TransferPetOwnerModal.jsx"),
           },
         ],
       },

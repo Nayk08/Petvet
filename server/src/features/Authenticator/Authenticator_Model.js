@@ -30,25 +30,4 @@ export default class AuthenticatorModel {
     return result.rows[0].user_picture;
   }
 
-  async findUserLevelId(userLevel) {
-    const result = await pool.query(
-      `SELECT user_level_id FROM tbl_user_level 
-WHERE LOWER(TRIM(user_level)) = LOWER(TRIM($1)) 
-LIMIT 1`,
-      [userLevel],
-    );
-    return result.rows[0]?.user_level_id;
-  }
-
-  async registerUser(userName, email, password, userLevelId) {
-    // RETURNING only safe columns — never user_password (even hashed, it
-    // has no business leaving the server in an API response).
-    const result = await pool.query(
-      `INSERT INTO tbl_users (user_name, user_email, user_password, user_level_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING users_id, user_name, user_email, user_level_id, date_created`,
-      [userName, email, password, userLevelId],
-    );
-    return result.rows[0];
-  }
 }
