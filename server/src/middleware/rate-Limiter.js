@@ -50,6 +50,17 @@ export const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 1000,
   message: { message: "Too many requests, please slow down." },
+  // TEMPORARY diagnostic — 1000/min is still getting tripped by normal
+  // browsing, which points at a real request-storm bug somewhere rather
+  // than just an undersized limit. Logs exactly which path/IP is flooding
+  // so the actual culprit can be found instead of guessed at; remove once
+  // that's identified and fixed.
+  handler: (req, res, next, options) => {
+    console.warn(
+      `[rate-limit] apiLimiter tripped — ip=${req.ip} path=${req.originalUrl} method=${req.method}`,
+    );
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 // /api/csrf-token is public and writes a session row to Postgres on every
