@@ -36,11 +36,13 @@ export default function ReceiptContent({ payment, appointment }) {
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Date</span>
-          <span>{formatDate(payment.date_created)}</span>
+          {/* Receipts are for completed payments: the paid-at time and the
+              cashier who took it, not when/who created the invoice. */}
+          <span>{formatDate(payment.date_updated ?? payment.date_created)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Served By</span>
-          <span>{payment.created_by ?? "—"}</span>
+          <span>{payment.updated_by ?? payment.created_by ?? "—"}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Status</span>

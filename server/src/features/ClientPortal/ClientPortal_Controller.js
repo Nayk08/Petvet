@@ -1,18 +1,13 @@
 import ClientPortalService from "./ClientPortal_Service.js";
 import { sendError } from "../../../utils/errorResponse.js";
-import { CLIENT_TOKEN_COOKIE } from "../../middleware/is-client-auth.js";
+import {
+  CLIENT_TOKEN_COOKIE,
+  CLIENT_TOKEN_COOKIE_OPTIONS,
+} from "../../middleware/is-client-auth.js";
 
 const clientPortalService = new ClientPortalService();
 
 // Same security properties as the staff session cookie (see app.js) —
-// httpOnly so no script on the page can read it, secure in production,
-// sameSite matching. 7 days to match the JWT's own expiresIn.
-const CLIENT_TOKEN_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  maxAge: 1000 * 60 * 60 * 24 * 7,
-};
 
 export default class ClientPortalController {
   async loginWithGoogle(req, res) {
@@ -127,6 +122,19 @@ export default class ClientPortalController {
     }
   }
 
+  async getMyPetMedicalRecords(req, res) {
+    try {
+      const records = await clientPortalService.getMyPetMedicalRecords({
+        pets_id: req.params.pets_id,
+        client_id: req.clientUser.client_id,
+      });
+      res.json(records);
+    } catch (error) {
+      console.log("Error on Controller getMyPetMedicalRecords function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async addMyPet(req, res) {
     try {
       const {
@@ -157,6 +165,27 @@ export default class ClientPortalController {
       res.status(201).json(pet);
     } catch (error) {
       console.log("Error on Controller addMyPet function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  // Public (landing page): the active service catalog, display fields only —
+  // no staff names, role settings or audit columns.
+  async getPublicServices(req, res) {
+    try {
+      const services = await clientPortalService.selectAppointmentServices();
+      res.json(
+        services.map((s) => ({
+          appointment_services_id: s.appointment_services_id,
+          appointment_services: s.appointment_services,
+          category_id: s.category_id,
+          category_name: s.category_name,
+          description: s.description,
+          duration_minutes: s.duration_minutes,
+          service_price: s.service_price,
+        })),
+      );
+    } catch (error) {
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }
@@ -229,12 +258,14 @@ export default class ClientPortalController {
     }
   }
 
-  async getGroomingPriceTiers(req, res) {
+  async cancelMyUnpaidAppointment(req, res) {
     try {
-      const tiers = await clientPortalService.getGroomingPriceTiers();
-      res.json(tiers);
+      const result = await clientPortalService.cancelMyUnpaidAppointment({
+        appointment_id: req.params.appointment_id,
+        client_id: req.clientUser.client_id,
+      });
+      res.json(result);
     } catch (error) {
-      console.log("Error on Controller getGroomingPriceTiers function");
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }
@@ -247,7 +278,6 @@ export default class ClientPortalController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
       } = req.body;
       const appointment = await clientPortalService.bookAppointment({
@@ -257,7 +287,6 @@ export default class ClientPortalController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
       });
       res.status(201).json(appointment);
@@ -272,11 +301,12 @@ export default class ClientPortalController {
       if (!req.file) {
         return res.status(400).json({ message: "No payment screenshot uploaded" });
       }
-      const { gcash_reference_number } = req.body;
+      const { gcash_reference_number, amount_paid } = req.body;
       const payment = await clientPortalService.submitPaymentProof({
         payment_id: req.params.id,
         client_id: req.clientUser.client_id,
         gcash_reference_number,
+        amount_paid,
         payment_proof_image: req.file.path,
       });
       res.json(payment);

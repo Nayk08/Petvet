@@ -20,7 +20,7 @@ export function Component() {
     queryFn: ({ signal }) => fetchPetById(params.pets_id, { signal }),
   });
 
-  const { data: history, isPending } = useQuery({
+  const { data: history, isPending, isError, error } = useQuery({
     queryKey: ["pet-history", params.pets_id],
     queryFn: ({ signal }) => fetchPetHistory(params.pets_id, { signal }),
   });
@@ -44,6 +44,10 @@ export function Component() {
           {isPending ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
               Loading...
+            </p>
+          ) : isError ? (
+            <p role="alert" className="text-sm text-rose-500 dark:text-rose-400 py-6 text-center">
+              {error?.message ?? "Failed to load history"}
             </p>
           ) : (
             <PetHistoryList history={history} />

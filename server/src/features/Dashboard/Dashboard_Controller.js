@@ -12,12 +12,14 @@ export default class DashboardController {
         search,
         appointment_status_name,
         service_name,
+        category_name,
         assigned_staff_id,
         appointment_date,
       } = req.query;
       const filters = {
         appointment_status_name,
         service_name,
+        category_name,
         assigned_staff_id,
         appointment_date,
       };

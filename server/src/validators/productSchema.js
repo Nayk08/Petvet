@@ -11,6 +11,16 @@ const productExpiryDateSchema = z
     return year >= currentYear && year <= currentYear + 50;
   }, "Expiry date year looks invalid");
 
+// New stock (add / restock) can't already be expired — that's a typo, and
+// the batch would be unsellable on arrival. Editing an existing batch keeps
+// the looser check so an already-expired one can still be corrected.
+const manilaToday = () =>
+  new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const newStockExpiryDateSchema = productExpiryDateSchema.refine(
+  (val) => !val || val.slice(0, 10) >= manilaToday(),
+  "Expiry date can't be in the past",
+);
+
 // Kept as a plain (optionally empty) string, same as product_expiry_date —
 // an unselected <select> submits "", which Postgres itself coerces fine
 // once normalized to NULL at the model layer; z.coerce.number() would
@@ -26,11 +36,13 @@ export const addProductSchema = z.object({
   product_price: z.coerce
     .number({ error: "Price must be a valid number" })
     .min(0, "Price must be 0 or more"),
-  product_expiry_date: productExpiryDateSchema,
+  product_expiry_date: newStockExpiryDateSchema,
   category_id: categoryIdSchema,
 });
 
-export const updateProductSchema = addProductSchema.partial();
+export const updateProductSchema = addProductSchema
+  .extend({ product_expiry_date: productExpiryDateSchema })
+  .partial();
 
 // Dedicated "restock" action — adds to an existing batch's quantity and
 // always overwrites its price/expiry with whatever's submitted (both
@@ -44,7 +56,7 @@ export const addQuantitySchema = z.object({
   product_price: z.coerce
     .number({ error: "Price must be a valid number" })
     .min(0, "Price must be 0 or more"),
-  product_expiry_date: productExpiryDateSchema,
+  product_expiry_date: newStockExpiryDateSchema,
 });
 
 export const addProductCategorySchema = z.object({

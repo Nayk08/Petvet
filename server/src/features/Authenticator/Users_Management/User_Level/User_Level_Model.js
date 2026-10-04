@@ -95,12 +95,27 @@ export default class UserLevelModel {
     }
   }
 
+  async getRoleNameAndActiveUsers(userLevelId) {
+    const result = await pool.query(
+      `SELECT ul.user_level,
+              (SELECT COUNT(*) FROM tbl_user_level_assignments a
+               JOIN tbl_users u ON u.users_id = a.users_id AND u.is_deleted = false
+               WHERE a.user_level_id = ul.user_level_id AND a.is_active)::int AS active_users
+       FROM tbl_user_level ul
+       WHERE ul.user_level_id = $1 AND ul.is_deleted IS NOT TRUE`,
+      [userLevelId],
+    );
+    return result.rows[0];
+  }
+
   async deleteUserLevel(userLevelId, deletedBy) {
     const client = await pool.connect();
     try {
       const result = await client.query(
+        // is_active = false too, so v_user_permissions stops granting it.
         `UPDATE tbl_user_level
-          SET is_deleted = 'true', deleted_by = $2 WHERE user_level_id = $1
+          SET is_deleted = true, is_active = false, deleted_by = $2
+          WHERE user_level_id = $1 AND is_deleted IS NOT TRUE
             RETURNING *`,
         [userLevelId, deletedBy],
       );

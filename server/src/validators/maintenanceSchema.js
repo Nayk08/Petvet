@@ -22,17 +22,27 @@ const priceSchema = z
   .optional()
   .or(z.literal(""));
 
+// One of the three fixed tbl_service_categories rows (Grooming /
+// Consultation / Operation) — the FK rejects anything else.
+const categoryIdSchema = z.coerce
+  .number({ error: "Please select a category" })
+  .int()
+  .positive("Please select a category");
+
+// The booking end time is start + this, so it's required and must fit the
+// clinic day (9 AM – 6 PM = 540 minutes).
+const durationSchema = z.coerce
+  .number({ error: "Duration must be a valid number" })
+  .int("Duration must be whole minutes")
+  .positive("Duration must be at least 1 minute")
+  .max(540, "Duration can't be longer than the clinic day (540 minutes)");
+
 export const addServiceSchema = z.object({
-  appointment_services: z.string().trim().min(1, "Service name is required").max(50),
-  category: z.string().trim().max(50).optional().or(z.literal("")),
+  appointment_services: z.string().trim().min(1, "Sub-service name is required").max(50),
+  category_id: categoryIdSchema,
   description: z.string().trim().max(1000).optional().or(z.literal("")),
   service_price: priceSchema,
-  min_price: priceSchema,
-  duration_minutes: z.coerce
-    .number({ error: "Duration must be a valid number" })
-    .int()
-    .positive("Duration must be at least 1 minute")
-    .optional(),
+  duration_minutes: durationSchema,
   allowed_roles: allowedRolesSchema,
 });
 
@@ -45,32 +55,6 @@ export const serviceIdParamSchema = z.object({
     .positive("Invalid service ID"),
 });
 
-export const addGroomingTierSchema = z.object({
-  tier_name: z.string().trim().min(1, "Tier name is required").max(20),
-  max_weight_kg: z
-    .string()
-    .trim()
-    .refine((v) => v === "" || (!isNaN(Number(v)) && Number(v) > 0), {
-      message: "Max weight must be greater than 0",
-    })
-    .optional()
-    .or(z.literal("")), // blank = "no upper limit" (the largest tier)
-  price: z.coerce
-    .number({ error: "Price must be a valid number" })
-    .min(0, "Price must be 0 or more"),
-  description: z.string().trim().max(1000).optional().or(z.literal("")),
-  duration_minutes: z.coerce
-    .number({ error: "Duration must be a valid number" })
-    .int()
-    .positive("Duration must be at least 1 minute")
-    .optional(),
-});
-
-export const updateGroomingTierSchema = addGroomingTierSchema.partial();
-
-export const tierIdParamSchema = z.object({
-  tier_id: z.coerce
-    .number({ error: "Invalid tier ID" })
-    .int()
-    .positive("Invalid tier ID"),
+export const setServiceActiveSchema = z.object({
+  is_active: z.boolean({ error: "is_active must be true or false" }),
 });

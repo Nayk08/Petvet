@@ -4,7 +4,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { loader, requireAuth, requirePermission } from "./utils/routeGuards.js";
+import { requireAuth, requirePermission } from "./utils/routeGuards.js";
 import { requireClientAuth } from "./utils/clientPortalGuards.js";
 import { resolveLandingPath } from "./utils/resolveLandingPath.js";
 import Layout from "./components/layout/Layout";
@@ -16,7 +16,7 @@ import Grooming_Appointment from "./pages/ServerSide/Grooming_Appointment.jsx";
 import Consultation_Appointment from "./pages/ServerSide/Consultation_Appointment.jsx";
 import Operation_Appointment from "./pages/ServerSide/Operation_Appointment.jsx";
 import LandingPage from "./pages/LandingPage";
-import { loader as LandingLoader } from "../src/pages/LandingPage.jsx";
+import { loader as LandingLoader } from "./pages/LandingPage.jsx";
 import {
   action as loginAction,
   loader as loginLoader,
@@ -26,6 +26,13 @@ import Login from "./pages/Authentication/Login";
 
 import { queryClient, fetchNavbar } from "./api/http";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
+
+// Shown while a route's loader runs on first page load.
+const appLoading = (
+  <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-500 text-sm">
+    Loading application...
+  </div>
+);
 
 // LandingPage.jsx and AuthForm.jsx export a `loader`/`action` alongside
 // their component, which Vite's Fast Refresh can't hot-swap ("loader"
@@ -47,6 +54,7 @@ const router =
     index: true,
     element: <LandingPage />,
     errorElement: <ErrorPage />,
+    hydrateFallbackElement: appLoading,
     loader: LandingLoader,
   },
 
@@ -54,6 +62,7 @@ const router =
     path: "/login",
     element: <Login />,
     errorElement: <ErrorPage />,
+    hydrateFallbackElement: appLoading,
     action: loginAction,
     loader: loginLoader,
   },
@@ -110,11 +119,7 @@ const router =
   {
     path: "/",
     element: <Layout />,
-    hydrateFallbackElement: (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 text-sm">
-        Loading application...
-      </div>
-    ),
+    hydrateFallbackElement: appLoading,
     errorElement: <ErrorPage />,
     loader: requireAuth,
     children: [
@@ -460,7 +465,7 @@ const router =
           },
           {
             path: "pets/:pets_id/transfer-owner",
-            loader: requirePermission("C_P_RECORDS"),
+            loader: requirePermission("C_P_RECORDS", "can_edit"),
             lazy: () =>
               import("./pages/ServerSide/Client_Records/Pet_Records/components/TransferPetOwnerModal.jsx"),
           },
@@ -469,6 +474,12 @@ const router =
             loader: requirePermission("C_P_RECORDS"),
             lazy: () =>
               import("./pages/ServerSide/Client_Records/Pet_Records/components/PetHistoryModal.jsx"),
+          },
+          {
+            path: "pets/:pets_id/medical-records",
+            loader: requirePermission("MEDICAL_RECORDS"),
+            lazy: () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/MedicalRecordsModal.jsx"),
           },
         ],
       },

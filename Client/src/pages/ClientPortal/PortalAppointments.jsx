@@ -63,6 +63,8 @@ export function Component() {
   const appointmentsByDay = useMemo(() => {
     const map = new Map();
     for (const appt of appointments) {
+      // Cancelled bookings don't take up the day — keep them off the calendar.
+      if (appt.appointment_status_name === "Cancelled") continue;
       const key = dateKey(appt.appointment_date);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(appt);
@@ -129,7 +131,7 @@ export function Component() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-wide">
             My Appointments
@@ -142,7 +144,7 @@ export function Component() {
           disabled={isSelectedDayPast}
           title={isSelectedDayPast ? "Can't book an appointment in the past" : undefined}
           onClick={() => navigate(bookLink)}
-          className="flex items-center gap-1.5 font-medium"
+          className="flex items-center justify-center gap-1.5 font-medium w-full sm:w-auto"
         >
           <Plus size={16} />
           <span>Book Appointment</span>

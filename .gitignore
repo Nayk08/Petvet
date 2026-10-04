@@ -19,3 +19,5 @@ Thumbs.db
 
 # Claude Code local session/settings
 .claude/
+# Migrations ARE code: they must be committed so every database gets them.
+!server/migrations/*.sql

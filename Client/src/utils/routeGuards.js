@@ -1,6 +1,11 @@
 // src/utils/routeGuards.js
 import { redirect } from "react-router-dom";
-import { fetchCurrentUser, fetchNavbar, queryClient } from "../api/http";
+import {
+  fetchCurrentUser,
+  fetchNavbar,
+  queryClient,
+  loginUrlReturningHere,
+} from "../api/http";
 import { resolveLandingPath } from "./resolveLandingPath.js";
 
 // Require the user to be logged in
@@ -12,7 +17,7 @@ export async function requireAuth() {
   });
 
   if (!user) {
-    throw redirect("/login?mode=login");
+    throw redirect(loginUrlReturningHere());
   }
   return user;
 }

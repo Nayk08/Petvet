@@ -24,9 +24,9 @@ import {
   ChevronRight,
   CalendarClock,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, redirect } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
-import { fetchPublicClinicSchedule } from "@/api/clientPortal.js";
+import { fetchPublicClinicSchedule, fetchPublicServices } from "@/api/clientPortal.js";
 
 import petvetA1 from "../assets/petVet/petvet-img.jpg";
 import petvetA2 from "../assets/petVet/petvet-img2.jpg";
@@ -190,7 +190,7 @@ export default function LandingPage() {
               className="h-12 px-6 text-base border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white"
               asChild
             >
-              <a href="#services">View Clinic Hours</a>
+              <a href="#hours">View Clinic Hours</a>
             </Button>
           </div>
         </section>
@@ -239,9 +239,28 @@ export default function LandingPage() {
 
         <hr className="border-zinc-200 dark:border-zinc-800" />
 
-        {/* Clinic Policies & Hours Section */}
+        {/* Services Section — live catalog from Maintenance */}
         <section
           id="services"
+          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+        >
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
+              Our Services
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400 mt-2">
+              Everything we offer, with how long each visit takes. Sign in to
+              book any of these online.
+            </p>
+          </div>
+          <ServicesList />
+        </section>
+
+        <hr className="border-zinc-200 dark:border-zinc-800" />
+
+        {/* Clinic Policies & Hours Section */}
+        <section
+          id="hours"
           className="container px-4 md:px-6 py-20 max-w-5xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-12">
@@ -712,6 +731,87 @@ function LiveCalendar() {
   );
 }
 
+// The clinic's live service catalog (managed in Maintenance), grouped by
+// category — so the landing page never shows a stale or hardcoded price.
+function ServicesList() {
+  const [services, setServices] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublicServices({ signal: controller.signal })
+      .then(setServices)
+      .catch((err) => {
+        if (err.name !== "AbortError") setFailed(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (failed) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        Couldn't load our services right now — please try again later.
+      </p>
+    );
+  }
+  if (!services) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        Loading services...
+      </p>
+    );
+  }
+
+  // Already in category order (Grooming, Consultation, Operation).
+  const byCategory = [...new Set(services.map((s) => s.category_name))].map(
+    (name) => [name, services.filter((s) => s.category_name === name)],
+  );
+
+  return (
+    <div className="space-y-10">
+      {byCategory.map(([category, items]) => (
+        <div key={category}>
+          <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+            {category}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((s) => (
+              <div
+                key={s.appointment_services_id}
+                className="flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]"
+              >
+                <h4 className="font-semibold text-zinc-900 dark:text-white">
+                  {s.appointment_services}
+                </h4>
+                {s.description && (
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-3">
+                    {s.description}
+                  </p>
+                )}
+                <div className="mt-auto pt-2 flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
+                    <Clock className="h-4 w-4" />
+                    {s.duration_minutes} min
+                  </span>
+                  <span className="font-bold text-green-700 dark:text-green-400">
+                    {s.service_price != null
+                      ? `₱${Number(s.service_price).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`
+                      : "Price at clinic"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FeatureCard({ icon, title, description }) {
   return (
     <Card className="bg-zinc-50 dark:bg-[#0e1121] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white">
@@ -799,7 +899,7 @@ export async function loader() {
 
   if (user) {
     const { modules } = await fetchNavbar({});
-    return window.location.assign(resolveLandingPath(modules));
+    throw redirect(resolveLandingPath(modules));
   }
 
   return null;

@@ -18,16 +18,15 @@ const ROLE_OPTIONS = ["Veterinarian", "Groomer", "Staff", "Admin"];
 // `service` is null for "add", or the row being edited for "edit" — both
 // paths share this one form/mutation, same as most other add/edit pairs in
 // this app.
-export default function ServiceModal({ service, onClose }) {
+export default function ServiceModal({ service, categories, defaultCategoryId, onClose }) {
   const isEditMode = Boolean(service);
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState({
     appointment_services: service?.appointment_services ?? "",
-    category: service?.category ?? "",
+    category_id: String(service?.category_id ?? defaultCategoryId ?? ""),
     description: service?.description ?? "",
     service_price: service?.service_price ?? "",
-    min_price: service?.min_price ?? "",
     duration_minutes: service?.duration_minutes ?? "",
   });
   const [selectedRoles, setSelectedRoles] = useState(
@@ -51,7 +50,7 @@ export default function ServiceModal({ service, onClose }) {
         ? updateMaintenanceService(service.appointment_services_id, payload)
         : addMaintenanceService(payload),
     onSuccess: () => {
-      toast.success(isEditMode ? "Service updated" : "Service added");
+      toast.success(isEditMode ? "Sub-service updated" : "Sub-service added");
       queryClient.invalidateQueries({ queryKey: ["maintenance-services"] });
       // Booking dropdowns (staff + client portal) read the same catalog.
       queryClient.invalidateQueries({ queryKey: ["appointment-services"] });
@@ -69,11 +68,10 @@ export default function ServiceModal({ service, onClose }) {
     e.preventDefault();
     mutation.mutate({
       appointment_services: form.appointment_services.trim(),
-      category: form.category.trim(),
+      category_id: Number(form.category_id),
       description: form.description.trim(),
       service_price: form.service_price,
-      min_price: form.min_price,
-      duration_minutes: form.duration_minutes || undefined,
+      duration_minutes: Number(form.duration_minutes),
       allowed_roles: selectedRoles,
     });
   }
@@ -84,17 +82,17 @@ export default function ServiceModal({ service, onClose }) {
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
-              {isEditMode ? "Edit Service" : "Add Service"}
+              {isEditMode ? "Edit Sub-service" : "Add Sub-service"}
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
-              Service details shown to staff and clients when booking.
+              Its duration sets the appointment end time when booking.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                Service Name
+                Sub-service Name
               </label>
               <Input
                 name="appointment_services"
@@ -111,14 +109,23 @@ export default function ServiceModal({ service, onClose }) {
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                   Category
                 </label>
-                <Input
-                  name="category"
-                  value={form.category}
+                {/* The three fixed categories — a sub-service belongs to exactly one. */}
+                <select
+                  name="category_id"
+                  value={form.category_id}
                   onChange={handleChange}
-                  placeholder="e.g. Medical, Grooming"
-                  maxLength={50}
-                  className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
-                />
+                  required
+                  className="w-full h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-2 text-sm text-slate-900 dark:text-slate-100"
+                >
+                  <option value="" disabled>
+                    Select a category
+                  </option>
+                  {categories.map((c) => (
+                    <option key={c.category_id} value={c.category_id}>
+                      {c.category_name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
@@ -128,6 +135,9 @@ export default function ServiceModal({ service, onClose }) {
                   name="duration_minutes"
                   type="number"
                   min={1}
+                  max={540}
+                  step={1}
+                  required
                   value={form.duration_minutes}
                   onChange={handleChange}
                   placeholder="e.g. 30"
@@ -150,43 +160,25 @@ export default function ServiceModal({ service, onClose }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  Fixed Price (₱)
-                </label>
-                <Input
-                  name="service_price"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.service_price}
-                  onChange={handleChange}
-                  placeholder="Leave blank if variable"
-                  className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  Minimum Price (₱)
-                </label>
-                <Input
-                  name="min_price"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.min_price}
-                  onChange={handleChange}
-                  placeholder="Floor for a variable price"
-                  className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                Price (₱)
+              </label>
+              <Input
+                name="service_price"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.service_price}
+                onChange={handleChange}
+                placeholder="Leave blank if priced at the clinic"
+                className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
+              />
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Leave blank for a sub-service priced per case (e.g. surgery) —
+                staff enter the amount when the client pays.
+              </p>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-1">
-              Leave Fixed Price blank for a service priced per case at
-              booking (e.g. surgery) — Minimum Price then sets the lowest
-              amount staff can charge for it.
-            </p>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block">
@@ -232,7 +224,7 @@ export default function ServiceModal({ service, onClose }) {
                 ? "Saving..."
                 : isEditMode
                   ? "Save Changes"
-                  : "Add Service"}
+                  : "Add Sub-service"}
             </Button>
           </DialogFooter>
         </form>

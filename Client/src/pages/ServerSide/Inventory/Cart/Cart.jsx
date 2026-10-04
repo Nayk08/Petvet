@@ -101,7 +101,12 @@ export default function Cart() {
   // (cart-side stock; DB stock is never touched here)
   const handleAddToCart = (product) => {
     const qtyToAdd = getSelectedQty(product.product_name);
-    addToCart(product, qtyToAdd);
+    // The cart clamps quantities to product_quantity — give it the sellable
+    // (unexpired) stock, not the raw total.
+    addToCart(
+      { ...product, product_quantity: product.sellable_quantity ?? product.product_quantity },
+      qtyToAdd,
+    );
     setSelectedQuantities((prev) => ({ ...prev, [product.product_name]: 1 }));
   };
 
@@ -189,7 +194,8 @@ export default function Cart() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {data.rows.map((product) => {
               const localQty = getSelectedQty(product.product_name);
-              const rawStock = product.product_quantity ?? 0;
+              // Expired batches can't be sold, so only unexpired stock counts here.
+              const rawStock = product.sellable_quantity ?? product.product_quantity ?? 0;
               const currentCartQty = getCartQty(product.product_name);
 
               // Stock minus what's already committed to the cart —

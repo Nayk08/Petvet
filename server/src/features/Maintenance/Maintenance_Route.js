@@ -6,15 +6,21 @@ import {
   addServiceSchema,
   updateServiceSchema,
   serviceIdParamSchema,
-  addGroomingTierSchema,
-  updateGroomingTierSchema,
-  tierIdParamSchema,
+  setServiceActiveSchema,
 } from "../../validators/maintenanceSchema.js";
 
 const router = express.Router();
 const maintenanceController = new MaintenanceController();
 
-// ── Services ────────────────────────────────────────
+// ── Service categories (fixed: read-only) ──────────
+
+router.get(
+  "/maintenance/service-categories",
+  hasPermission("MAINTENANCE", "can_view"),
+  (req, res) => maintenanceController.getServiceCategories(req, res),
+);
+
+// ── Sub-services ────────────────────────────────────
 
 router.get(
   "/maintenance/services",
@@ -37,41 +43,14 @@ router.put(
   (req, res) => maintenanceController.updateService(req, res),
 );
 
+// Soft delete / restore (is_active = false hides it from booking; old
+// appointments keep pointing at it).
 router.patch(
   "/maintenance/services/:service_id/active",
-  hasPermission("MAINTENANCE", "can_edit"),
-  validateParams(serviceIdParamSchema),
-  (req, res) => maintenanceController.setServiceActive(req, res),
-);
-
-// ── Grooming price tiers ───────────────────────────
-
-router.get(
-  "/maintenance/grooming-tiers",
-  hasPermission("MAINTENANCE", "can_view"),
-  (req, res) => maintenanceController.getGroomingTiers(req, res),
-);
-
-router.post(
-  "/maintenance/grooming-tiers",
-  hasPermission("MAINTENANCE", "can_create"),
-  validateBody(addGroomingTierSchema),
-  (req, res) => maintenanceController.addGroomingTier(req, res),
-);
-
-router.put(
-  "/maintenance/grooming-tiers/:tier_id",
-  hasPermission("MAINTENANCE", "can_edit"),
-  validateParams(tierIdParamSchema),
-  validateBody(updateGroomingTierSchema),
-  (req, res) => maintenanceController.updateGroomingTier(req, res),
-);
-
-router.delete(
-  "/maintenance/grooming-tiers/:tier_id",
   hasPermission("MAINTENANCE", "can_delete"),
-  validateParams(tierIdParamSchema),
-  (req, res) => maintenanceController.deleteGroomingTier(req, res),
+  validateParams(serviceIdParamSchema),
+  validateBody(setServiceActiveSchema),
+  (req, res) => maintenanceController.setServiceActive(req, res),
 );
 
 export default router;

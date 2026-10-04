@@ -8,6 +8,7 @@ import {
   logoutUser,
   queryClient,
 } from "../../api/http";
+import { useCartStore } from "../../stores/useCartStore";
 import petvetLogo from "../../assets/petvet_icon.svg";
 
 import {
@@ -162,6 +163,9 @@ export default function Sidebar({ onLogout }) {
     try {
       await logoutUser();
       queryClient.clear();
+      // The cart is persisted to localStorage — don't hand it to the next
+      // person who logs in on this (shared clinic) PC.
+      useCartStore.getState().clearCart();
       if (onLogout) onLogout();
       navigate("/login?mode=login", { replace: true });
     } catch (error) {
@@ -302,7 +306,9 @@ export default function Sidebar({ onLogout }) {
               const children = childrenMap.get(module.module_code) || [];
               const IconComponent = MODULE_ICONS[module.module_code] || Circle;
 
+              // Permission-only modules (e.g. MEDICAL_RECORDS) have no route — don't render a dead link.
               if (children.length === 0) {
+                if (!module.route) return null;
                 return (
                   <NavLink
                     key={module.module_code}

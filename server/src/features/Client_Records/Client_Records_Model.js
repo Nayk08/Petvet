@@ -394,15 +394,49 @@ export default class ClientRecordsModel {
     }
   }
 
+  async countOpenAppointmentsForPet(pets_id) {
+    const res = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM tbl_appointments a
+       JOIN tbl_appointment_status s ON s.appointment_status_id = a.appointment_status_id
+       WHERE a.pets_id = $1 AND a.is_deleted IS NOT TRUE
+         AND LOWER(TRIM(s.appointment_status_name)) IN ('pending', 'in queue')`,
+      [pets_id],
+    );
+    return res.rows[0].n;
+  }
+
+  async getOpenItemsForClient(client_id) {
+    const res = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM tbl_appointments a
+          JOIN tbl_appointment_status s ON s.appointment_status_id = a.appointment_status_id
+          WHERE a.client_id = $1 AND a.is_deleted IS NOT TRUE
+            AND LOWER(TRIM(s.appointment_status_name)) IN ('pending', 'in queue'))::int AS appointments,
+         (SELECT COUNT(*) FROM tbl_payments p
+          JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
+          JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+          WHERE a.client_id = $1 AND p.is_deleted IS NOT TRUE
+            AND LOWER(TRIM(ps.payment_status_name)) IN ('pending', 'awaiting verification', 'refund needed'))::int AS payments`,
+      [client_id],
+    );
+    return res.rows[0];
+  }
+
   async getPetById(pets_id) {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `SELECT * FROM tbl_pets WHERE pets_id = $1 AND is_deleted IS NOT TRUE`,
+        // A deleted client's pets are archived with them — they must not
+        // stay editable/transferable/viewable on their own.
+        `SELECT p.* FROM tbl_pets p
+         JOIN tbl_clients c ON c.client_id = p.client_id AND c.is_deleted IS NOT TRUE
+         WHERE p.pets_id = $1 AND p.is_deleted IS NOT TRUE`,
         [pets_id],
       );
       if (!res.rows.length) {
-        throw new Error("Pet record not found.");
+        const err = new Error("Pet record not found.");
+        err.status = 404;
+        throw err;
       }
       return res.rows[0];
     } catch (error) {
@@ -472,6 +506,7 @@ export default class ClientRecordsModel {
   async transferPetOwner({ pets_id, new_client_id, updated_by }) {
     const client = await pool.connect();
     try {
+      await client.query("BEGIN");
       const res = await client.query(
         `UPDATE tbl_pets
         SET client_id = $1, updated_by = $2, date_updated = NOW()
@@ -481,10 +516,28 @@ export default class ClientRecordsModel {
       );
 
       if (res.rows.length === 0) {
-        throw new Error(`Pet with id ${pets_id} not found`);
+        const err = new Error("Pet record not found.");
+        err.status = 404;
+        throw err;
       }
+
+      // The pet's upcoming visits (and so their bills) go with it — they used
+      // to stay on the old owner, who kept seeing/paying for them while the
+      // new owner couldn't. Past visits stay as history under who brought it.
+      await client.query(
+        `UPDATE tbl_appointments a
+         SET client_id = $1, updated_by = $2, date_updated = NOW()
+         FROM tbl_appointment_status s
+         WHERE s.appointment_status_id = a.appointment_status_id
+           AND a.pets_id = $3 AND a.is_deleted IS NOT TRUE
+           AND LOWER(TRIM(s.appointment_status_name)) IN ('pending', 'in queue')`,
+        [new_client_id, updated_by, pets_id],
+      );
+
+      await client.query("COMMIT");
       return res.rows[0];
     } catch (error) {
+      await client.query("ROLLBACK");
       console.log(`Error in transferPetOwner: ${error}`);
       throw error;
     } finally {

@@ -30,6 +30,11 @@ const poolConfig = {
   connectionTimeoutMillis: 5000,
   statement_timeout: 10000,
   query_timeout: 10000,
+  // Run every session on clinic time, so CURRENT_DATE / DATE(timestamptz) /
+  // now()-defaulted columns mean "today in Manila". On Render the session
+  // defaults to UTC, which put 12 AM–8 AM Manila sales on the previous day
+  // in the "today" revenue and queue numbers.
+  options: "-c TimeZone=Asia/Manila",
 };
 
 const pool = new Pool(

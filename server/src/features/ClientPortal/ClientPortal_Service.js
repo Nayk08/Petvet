@@ -4,11 +4,13 @@ import ClientPortalModel from "./ClientPortal_Model.js";
 import ClientRecordsService from "../Client_Records/Client_Records_Service.js";
 import AppointmentService from "../Appointment/Appointment_Service.js";
 import PaymentService from "../Payment/Payment_Service.js";
+import MedicalRecordsService from "../MedicalRecords/MedicalRecords_Service.js";
 
 const clientPortalModel = new ClientPortalModel();
 const clientRecordsService = new ClientRecordsService();
 const appointmentService = new AppointmentService();
 const paymentService = new PaymentService();
+const medicalRecordsService = new MedicalRecordsService();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export default class ClientPortalService {
@@ -140,6 +142,16 @@ export default class ClientPortalService {
     return appointmentService.getAppointmentHistoryForPet(pets_id);
   }
 
+  async getMyPetMedicalRecords({ pets_id, client_id }) {
+    const pet = await clientRecordsService.getPetById(pets_id); // throws if missing
+    if (String(pet.client_id) !== String(client_id)) {
+      const err = new Error("You don't have access to this pet's medical records.");
+      err.statusCode = 403;
+      throw err;
+    }
+    return medicalRecordsService.getPetMedicalRecords(pets_id);
+  }
+
   async addMyPet({
     client_id,
     pets_name,
@@ -208,10 +220,6 @@ export default class ClientPortalService {
     return appointmentService.selectStaff();
   }
 
-  async getGroomingPriceTiers() {
-    return appointmentService.getGroomingPriceTiers();
-  }
-
   // client_id is always taken from the authenticated JWT (passed in here
   // by the controller) — never trusted from the request body — so a
   // client can only ever book an appointment for themselves. pets_id DOES
@@ -226,7 +234,6 @@ export default class ClientPortalService {
     assigned_staff_id,
     appointment_date,
     start_time,
-    end_time,
     notes,
   }) {
     const pet = await clientRecordsService.getPetById(pets_id);
@@ -236,6 +243,10 @@ export default class ClientPortalService {
       throw err;
     }
 
+    // A sub-service with no fixed price can still be booked: its bill opens
+    // at ₱0 and staff enter the real amount when the client pays at the
+    // clinic. (Online GCash payment is refused for it — see
+    // Payment_Service.submitOnlinePaymentProof.)
     const appointment = await appointmentService.addAppointment({
       client_id,
       pets_id,
@@ -243,7 +254,6 @@ export default class ClientPortalService {
       assigned_staff_id,
       appointment_date,
       start_time,
-      end_time,
       notes,
       created_by: "Client Portal",
     });
@@ -260,6 +270,43 @@ export default class ClientPortalService {
     return { ...appointment, payment };
   }
 
+  // A client backing out of a booking they haven't paid for. Only their own,
+  // only while still unpaid (Pending, no GCash proof sent) — a paid one needs
+  // a refund, which stays with the clinic. Goes through the normal cancel,
+  // so the 2-hour rule applies, the unpaid bill is cancelled and the time
+  // slot is released.
+  async cancelMyUnpaidAppointment({ appointment_id, client_id }) {
+    const appointment = await appointmentService.getAppointmentById(appointment_id);
+    if (String(appointment.client_id) !== String(client_id)) {
+      const err = new Error("You can only cancel your own appointments.");
+      err.statusCode = 403;
+      throw err;
+    }
+    if (["Cancelled", "No Show", "Completed"].includes(appointment.appointment_status_name)) {
+      const err = new Error(`This booking is already ${appointment.appointment_status_name}.`);
+      err.statusCode = 409;
+      throw err;
+    }
+    const payment = await paymentService
+      .getPaymentByAppointmentId(appointment_id)
+      .catch(() => null);
+    if (
+      appointment.appointment_status_name !== "Pending" ||
+      (payment && payment.payment_status_name !== "Pending")
+    ) {
+      const err = new Error(
+        "This appointment is already paid or being verified — please contact the clinic to cancel it.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    return appointmentService.cancelAppointment(appointment_id, {
+      name: "Client Portal",
+      role: "Client",
+      roles: [],
+    });
+  }
+
   // Anyone with a valid client JWT could otherwise submit proof for ANY
   // payment_id by guessing — this is the ownership check that stops that.
   // A payment with no appointment_id is a cart/INV checkout, which the
@@ -268,6 +315,7 @@ export default class ClientPortalService {
     payment_id,
     client_id,
     gcash_reference_number,
+    amount_paid,
     payment_proof_image,
   }) {
     const payment = await paymentService.getPaymentById(payment_id); // throws 404 if missing
@@ -284,6 +332,17 @@ export default class ClientPortalService {
     if (String(appointment.client_id) !== String(client_id)) {
       const err = new Error("You don't have access to this payment.");
       err.statusCode = 403;
+      throw err;
+    }
+
+    // GCash never gives change: the amount the client says they sent must
+    // be exactly the bill, or staff would be verifying a short payment.
+    const toCents = (v) => Math.round(Number(v) * 100);
+    if (!(Number(amount_paid) > 0) || toCents(amount_paid) !== toCents(payment.total_amount)) {
+      const err = new Error(
+        `The amount sent must be exactly ₱${Number(payment.total_amount).toFixed(2)}.`,
+      );
+      err.statusCode = 400;
       throw err;
     }
 

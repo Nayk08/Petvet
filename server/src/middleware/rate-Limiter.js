@@ -31,6 +31,10 @@ export const loginLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000,
   max: 8,
+  // Only FAILED attempts count — brute force is what this guards against.
+  // Counting successful logins too meant a clinic whose staff share one
+  // internet connection (one IP) got locked out after 8 normal sign-ins.
+  skipSuccessfulRequests: true,
   message: {
     message: "Too many login attempts. Please wait a few minutes and try again.",
   },

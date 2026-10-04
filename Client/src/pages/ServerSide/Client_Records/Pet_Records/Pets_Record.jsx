@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { fetchPetRecordsByClientId } from "@/api/http";
 import { PetRecordsColumns } from "@/utils/COLUMNS";
-import { ArrowLeft, User, PawPrint, ArrowRightLeft, History } from "lucide-react";
+import { ArrowLeft, User, PawPrint, ArrowRightLeft, History, Stethoscope } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -95,6 +95,13 @@ export function Component() {
                 className:
                   "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
                 onClick: (row) => navigate(`pets/${row.pet_id}/history`),
+              },
+              {
+                label: "Medical Records",
+                icon: Stethoscope,
+                className:
+                  "text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/50",
+                onClick: (row) => navigate(`pets/${row.pet_id}/medical-records`),
               },
               {
                 label: "Transfer Owner",

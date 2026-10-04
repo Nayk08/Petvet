@@ -3,8 +3,11 @@ import ClientPortalController from "./ClientPortal_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
 import authLimiter from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
-import { validateBody } from "../../middleware/validate.js";
-import { clientPortalBookAppointmentSchema } from "../../validators/appointmentSchema.js";
+import { validateBody, validateParams } from "../../middleware/validate.js";
+import {
+  clientPortalBookAppointmentSchema,
+  appointmentIdParamSchema,
+} from "../../validators/appointmentSchema.js";
 import { clientPortalAddPetSchema } from "../../validators/petSchema.js";
 import { doubleCsrfProtection } from "../../config/csrf.js";
 
@@ -38,6 +41,10 @@ router.post(
 router.get("/public/clinic-schedule", (req, res) =>
   clientPortalController.getClinicSchedule(req, res),
 );
+// Landing page service list — same catalog as booking, display fields only.
+router.get("/public/services", (req, res) =>
+  clientPortalController.getPublicServices(req, res),
+);
 
 // Everything below requires a valid client JWT.
 router.get("/me", isClientAuth, (req, res) =>
@@ -55,6 +62,14 @@ router.post(
   doubleCsrfProtection,
   validateBody(clientPortalBookAppointmentSchema),
   (req, res) => clientPortalController.bookAppointment(req, res),
+);
+// Back out of a booking that hasn't been paid yet (see the service).
+router.patch(
+  "/appointments/:appointment_id/cancel",
+  isClientAuth,
+  doubleCsrfProtection,
+  validateParams(appointmentIdParamSchema),
+  (req, res) => clientPortalController.cancelMyUnpaidAppointment(req, res),
 );
 router.get("/appointments/booked-slots", isClientAuth, (req, res) =>
   clientPortalController.getStaffBookedSlots(req, res),
@@ -91,6 +106,9 @@ router.post(
 router.get("/pets/:pets_id/history", isClientAuth, (req, res) =>
   clientPortalController.getMyPetHistory(req, res),
 );
+router.get("/pets/:pets_id/medical-records", isClientAuth, (req, res) =>
+  clientPortalController.getMyPetMedicalRecords(req, res),
+);
 router.get("/species", isClientAuth, (req, res) =>
   clientPortalController.selectSpecies(req, res),
 );
@@ -102,9 +120,6 @@ router.get("/appointment-services", isClientAuth, (req, res) =>
 );
 router.get("/appointment-staff", isClientAuth, (req, res) =>
   clientPortalController.selectStaff(req, res),
-);
-router.get("/grooming-price-tiers", isClientAuth, (req, res) =>
-  clientPortalController.getGroomingPriceTiers(req, res),
 );
 
 export default router;

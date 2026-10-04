@@ -1,10 +1,23 @@
+import { isAdmin as isAdminUser } from "../../../utils/isAdmin.js";
 import AppointmentModel from "./Appointment_Model.js";
 import PaymentModel from "../Payment/Payment_Model.js";
 import { validatePaymentMethod } from "../../../utils/validatePaymentMethod.js";
 import { sendMail } from "../../config/mailer.js";
 import { appointmentCompletedEmail } from "../../../utils/emailTemplates.js";
+import { parseManilaTimestamp } from "../../../utils/manilaTime.js";
+import { slotStartInstant } from "../../validators/appointmentSchema.js";
 
 const appointmentModel = new AppointmentModel();
+
+// A guarded status change found the appointment already moved on (another
+// staff member, a double click, or the auto-complete got there first).
+function statusChangedError() {
+  const err = new Error(
+    "This appointment's status was just changed by someone else — refresh and try again.",
+  );
+  err.statusCode = 409;
+  return err;
+}
 const paymentModel = new PaymentModel();
 
 // Looks up the service and staff member fresh (never trusts a client-sent
@@ -53,24 +66,15 @@ async function assertStaffMatchesService(
   return service;
 }
 
-// A service with no fixed service_price and no weight-tier pricing
-// (currently just Operation) is priced by whatever amount the caller
-// submits — this is the only real check on that, so a caller-controlled
-// number can't undercut a configured floor (tbl_appointment_services.min_price)
-// or, absent one, be booked for an arbitrarily small amount.
+// A sub-service with no fixed price is priced by whatever amount staff enter
+// when the client pays — it just has to be a real, positive amount. (There
+// is no minimum price any more; it was removed from Maintenance.)
 function assertValidManualAmount(service, amount) {
-  const needsManualAmount =
-    service.service_price == null && service.appointment_services !== "Grooming";
-  if (!needsManualAmount) return;
+  if (service.service_price != null) return;
 
-  const minAmount =
-    service.min_price != null ? Number(service.min_price) : 0.01;
-
-  if (!(Number(amount) >= minAmount)) {
+  if (!(Number(amount) > 0)) {
     const err = new Error(
-      minAmount > 0.01
-        ? `Amount for a ${service.appointment_services} appointment must be at least ₱${minAmount.toFixed(2)}.`
-        : `A valid amount is required to book a ${service.appointment_services} appointment.`,
+      `A valid amount is required to book a ${service.appointment_services} appointment.`,
     );
     err.statusCode = 400;
     throw err;
@@ -101,7 +105,6 @@ export default class AppointmentService {
     assigned_staff_id,
     appointment_date,
     start_time,
-    end_time,
     notes,
     created_by,
   }) {
@@ -122,7 +125,6 @@ export default class AppointmentService {
       assigned_staff_id,
       appointment_date,
       start_time,
-      end_time,
       appointment_status_id: pendingStatusId,
       notes,
       created_by,
@@ -136,7 +138,6 @@ export default class AppointmentService {
     assigned_staff_id,
     appointment_date,
     start_time,
-    end_time,
     status_name,
     notes,
     updated_by,
@@ -147,7 +148,7 @@ export default class AppointmentService {
     // it after the fact (or reassigning its staff/pet/service) would rewrite
     // history with no trace that it happened, and for a Completed visit,
     // no re-validation of what was actually charged.
-    if (["Completed", "Cancelled"].includes(current.appointment_status_name)) {
+    if (["Completed", "Cancelled", "No Show"].includes(current.appointment_status_name)) {
       const err = new Error(
         `A ${current.appointment_status_name} appointment can't be edited.`,
       );
@@ -155,11 +156,38 @@ export default class AppointmentService {
       throw err;
     }
 
-    const appointment_status_id =
-      await appointmentModel.getAppointmentStatusId(status_name);
-    if (!appointment_status_id) {
-      const err = new Error(`'${status_name}' appointment status not configured`);
-      err.statusCode = 500;
+    // Status only moves through its own actions (Confirm Payment -> In
+    // Queue, Mark Completed, Mark No Show, Cancel), each of which enforces
+    // payment / ownership / email. Editing used to let anyone jump straight
+    // to "Completed" or "In Queue" without paying.
+    if (status_name && status_name !== current.appointment_status_name) {
+      const err = new Error(
+        "Status can't be changed by editing — use Confirm Payment, Mark Completed, Mark No Show or Cancel.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Already paid: a different service or pet would no longer match what
+    // was charged. (Pending ones are re-priced in the model instead.)
+    if (
+      current.appointment_status_name === "In Queue" &&
+      (String(current.appointment_services_id) !== String(appointment_services_id) ||
+        String(current.pets_id) !== String(pets_id))
+    ) {
+      const err = new Error(
+        "This appointment is already paid — its service or pet can't be changed. Cancel it (the payment is flagged for refund) and book again.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Keeping an already-started slot is fine (e.g. adding notes mid-visit);
+    // MOVING the appointment into the past is not.
+    const newStart = slotStartInstant(appointment_date, start_time);
+    if (newStart !== parseManilaTimestamp(current.start_time) && newStart < Date.now()) {
+      const err = new Error("Cannot move an appointment into the past");
+      err.statusCode = 400;
       throw err;
     }
 
@@ -172,8 +200,7 @@ export default class AppointmentService {
       assigned_staff_id,
       appointment_date,
       start_time,
-      end_time,
-      appointment_status_id,
+      expected_status_id: current.appointment_status_id,
       notes,
       updated_by,
     });
@@ -193,8 +220,10 @@ export default class AppointmentService {
     // Cancellations should come in at least 2 hours before the slot so the
     // clinic has a real chance to fill it — Admin can still override for a
     // genuine exception (e.g. the clinic itself needs to cancel last-minute).
-    const isAdmin = requestingUser.role?.trim() === "Admin";
-    const msUntilStart = new Date(appointment.start_time).getTime() - Date.now();
+    const isAdmin = isAdminUser(requestingUser);
+    // start_time is Manila wall-clock; new Date() parsed it in the server's
+    // timezone (UTC on Render), making this cutoff 8 hours late.
+    const msUntilStart = parseManilaTimestamp(appointment.start_time) - Date.now();
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
     if (!isAdmin && msUntilStart < TWO_HOURS_MS) {
       const err = new Error(
@@ -243,11 +272,15 @@ export default class AppointmentService {
       throw err;
     }
 
-    return appointmentModel.setAppointmentStatus({
+    const updated = await appointmentModel.setAppointmentStatus({
       appointment_id,
       appointment_status_id: noShowStatusId,
       updated_by,
+      from_status: appointment.appointment_status_name,
     });
+    if (!updated) throw statusChangedError();
+    await appointmentModel.cancelPendingPayment(appointment_id, updated_by);
+    return updated;
   }
 
   // The groomer/veterinarian actually assigned to the appointment marks it
@@ -259,7 +292,7 @@ export default class AppointmentService {
   async completeAppointment(appointment_id, requestingUser) {
     const appointment = await this.getAppointmentById(appointment_id); // throws 404 if missing
 
-    const isAdmin = requestingUser.role?.trim() === "Admin";
+    const isAdmin = isAdminUser(requestingUser);
     if (!isAdmin && String(appointment.assigned_staff_id) !== String(requestingUser.id)) {
       const err = new Error(
         "You can only complete an appointment that's assigned to you.",
@@ -288,7 +321,9 @@ export default class AppointmentService {
       appointment_id,
       appointment_status_id: completedStatusId,
       updated_by: requestingUser.name,
+      from_status: "In Queue",
     });
+    if (!updated) throw statusChangedError();
 
     // Fire-and-forget by design (see mailer.js) — the appointment is
     // already marked completed above regardless of whether this succeeds,
@@ -300,7 +335,8 @@ export default class AppointmentService {
       staff_name: appointment.staff_name,
       appointment_date: appointment.appointment_date,
     });
-    await sendMail({ to: appointment.email, subject, html });
+    // Not awaited: the response shouldn't wait on an SMTP round trip.
+    sendMail({ to: appointment.email, subject, html });
 
     return updated;
   }
@@ -311,10 +347,6 @@ export default class AppointmentService {
 
   async selectStaff() {
     return appointmentModel.selectStaff();
-  }
-
-  async getGroomingPriceTiers() {
-    return appointmentModel.getGroomingPriceTiers();
   }
 
   async getAppointmentHistoryForPet(pets_id) {
@@ -328,7 +360,6 @@ export default class AppointmentService {
     assigned_staff_id,
     appointment_date,
     start_time,
-    end_time,
     notes,
     amount,
     payment_method,
@@ -380,7 +411,6 @@ export default class AppointmentService {
       assigned_staff_id,
       appointment_date,
       start_time,
-      end_time,
       appointment_status_id: confirmedStatusId,
       notes,
       amount,

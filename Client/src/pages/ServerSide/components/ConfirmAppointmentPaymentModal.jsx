@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, Printer } from "lucide-react";
 import {
@@ -23,7 +22,6 @@ import {
   queryClient,
   invalidateAppointmentQueries,
   completeAppointmentPayment,
-  selectGroomingPriceTiers,
   applyOptimisticRevenue,
   estimatePaymentSplit,
   fetchPaymentById,
@@ -62,21 +60,6 @@ function formatTimeLabel(timeString) {
   return `${hour12}:${mStr} ${period}`;
 }
 
-function resolveGroomingTier(tiers, weightKg) {
-  if (!tiers?.length || weightKg == null) return null;
-  const sorted = [...tiers].sort((a, b) => {
-    if (a.max_weight_kg == null) return 1;
-    if (b.max_weight_kg == null) return -1;
-    return a.max_weight_kg - b.max_weight_kg;
-  });
-  return (
-    sorted.find(
-      (t) =>
-        t.max_weight_kg == null || Number(t.max_weight_kg) >= Number(weightKg),
-    ) ?? null
-  );
-}
-
 export function Component() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -88,27 +71,15 @@ export function Component() {
 
   const draft = location.state;
 
-  const isGrooming = draft?.serviceName === "Grooming";
-
-  const { data: tiers } = useQuery({
-    queryKey: ["grooming-price-tiers"],
-    queryFn: ({ signal }) => selectGroomingPriceTiers({ signal }),
-    enabled: isGrooming,
-  });
-
-  const resolvedTier = isGrooming
-    ? resolveGroomingTier(tiers, draft?.petWeightKg)
-    : null;
-
+  // A sub-service with a fixed price uses it; one without (e.g. surgery) is
+  // priced per case, entered here.
   const isFixedPrice = draft?.servicePrice != null;
-  const isVariablePrice = !isFixedPrice && !isGrooming; // Operation
+  const isVariablePrice = !isFixedPrice;
 
   const [manualAmount, setManualAmount] = useState("");
   const serviceAmount = isFixedPrice
     ? Number(draft.servicePrice)
-    : isGrooming
-      ? Number(resolvedTier?.price ?? 0)
-      : Number(manualAmount || 0);
+    : Number(manualAmount || 0);
 
   const FEE_PRESETS = [
     "De-matting fee",
@@ -193,7 +164,16 @@ export function Component() {
     submit(event.currentTarget, { method: "post" });
   }
 
-  if (!draft?.appointmentId) {
+  // Submitting the payment form is a router navigation, which drops
+  // location.state (the draft) — so after a SUCCESSFUL payment the draft is
+  // gone. Check the action result first: this used to fall straight into
+  // "Booking session expired / saved as Pending" right after a payment had
+  // gone through, inviting the cashier to charge the client twice.
+  const receipt =
+    completedReceipt ?? (actionData?.success ? actionData.receipt : null);
+  const paidWithoutReceipt = actionData?.success && !receipt;
+
+  if (!draft?.appointmentId && !receipt) {
     return (
       <Dialog
         open
@@ -202,13 +182,12 @@ export function Component() {
         <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-sm shadow-xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Booking session expired
+              {paidWithoutReceipt ? "Appointment booked" : "Booking session expired"}
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
-              We lost track of this payment step (this can happen after a page
-              refresh) — but the appointment was already saved as Pending on the
-              calendar. Payment collection for it isn't available from here
-              right now.
+              {paidWithoutReceipt
+                ? "Payment received and the appointment is booked. The receipt couldn't be loaded — print it from Payments."
+                : "We lost track of this payment step (this can happen after a page refresh) — but the appointment was already saved as Pending on the calendar. Payment collection for it isn't available from here right now."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="pt-2">
@@ -225,11 +204,11 @@ export function Component() {
     <Dialog
       open
       onOpenChange={(isOpen) =>
-        !isOpen && (completedReceipt ? closeAfterReceipt() : closeModal())
+        !isOpen && (receipt ? closeAfterReceipt() : closeModal())
       }
     >
       <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6 transition-colors duration-200">
-        {completedReceipt ? (
+        {receipt ? (
           <>
             <DialogHeader className="mb-2 print:hidden">
               <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
@@ -242,8 +221,8 @@ export function Component() {
 
             <div className="max-h-[55vh] overflow-y-auto">
               <ReceiptContent
-                payment={completedReceipt.payment}
-                appointment={completedReceipt.appointment}
+                payment={receipt.payment}
+                appointment={receipt.appointment}
               />
             </div>
 
@@ -325,6 +304,7 @@ export function Component() {
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {formatDateLabel(draft.payload.appointment_date)},{" "}
                 {formatTimeLabel(draft.payload.start_time)}
+                {draft.endTime ? ` - ${formatTimeLabel(draft.endTime.split(" ")[1])}` : ""}
               </span>
             </div>
           </div>
@@ -346,22 +326,20 @@ export function Component() {
                   step="0.01"
                   required
                   inputMode="decimal"
-                  placeholder="Enter operation cost"
+                  placeholder="Enter the agreed amount"
                   value={manualAmount}
                   onChange={(e) => setManualAmount(e.target.value)}
                   className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Operations are priced per case — enter the agreed amount.
+                {draft.serviceName} is priced per case — enter the agreed amount.
               </p>
             </div>
           ) : (
             <div className="flex justify-between items-center py-1">
               <span className="text-sm text-slate-700 dark:text-slate-300">
-                {isGrooming && resolvedTier
-                  ? `Total (${resolvedTier.tier_name} tier)`
-                  : "Total"}
+                Total
               </span>
               <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">
                 ₱{total.toFixed(2)}

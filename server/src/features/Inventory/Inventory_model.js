@@ -19,6 +19,10 @@ const GROUPED_PRODUCTS_QUERY = `
   SELECT
     p.product_name,
     SUM(p.product_quantity)::int AS product_quantity,
+    -- what can actually be sold (checkout skips expired batches)
+    COALESCE(SUM(p.product_quantity) FILTER (
+      WHERE p.product_expiry_date IS NULL OR p.product_expiry_date > CURRENT_TIMESTAMP
+    ), 0)::int AS sellable_quantity,
     COUNT(*)::int AS batch_count,
     MIN(p.product_price) AS min_price,
     MAX(p.product_price) AS max_price,
@@ -571,6 +575,15 @@ export default class InventoryModel {
       );
       return res.rows[0];
     } catch (error) {
+      // An active batch with the same name + expiry already exists
+      // (uq_products_name_expiry) — say so instead of a generic 500.
+      if (error.code === "23505") {
+        const err = new Error(
+          "An active batch with the same name and expiry date already exists — add the quantity to that batch instead.",
+        );
+        err.status = 409;
+        throw err;
+      }
       console.log("Error on Model restoreProduct function");
       throw error;
     } finally {

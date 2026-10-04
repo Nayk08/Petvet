@@ -35,6 +35,7 @@ export default class PermissionController {
         field,
         value,
         updatedBy,
+        requester: req.session.user,
       });
 
       res.status(200).json({ success: true, data: updated });

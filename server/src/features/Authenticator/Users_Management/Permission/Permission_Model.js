@@ -30,6 +30,14 @@ export default class PermissionModel {
     return result.rows;
   }
 
+  async getModuleCode(userModuleId) {
+    const { rows } = await pool.query(
+      `SELECT module_code FROM tbl_user_module WHERE user_module_id = $1`,
+      [userModuleId],
+    );
+    return rows[0]?.module_code;
+  }
+
   async getUserLevels() {
     const query = `
       SELECT user_level_id, user_level, description

@@ -7,10 +7,18 @@ import { queryClient } from "@/api/http.js";
 import petvetLogo from "@/assets/petvet_icon.svg";
 
 const NAV_ITEMS = [
-  { to: "/portal/appointments", label: "My Appointments", icon: Calendar },
-  { to: "/portal/pets", label: "My Pets", icon: Cat },
-  { to: "/portal/payments", label: "Payment History", icon: CreditCard },
+  { to: "/portal/appointments", label: "My Appointments", shortLabel: "Appointments", icon: Calendar },
+  { to: "/portal/pets", label: "My Pets", shortLabel: "Pets", icon: Cat },
+  { to: "/portal/payments", label: "Payment History", shortLabel: "Payments", icon: CreditCard },
 ];
+
+// Phone bottom tab bar: icon over a short label, thumb-reachable.
+const bottomLinkClass = ({ isActive }) =>
+  `flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+    isActive
+      ? "text-indigo-600 dark:text-indigo-300"
+      : "text-slate-500 dark:text-slate-400"
+  }`;
 
 const linkClass = ({ isActive }) =>
   `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
@@ -100,27 +108,33 @@ export function Component() {
             <button
               type="button"
               onClick={handleLogout}
+              aria-label="Log out"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg bg-transparent border-none cursor-pointer transition-colors dark:text-rose-400 dark:hover:bg-rose-950/40"
             >
               <LogOut size={14} />
-              Log Out
+              <span className="hidden sm:inline">Log Out</span>
             </button>
           </div>
         </div>
-
-        <div className="sm:hidden flex items-center gap-1 px-4 pb-2 overflow-x-auto">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={linkClass}>
-              <Icon size={16} />
-              {label}
-            </NavLink>
-          ))}
-        </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      {/* Bottom padding on phones keeps content clear of the tab bar. */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
         <Outlet />
       </main>
+
+      {/* Phones: fixed bottom tab bar instead of cramped top tabs. */}
+      <nav
+        aria-label="Portal sections"
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-3 border-t border-slate-200 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] dark:border-slate-800 dark:bg-slate-950/95"
+      >
+        {NAV_ITEMS.map(({ to, shortLabel, icon: Icon }) => (
+          <NavLink key={to} to={to} className={bottomLinkClass}>
+            <Icon size={20} />
+            {shortLabel}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

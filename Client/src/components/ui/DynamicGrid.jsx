@@ -27,6 +27,7 @@ export default function DynamicGrid({
   columnsConfig = [],
   actions = [],
   title = "Dynamic Grid",
+  subtitle = "Real-time status tracking and record management.",
   buttonText = "Add New",
   buttonLink = "",
   onEdit,
@@ -212,7 +213,7 @@ export default function DynamicGrid({
               {title}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-              Real-time status tracking and record management.
+              {subtitle}
             </p>
           </div>
           {buttonLink && (

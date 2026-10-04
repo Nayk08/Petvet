@@ -63,6 +63,15 @@ export function resolvePaymentSplit({
   // Split
   const cash = round2(Number(cash_received) || 0);
   const gcash = round2(Number(gcash_received) || 0);
+  // Without this, cash -10 / GCash total+10 "adds up" and corrupts the
+  // Cash vs GCash revenue split.
+  if (cash <= 0 || gcash <= 0) {
+    const err = new Error(
+      "A split payment needs a positive cash amount and a positive GCash amount.",
+    );
+    err.statusCode = 400;
+    throw err;
+  }
   if (round2(cash + gcash) !== total) {
     const err = new Error(
       "Cash + GCash received must exactly equal the total amount for a split payment — GCash doesn't give change.",

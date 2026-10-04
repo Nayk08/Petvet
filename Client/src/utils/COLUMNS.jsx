@@ -445,16 +445,18 @@ export const AppointmentColumns = [
   { key: "appointment_id", label: "ID" },
   { key: "client_name", label: "CLIENT" },
   { key: "pets_name", label: "PET" },
+  // Filter by the three fixed categories; the sub-service is its own column.
   {
-    key: "service_name",
-    label: "SERVICE",
+    key: "category_name",
+    label: "CATEGORY",
     multiSelect: true,
     filterOptions: [
       { key: "grooming", value: "Grooming", label: "Grooming" },
-      { key: "operation", value: "Operation", label: "Operation" },
       { key: "consultation", value: "Consultation", label: "Consultation" },
+      { key: "operation", value: "Operation", label: "Operation" },
     ],
   },
+  { key: "service_name", label: "SERVICE" },
   {
     key: "staff_name",
     label: "STAFF",
@@ -531,16 +533,18 @@ export const TodayQueueColumns = [
   { key: "appointment_id", label: "ID" },
   { key: "pets_name", label: "PATIENT NAME" },
   { key: "client_name", label: "OWNER" },
+  // Filter by the three fixed categories; the sub-service is its own column.
   {
-    key: "service_name",
-    label: "SERVICE TYPE",
+    key: "category_name",
+    label: "CATEGORY",
     multiSelect: true,
     filterOptions: [
       { key: "grooming", value: "Grooming", label: "Grooming" },
-      { key: "operation", value: "Operation", label: "Operation" },
       { key: "consultation", value: "Consultation", label: "Consultation" },
+      { key: "operation", value: "Operation", label: "Operation" },
     ],
   },
+  { key: "service_name", label: "SERVICE TYPE" },
   {
     key: "start_time",
     label: "APPOINTMENT TIME",
@@ -591,45 +595,22 @@ export const TodayQueueColumns = [
 // ── Maintenance (service catalog) ──────────────────────
 
 export const MaintenanceServiceColumns = [
-  { key: "appointment_services", label: "SERVICE NAME" },
-  {
-    key: "category",
-    label: "CATEGORY",
-    render: (value) =>
-      value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
-  },
-  {
-    key: "description",
-    label: "DESCRIPTION",
-    render: (value) => (
-      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 max-w-xs block">
-        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
-      </span>
-    ),
-  },
+  // Listed per category tab in Maintenance, so no category column here.
+  { key: "appointment_services", label: "SUB-SERVICE" },
   {
     key: "service_price",
     label: "PRICE",
-    render: (value, row) => {
-      if (value != null) {
-        return (
-          <span className="font-medium text-slate-900 dark:text-slate-100">
-            ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </span>
-        );
-      }
-      // No fixed price — either weight-tier priced (Grooming) or a manual
-      // amount entered at booking time, with an optional configured floor.
-      return row.min_price != null ? (
-        <span className="text-slate-600 dark:text-slate-300">
-          From ₱{Number(row.min_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+    render: (value) =>
+      value != null ? (
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </span>
       ) : (
+        // No fixed price — entered by staff when the client pays.
         <span className="text-slate-400 dark:text-slate-500 italic text-xs">
-          Set at booking
+          Priced at clinic
         </span>
-      );
-    },
+      ),
   },
   {
     key: "duration_minutes",
@@ -667,57 +648,24 @@ export const MaintenanceServiceColumns = [
     label: "STATUS",
     filterOptions: [
       { key: "active", value: "true", label: "Active" },
-      { key: "inactive", value: "false", label: "Inactive" },
+      { key: "deleted", value: "false", label: "Deleted" },
     ],
     render: (value) => (
       <StatusBadge
-        label={value ? "Active" : "Inactive"}
+        label={value ? "Active" : "Deleted"}
         variant={value ? "active" : "inactive"}
       />
     ),
   },
-];
-
-export const MaintenanceGroomingTierColumns = [
-  { key: "tier_name", label: "TIER" },
-  {
-    key: "max_weight_kg",
-    label: "MAX WEIGHT",
-    render: (value) =>
-      value != null ? (
-        <span className="text-slate-700 dark:text-slate-300">{value} kg</span>
-      ) : (
-        <span className="text-slate-500 dark:text-slate-400 italic text-xs">
-          No limit
-        </span>
-      ),
-  },
-  {
-    key: "price",
-    label: "PRICE",
-    render: (value) => (
-      <span className="font-medium text-slate-900 dark:text-slate-100">
-        ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-      </span>
-    ),
-  },
-  {
-    key: "duration_minutes",
-    label: "DURATION",
-    render: (value) =>
-      value ? (
-        <span className="text-slate-700 dark:text-slate-300">{value} min</span>
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
-      ),
-  },
+  // Last: long free text, so the key facts (price, duration, staff) stay in view.
   {
     key: "description",
     label: "DESCRIPTION",
     render: (value) => (
-      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 max-w-xs block">
+      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-normal min-w-56 max-w-xs block">
         {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
       </span>
     ),
   },
 ];
+

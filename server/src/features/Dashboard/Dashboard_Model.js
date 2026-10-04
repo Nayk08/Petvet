@@ -1,12 +1,14 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
 import AppointmentModel from "../Appointment/Appointment_Model.js";
+import { REAL_PAYMENT_ACTIVITY_SQL } from "../Payment/Payment_Model.js";
 
 const appointmentModel = new AppointmentModel();
 
 const APPOINTMENT_ALLOWED_FILTER_COLUMNS = [
   "appointment_status_name",
   "service_name",
+  "category_name",
   "assigned_staff_id",
   "appointment_date",
 ];
@@ -93,7 +95,7 @@ export default class DashboardModel {
     const client = await pool.connect();
     try {
       const values = [];
-      const conditions = ["date_created::date = CURRENT_DATE"];
+      const conditions = ["date_created::date = CURRENT_DATE", REAL_PAYMENT_ACTIVITY_SQL];
 
       for (const [key, value] of Object.entries(filters)) {
         if (key === "payment_type") {

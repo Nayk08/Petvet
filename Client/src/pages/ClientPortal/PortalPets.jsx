@@ -4,6 +4,7 @@ import { Plus, History } from "lucide-react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { Pagination } from "@/components/ui/Pagination";
 import { Button } from "@/components/ui/button.jsx";
+import { Input } from "@/components/ui/input.jsx";
 import { PetRecordsColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -36,7 +37,7 @@ export function Component() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             My Pets
@@ -45,7 +46,10 @@ export function Component() {
             On file with the clinic. Contact us to update existing details.
           </p>
         </div>
-        <Button onClick={() => setShowAddPet(true)} className="flex items-center gap-1.5">
+        <Button
+          onClick={() => setShowAddPet(true)}
+          className="flex items-center justify-center gap-1.5 w-full sm:w-auto"
+        >
           <Plus size={16} />
           Add Pet
         </Button>
@@ -59,6 +63,63 @@ export function Component() {
         </p>
       ) : (
         <>
+          {/* Phones: one card per pet instead of a sideways-scrolling table. */}
+          <div className="sm:hidden space-y-3">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search pets..."
+              className="h-10 bg-white dark:bg-slate-900"
+            />
+            {(data?.rows ?? []).length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic text-center py-6">
+                No pets found.
+              </p>
+            ) : (
+              (data?.rows ?? []).map((pet) => (
+                <div
+                  key={pet.pet_id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3"
+                >
+                  {pet.pet_image ? (
+                    <img
+                      src={pet.pet_image}
+                      alt={pet.pet_name}
+                      className="h-14 w-14 rounded-lg object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 shrink-0">
+                      No photo
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 dark:text-white truncate">
+                      {pet.pet_name}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {[pet.species_name, pet.breed, pet.gender_name].filter(Boolean).join(" · ")}
+                    </p>
+                    {pet.weight_kg != null && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {pet.weight_kg} kg
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPet({ id: pet.pet_id, name: pet.pet_name })}
+                    className="shrink-0 gap-1"
+                  >
+                    <History size={14} />
+                    History
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden sm:block">
           <DynamicGrid
             data={data?.rows ?? []}
             columnsConfig={PetRecordsColumns}
@@ -77,7 +138,9 @@ export function Component() {
                   setHistoryPet({ id: row.pet_id, name: row.pet_name }),
               },
             ]}
+            subtitle="Your pets on file with the clinic."
           />
+          </div>
           <Pagination
             page={page}
             totalPages={limit === "all" ? 1 : (data?.pagination?.totalPages ?? 1)}

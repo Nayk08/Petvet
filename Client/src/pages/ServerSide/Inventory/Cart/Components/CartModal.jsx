@@ -26,6 +26,7 @@ import {
   checkoutOrder,
   completePayment,
   fetchPaymentById,
+  deletePayment,
 } from "@/api/http.js";
 import PaymentMethodPicker from "@/components/ui/PaymentMethodPicker.jsx";
 import {
@@ -219,7 +220,19 @@ export function Component() {
     setAmountPaid("");
     setSplitCashPaid("");
     setSplitGcashPaid("");
-    clearCart();
+    // Backing out of an unpaid checkout: cancel the Pending invoice it
+    // created (it used to be left behind in Payments forever) but KEEP the
+    // cart, so the cashier can adjust quantities and check out again —
+    // clearing it here threw away the whole order.
+    if (payment?.payment_id) {
+      deletePayment(payment.payment_id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["Payments"] }))
+        .catch((error) =>
+          toast.error("Couldn't cancel the unpaid invoice", {
+            description: `${error.message} — cancel it from Payments.`,
+          }),
+        );
+    }
     setPayment(null);
   };
 

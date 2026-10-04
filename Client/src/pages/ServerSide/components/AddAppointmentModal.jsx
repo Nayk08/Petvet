@@ -34,30 +34,14 @@ import {
   selectAppointmentStaff,
 } from "@/api/http";
 import { formatDate } from "@/utils/COLUMNS";
-
-const STATUS_OPTIONS = ["Pending", "In Queue", "Completed"];
-
-const BOOKING_START_HOUR = 9; // 9 AM
-const BOOKING_LAST_START_HOUR = 17; // 5 PM start -> 6 PM end is the last slot
-
-const TIME_SLOTS = Array.from(
-  { length: BOOKING_LAST_START_HOUR - BOOKING_START_HOUR + 1 },
-  (_, i) => {
-    const hour = BOOKING_START_HOUR + i;
-    const fmt = (h) => {
-      const period = h < 12 || h === 24 ? "AM" : "PM";
-      const display = h % 12 === 0 ? 12 : h % 12;
-      return `${display}:00 ${period}`;
-    };
-    return {
-      value: String(hour).padStart(2, "0") + ":00",
-      label: `${fmt(hour)} - ${fmt(hour + 1)}`,
-      hour,
-    };
-  },
-);
-
-const BOOKING_CLOSE_HOUR = 18; // 6 PM — last slot (5-6 PM) has already started by then
+import {
+  CLINIC_CLOSE_MINUTE,
+  buildServiceSlots,
+  formatClockMinutes,
+  overlapsBooked,
+  timeToMinutes,
+  toBookedRanges,
+} from "@/utils/serviceSlots";
 
 function formatDateString(d) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -86,31 +70,14 @@ function extractTimeOfDay(value) {
   return timePart.slice(0, 5); // "HH:mm"
 }
 
-function extractHour(value) {
-  const timePart = extractTimeOfDay(value);
-  return timePart ? Number(timePart.split(":")[0]) : null;
-}
-
 function buildAppointmentPayload(formData) {
   const appointment_date = formData.get("appointment_date");
-  const time_slot = formData.get("time_slot"); // e.g. "09:00", a one-hour slot
-  const [slotHour] = time_slot.split(":").map(Number);
+  const time_slot = formData.get("time_slot"); // start time, e.g. "09:30"
 
-  // FIXED: start_time/end_time are now sent as bare "HH:mm:ss" time-of-day
-  // strings, not a combined "<date>T<time>" datetime string. Why: the
-  // backend column (tbl_appointments.start_time/end_time) is TIMESTAMP
-  // WITHOUT TIME ZONE storing a clinic-local wall-clock slot.
-  // appointmentSchema.js validates these fields as plain time strings
-  // (never z.coerce.date() / new Date(...)), and Appointment_Model.js
-  // recombines them with appointment_date server-side, right before the
-  // write, via a toTimestampString() helper — never through a Date object.
-  // Sending a full "<date>T<time>" datetime string here, as this used to
-  // do, either fails schema validation outright (safe) or — if the schema
-  // and this payload fall out of sync — corrupts the write with a garbled
-  // value. Keep this as bare time, always; the date travels separately in
-  // appointment_date.
+  // Only the start is sent, as a bare "HH:mm:ss" Manila wall-clock time
+  // (the date travels separately in appointment_date). The server computes
+  // end_time from the sub-service's current duration and stores both.
   const start_time = `${time_slot}:00`;
-  const end_time = `${String(slotHour + 1).padStart(2, "0")}:00:00`;
 
   return {
     client_id: formData.get("client_id"),
@@ -119,7 +86,6 @@ function buildAppointmentPayload(formData) {
     assigned_staff_id: formData.get("assigned_staff_id"),
     appointment_date,
     start_time,
-    end_time,
     notes: formData.get("notes"),
   };
 }
@@ -128,7 +94,7 @@ function buildAppointmentPayload(formData) {
 // slot (9 AM-6 PM) has already passed, in which case it's tomorrow.
 function earliestBookableDateString() {
   const now = new Date();
-  if (now.getHours() >= BOOKING_CLOSE_HOUR) {
+  if (now.getHours() * 60 + now.getMinutes() >= CLINIC_CLOSE_MINUTE) {
     now.setDate(now.getDate() + 1);
   }
   return formatDateString(now);
@@ -184,6 +150,7 @@ export function Component() {
     setSelectedPetId(""); // previously-picked pet belonged to a different client
   }
 
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [selectedPetId, setSelectedPetId] = useState("");
@@ -197,6 +164,18 @@ export function Component() {
     queryKey: ["appointment-staff"],
     queryFn: ({ signal }) => selectAppointmentStaff({ signal }),
   });
+
+  // Category first (Grooming / Consultation / Operation), then one of ITS
+  // sub-services. Categories come from the active sub-services themselves,
+  // already in category order — one with nothing bookable isn't offered.
+  const categories = [
+    ...new Map(
+      (services ?? []).map((s) => [String(s.category_id), s.category_name]),
+    ),
+  ].map(([category_id, category_name]) => ({ category_id, category_name }));
+  const categoryServices = (services ?? []).filter(
+    (s) => String(s.category_id) === selectedCategoryId,
+  );
 
   const selectedService = services?.find(
     (s) => String(s.appointment_services_id) === selectedServiceId,
@@ -217,17 +196,13 @@ export function Component() {
     enabled: isEditMode,
   });
 
-  // FIXED: was `new Date(appointmentData.start_time).getHours()...` — see
-  // extractTimeOfDay/extractHour comment above for why that's unreliable
-  // against the space-separated "YYYY-MM-DD HH:mm:ss" strings the API now
-  // returns.
-  const initialSlotValue = appointmentData?.start_time
-    ? String(extractHour(appointmentData.start_time)).padStart(2, "0") + ":00"
-    : "";
-  const [selectedSlot, setSelectedSlot] = useState(initialSlotValue);
+  // Slot values are the start time, "HH:mm" (see extractTimeOfDay above).
+  const [selectedSlot, setSelectedSlot] = useState(
+    extractTimeOfDay(appointmentData?.start_time),
+  );
 
-  // Once the appointment loads in edit mode, default the client/date/slot
-  // pickers to its current values.
+  // Once the appointment loads in edit mode, default the pickers to its
+  // current values.
   useEffect(() => {
     if (appointmentData?.client_id) {
       setSelectedClientId(String(appointmentData.client_id));
@@ -237,10 +212,10 @@ export function Component() {
       setSelectedDate(appointmentData.appointment_date.split("T")[0]);
     }
     if (appointmentData?.start_time) {
-      // FIXED: was `new Date(appointmentData.start_time).getHours()` — see
-      // extractHour comment above.
-      const hour = extractHour(appointmentData.start_time);
-      setSelectedSlot(String(hour).padStart(2, "0") + ":00");
+      setSelectedSlot(extractTimeOfDay(appointmentData.start_time));
+    }
+    if (appointmentData?.category_id) {
+      setSelectedCategoryId(String(appointmentData.category_id));
     }
     if (appointmentData?.appointment_services_id) {
       setSelectedServiceId(String(appointmentData.appointment_services_id));
@@ -253,21 +228,43 @@ export function Component() {
     }
   }, [appointmentData]);
 
+  // Start times come from the selected sub-service's duration: a 30-min
+  // Half Bath offers 9:00-9:30, 9:30-10:00, …; a 60-min service 9:00-10:00, …
+  const serviceSlots = buildServiceSlots(selectedService?.duration_minutes);
+
+  // Editing without changing service/time keeps the appointment's stored
+  // times (the server does the same), even if the duration has since been
+  // changed in Maintenance — so offer its current slot as-is.
+  const isOriginalService =
+    isEditMode &&
+    String(appointmentData?.appointment_services_id) === selectedServiceId;
+  const originalStart = timeToMinutes(appointmentData?.start_time);
+  const originalEnd = timeToMinutes(appointmentData?.end_time);
+  if (
+    isOriginalService &&
+    originalStart != null &&
+    !serviceSlots.some((s) => s.startMinute === originalStart)
+  ) {
+    serviceSlots.push({
+      value: extractTimeOfDay(appointmentData.start_time),
+      startMinute: originalStart,
+      endMinute: originalEnd,
+      label: `${formatClockMinutes(originalStart)} - ${formatClockMinutes(originalEnd)} (current)`,
+    });
+    serviceSlots.sort((a, b) => a.startMinute - b.startMinute);
+  }
+
   const isToday = selectedDate === todayDateString();
-  const availableSlots = TIME_SLOTS.filter((slot) => {
+  const availableSlots = serviceSlots.filter((slot) => {
     if (!isToday) return true;
-    // This comparison never leaves the browser (both sides are
-    // browser-local), so it's unaffected by the server-side timezone bug —
-    // left as-is. It's a client-side "disable past slots today" convenience;
-    // the server independently re-validates via appointmentSchema.js's
-    // validateSlot using Asia/Manila time regardless of what this produces.
+    // Client-side convenience only; the server re-validates in Manila time.
     const slotStart = new Date(`${selectedDate}T${slot.value}:00`);
     return slotStart.getTime() > Date.now();
   });
 
-  // Which hour-slots this staff member already has on the selected date,
-  // so the picker can disable them instead of letting the user hit the
-  // server's double-booking conflict error after filling out the form.
+  // This staff member's other appointments that day, so overlapping start
+  // times can be disabled instead of failing on submit. Durations differ,
+  // so this is a time-RANGE overlap check, not an exact-start match.
   const { data: staffAppointmentsForDate } = useQuery({
     queryKey: ["appointment-slots", selectedStaffId, selectedDate],
     queryFn: ({ signal }) =>
@@ -282,18 +279,13 @@ export function Component() {
     enabled: Boolean(selectedStaffId && selectedDate),
   });
 
-  // FIXED: was `new Date(appt.start_time).getHours()` — see extractHour
-  // comment above.
-  const bookedSlots = new Set(
-    (staffAppointmentsForDate ?? [])
-      .filter(
-        (appt) =>
-          appt.appointment_status_name !== "Cancelled" &&
-          String(appt.appointment_id) !== String(params.appointment_id ?? ""),
-      )
-      .map(
-        (appt) => String(extractHour(appt.start_time)).padStart(2, "0") + ":00",
-      ),
+  const bookedRanges = toBookedRanges(
+    (staffAppointmentsForDate ?? []).filter(
+      (appt) =>
+        !appt.is_deleted &&
+        appt.appointment_status_name !== "Cancelled" &&
+        String(appt.appointment_id) !== String(params.appointment_id ?? ""),
+    ),
   );
 
   const { data: pets, isPending: isPetsPending } = useQuery({
@@ -354,8 +346,9 @@ export function Component() {
           payload,
           clientName: clientSearch,
           petName: selectedPet?.pet_name,
-          petWeightKg: selectedPet?.weight_kg,
           serviceName: selectedServiceName,
+          // Computed server-side from the sub-service's duration.
+          endTime: appointment.end_time,
           servicePrice: services?.find(
             (s) =>
               String(s.appointment_services_id) ===
@@ -373,7 +366,7 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6 transition-colors duration-200">
+      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-lg max-h-[95vh] overflow-y-auto shadow-xl rounded-xl p-6 transition-colors duration-200">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
             {isEditMode ? "Edit Appointment" : "Book Appointment"}
@@ -524,39 +517,67 @@ export function Component() {
               </div>
             )}
 
-            {/* Service / Staff */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Category -> Sub-service (only that category's sub-services) */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Service
+                  Category
+                </label>
+                <select
+                  name="category_id"
+                  required
+                  value={selectedCategoryId}
+                  onChange={(e) => {
+                    setSelectedCategoryId(e.target.value);
+                    // The previous sub-service/staff/slot belonged to another category.
+                    setSelectedServiceId("");
+                    setSelectedStaffId("");
+                    setSelectedSlot("");
+                  }}
+                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((c) => (
+                    <option key={c.category_id} value={c.category_id}>
+                      {c.category_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                  Sub-service
                 </label>
                 <select
                   name="appointment_services_id"
                   required
+                  disabled={!selectedCategoryId}
                   value={selectedServiceId}
                   onChange={(e) => {
                     setSelectedServiceId(e.target.value);
                     setSelectedStaffId(""); // previously-picked staff may not offer this service
+                    setSelectedSlot(""); // start times depend on the duration
                   }}
-                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
+                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2 disabled:opacity-50"
                 >
-                  <option value="">Select a service</option>
-                  {services?.map((s) => (
+                  <option value="">
+                    {selectedCategoryId ? "Select a sub-service" : "Select a category first"}
+                  </option>
+                  {categoryServices.map((s) => (
                     <option
                       key={s.appointment_services_id}
                       value={s.appointment_services_id}
                     >
-                      {s.appointment_services}
+                      {s.appointment_services} ({s.duration_minutes} min)
                     </option>
                   ))}
                 </select>
-                {selectedService?.duration_minutes && (
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Estimated duration: {selectedService.duration_minutes} min
-                  </p>
-                )}
               </div>
+            </div>
 
+            {/* Staff / Date */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Staff
@@ -574,7 +595,7 @@ export function Component() {
                 >
                   <option value="">
                     {!selectedServiceId
-                      ? "Select a service first"
+                      ? "Select a sub-service first"
                       : filteredStaff.length === 0
                         ? "No staff available"
                         : "Select staff"}
@@ -586,10 +607,6 @@ export function Component() {
                   ))}
                 </select>
               </div>
-            </div>
-
-            {/* Date / Time slot — bookings are fixed one-hour blocks, 9 AM to 6 PM */}
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Appointment Date
@@ -608,9 +625,13 @@ export function Component() {
                 />
               </div>
 
+            </div>
+
+            {/* Start time — full width; options follow the sub-service's duration */}
+            <div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Time Slot
+                  Start Time
                 </label>
                 <select
                   name="time_slot"
@@ -621,11 +642,13 @@ export function Component() {
                 >
                   <option value="">
                     {availableSlots.length === 0
-                      ? "No slots left today"
-                      : "Select a slot"}
+                      ? !selectedServiceId
+                        ? "Select a sub-service first"
+                        : "No times left today"
+                      : "Select a start time"}
                   </option>
                   {availableSlots.map((slot) => {
-                    const isBooked = bookedSlots.has(slot.value);
+                    const isBooked = overlapsBooked(slot, bookedRanges);
                     return (
                       <option
                         key={slot.value}
@@ -641,28 +664,21 @@ export function Component() {
               </div>
             </div>
             <p className="text-[11px] -mt-2 text-slate-500 dark:text-slate-400">
-              Appointments are booked in fixed one-hour slots, 9:00 AM to 6:00
-              PM.
+              {selectedService
+                ? `${selectedServiceName} takes ${selectedService.duration_minutes} minutes — the end time is set automatically. Clinic hours: 9:00 AM to 6:00 PM.`
+                : "Pick a sub-service to see its start times. Clinic hours: 9:00 AM to 6:00 PM."}
             </p>
 
-            {/* Status (edit mode only — new appointments always start Pending) */}
+            {/* Status is read-only here — it changes only through Confirm
+                Payment, Mark Completed, Mark No Show and Cancel, which
+                enforce payment/ownership. */}
             {isEditMode && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Status
-                </label>
-                <select
-                  name="status_name"
-                  defaultValue={appointmentData?.appointment_status_name}
-                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Status:{" "}
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {appointmentData?.appointment_status_name}
+                </span>
+              </p>
             )}
 
             {/* Notes */}
@@ -771,7 +787,6 @@ export async function action({ request, params }) {
   try {
     await editAppointment(params.appointment_id, {
       ...payload,
-      status_name: formData.get("status_name"),
     });
   } catch (error) {
     const errorMessage = error.message || "Failed to save appointment.";

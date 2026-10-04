@@ -3,7 +3,8 @@ import pool from "../../config/db.js";
 export default class AuthenticatorModel {
   async findEmail(email) {
     const result = await pool.query(
-      "SELECT * FROM tbl_users WHERE user_email = $1 AND is_deleted = false",
+      // Case-insensitive: "Ana@Clinic.com" and "ana@clinic.com" are the same mailbox.
+      "SELECT * FROM tbl_users WHERE LOWER(TRIM(user_email)) = LOWER(TRIM($1)) AND is_deleted = false",
       [email],
     );
     return result.rows[0];

@@ -1,4 +1,5 @@
 import UserLevelService from "./User_Level_Service.js";
+import { sendError } from "../../../../../utils/errorResponse.js";
 const userLevelService = new UserLevelService();
 
 export default class UserLevelController {
@@ -93,7 +94,7 @@ export default class UserLevelController {
       if (error.code === "23505") {
         return res.status(409).json({ error: "User level already exists" });
       }
-      res.status(500).json({ error: "Failed to update user level" });
+      sendError(res, error, "Failed to update user level");
     }
   }
 
@@ -106,8 +107,7 @@ export default class UserLevelController {
       );
       res.status(200).json(data[0]);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to fetch user level" });
+      sendError(res, error, "Failed to delete user level");
     }
   }
 }

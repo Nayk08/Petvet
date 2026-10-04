@@ -1,12 +1,10 @@
 import PaymentModel from "./Payment_Model.js";
-import AppointmentModel from "../Appointment/Appointment_Model.js";
 import {
   validatePaymentMethod,
   resolvePaymentSplit,
 } from "../../../utils/validatePaymentMethod.js";
 
 const paymentModel = new PaymentModel();
-const appointmentModel = new AppointmentModel();
 
 export default class PaymentService {
   async getPayments({ page, limit, search, filters }) {
@@ -57,8 +55,8 @@ export default class PaymentService {
     }
 
     // New checkouts are saved as "Pending" rather than immediately
-    // "Completed" — use updatePaymentStatus (or a dedicated "complete"
-    // action) later to mark the order as paid.
+    // "Completed" — the "complete" action (completePayment) marks them
+    // paid later.
     const pendingStatusId = await paymentModel.getPaymentStatusId("Pending");
     if (!pendingStatusId) {
       const err = new Error("'Pending' payment status not configured");
@@ -92,12 +90,25 @@ export default class PaymentService {
       gcash_reference_number,
       cash_received,
       gcash_received,
+      // The Verify flow completes a payment that is "Awaiting Verification"
+      // (client sent GCash proof); every other path completes a Pending one.
+      expected_status = "Pending",
     } = {},
   ) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
-    if (payment.payment_status_name !== "Pending") {
+    if (payment.payment_status_name !== expected_status) {
       const err = new Error(
-        `Only pending payments can be completed. Payment is already ${payment.payment_status_name}.`,
+        `Only ${expected_status.toLowerCase()} payments can be completed here. Payment is already ${payment.payment_status_name}.`,
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    // An appointment for a service with no fixed price is booked at ₱0 and
+    // priced by hand when confirmed. Completing it here would record the
+    // visit as paid for free.
+    if (payment.appointment_id && !(Number(payment.total_amount) > 0)) {
+      const err = new Error(
+        "This appointment has no price yet — confirm its payment from the Appointments page, where the amount is entered.",
       );
       err.statusCode = 409;
       throw err;
@@ -142,26 +153,11 @@ export default class PaymentService {
         gcash_reference_number,
         cash_amount,
         gcash_amount,
+        expected_status,
       });
 
-      // This payment may belong to an appointment (booked "pay later" —
-      // see Appointment_Model.js:addAppointment) rather than a cart
-      // checkout. Completing it here, through the generic Payment module,
-      // bypasses completeAppointmentPayment entirely, so the appointment
-      // itself needs to be confirmed as a side effect or it stays stuck on
-      // Pending even though it's now paid.
-      if (payment.appointment_id) {
-        const confirmedStatusId =
-          await appointmentModel.getAppointmentStatusId("In Queue");
-        if (confirmedStatusId) {
-          await appointmentModel.setAppointmentStatus({
-            appointment_id: payment.appointment_id,
-            appointment_status_id: confirmedStatusId,
-            updated_by,
-          });
-        }
-      }
-
+      // A linked Pending appointment is confirmed (-> In Queue) inside
+      // completeCheckout's transaction.
       return completed;
     } catch (error) {
       if (error.message?.startsWith("Insufficient stock")) {
@@ -169,6 +165,16 @@ export default class PaymentService {
       }
       throw error;
     }
+  }
+
+  async markRefunded(payment_id, updated_by) {
+    const refunded = await paymentModel.markRefunded({ payment_id, updated_by });
+    if (!refunded) {
+      const err = new Error("Only payments marked \"Refund Needed\" can be marked refunded.");
+      err.statusCode = 409;
+      throw err;
+    }
+    return refunded;
   }
 
   async cancelPayment(payment_id, updated_by) {
@@ -191,30 +197,13 @@ export default class PaymentService {
         throw err;
       }
 
-      const cancelled = await paymentModel.cancelPayment({
+      // Also cancels (and frees the slot of) a linked Pending appointment,
+      // in the same transaction — see Payment_Model.cancelPayment.
+      return await paymentModel.cancelPayment({
         payment_id,
         payment_status_id: cancelledStatusId,
         updated_by,
       });
-
-      // This payment's cancel/delete soft-deletes the row entirely, so an
-      // appointment linked to it would otherwise be left stuck on Pending
-      // with no valid payment row left to ever complete against (see
-      // completeAppointmentPayment's "Payment record ... not found"). Cancel
-      // the appointment too — the client needs a fresh booking either way.
-      if (payment.appointment_id) {
-        const cancelledApptStatusId =
-          await appointmentModel.getAppointmentStatusId("Cancelled");
-        if (cancelledApptStatusId) {
-          await appointmentModel.setAppointmentStatus({
-            appointment_id: payment.appointment_id,
-            appointment_status_id: cancelledApptStatusId,
-            updated_by,
-          });
-        }
-      }
-
-      return cancelled;
     } catch (error) {
       console.log("Error on Service cancelPayment function");
       throw error;
@@ -263,6 +252,14 @@ export default class PaymentService {
     payment_proof_image,
   }) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
+
+    // A sub-service with no fixed price is priced and paid at the clinic —
+    // there's no amount to send by GCash yet.
+    if (!(Number(payment.total_amount) > 0)) {
+      const err = new Error("This booking is priced at the clinic — please pay there.");
+      err.statusCode = 409;
+      throw err;
+    }
 
     if (payment.payment_status_name !== "Pending") {
       const err = new Error(
@@ -333,6 +330,9 @@ export default class PaymentService {
         gcash_reference_number: payment.gcash_reference_number,
         gcash_received: payment.total_amount,
         cash_received: 0,
+        // The client already sent GCash proof, so this payment is Awaiting
+        // Verification, not Pending — approving it used to always fail.
+        expected_status: "Awaiting Verification",
       });
     }
 
@@ -343,11 +343,17 @@ export default class PaymentService {
         err.statusCode = 500;
         throw err;
       }
-      return paymentModel.updatePaymentStatus({
+      const rejected = await paymentModel.rejectProof({
         payment_id,
         payment_status_id: pendingStatusId,
         updated_by,
       });
+      if (!rejected) {
+        const err = new Error("This payment was just verified by someone else — refresh.");
+        err.statusCode = 409;
+        throw err;
+      }
+      return rejected;
     }
 
     const err = new Error('decision must be "approve" or "reject"');

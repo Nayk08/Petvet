@@ -1,5 +1,6 @@
 import AuthenticatorModel from "./Authenticator_Model.js";
 import bcrypt from "bcrypt";
+import { passwordFingerprint } from "../../middleware/is-auth.js";
 const authModel = new AuthenticatorModel();
 
 export default class AuthenticatorService {
@@ -30,6 +31,7 @@ export default class AuthenticatorService {
       user_level_id: profile?.user_level_id, // primary role, for display
       level_ids: profile?.level_ids, // all roles, for permission checks
       user_picture: profile?.user_picture ?? null,
+      pwd_fp: passwordFingerprint(user.user_password),
     };
   }
 

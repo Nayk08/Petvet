@@ -63,7 +63,7 @@ export function Component() {
                 {" "}
                 valued at{" "}
                 <strong className="text-slate-900 dark:text-slate-100">
-                  ${data.total_amount}
+                  ₱{Number(data.total_amount).toFixed(2)}
                 </strong>
               </span>
             )}

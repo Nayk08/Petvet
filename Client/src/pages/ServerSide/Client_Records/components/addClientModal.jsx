@@ -18,7 +18,6 @@ import {
   useNavigation,
   useActionData,
 } from "react-router-dom";
-import { useState, useEffect } from "react";
 import {
   queryClient,
   fetchClientById,
@@ -36,9 +35,6 @@ export function Component() {
   const isActionError = Boolean(actionData?.error);
   const actionError = actionData?.error;
 
-  // Track image preview state for a better UX
-  const [imagePreview, setImagePreview] = useState(null);
-
   function closeModal() {
     navigate(`..${location.search}`);
   }
@@ -50,24 +46,6 @@ export function Component() {
     staleTime: 5000,
     enabled: isEditMode,
   });
-
-  // Set initial image preview if editing
-  useEffect(() => {
-    if (data?.client_image) {
-      setImagePreview(data.client_image);
-    }
-  }, [data]);
-
-  function handleFileChange(event) {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  }
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -104,56 +82,6 @@ export function Component() {
             encType="multipart/form-data"
             className="space-y-5"
           >
-            {/* Image Upload Area */}
-            {/* <div className="space-y-2">
-              <label
-                htmlFor="client_image"
-                className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400"
-              >
-                Client Photo
-              </label>
-              <div className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative group">
-                <div className="w-16 h-16 shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden flex items-center justify-center">
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <svg
-                      className="w-6 h-6 text-slate-400 dark:text-slate-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  )}
-                </div>
-                <div className="flex flex-col text-left">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {imagePreview ? "Change photo" : "Upload client photo"}
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    PNG, JPG or WEBP up to 5MB
-                  </span>
-                </div>
-                <input
-                  id="client_image"
-                  name="client_image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </div>
-            </div> */}
 
             {/* Client Name */}
             <div className="space-y-1.5">

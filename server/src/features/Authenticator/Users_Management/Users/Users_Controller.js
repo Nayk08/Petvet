@@ -61,6 +61,7 @@ export default class UsersController {
         userId,
         updatedData,
         req.session.user.name,
+        req.session.user,
       );
       res.json(user);
     } catch (error) {

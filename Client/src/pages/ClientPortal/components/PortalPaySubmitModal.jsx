@@ -15,9 +15,32 @@ import { fetchClinicQrCode, submitPaymentProof } from "@/api/clientPortal.js";
 
 const GCASH_REFERENCE_PATTERN = /^\d{13}$/;
 
-export default function PortalPaySubmitModal({ paymentId, onClose }) {
+// "YYYY-MM-DD HH:mm:ss" Manila wall-clock -> "9:30 AM" (plain string
+// parsing; new Date() would shift it into the browser's timezone).
+function formatClock(value) {
+  if (!value) return "";
+  const [h, m] = String(value).split(" ")[1].split(":").map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+function formatVisitDate(value) {
+  if (!value) return "";
+  return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// onClose(submitted): true once the proof was sent, false if the client
+// backed out without paying (the booking page then offers to cancel it).
+// `details`: { pets_name, service_name, staff_name, appointment_date,
+// start_time, end_time } — what this bill is for.
+export default function PortalPaySubmitModal({ paymentId, amount, details, onClose }) {
   const queryClient = useQueryClient();
   const [referenceNumber, setReferenceNumber] = useState("");
+  const [amountSent, setAmountSent] = useState("");
   const [proofFile, setProofFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -30,7 +53,12 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
   });
 
   const isReferenceValid = GCASH_REFERENCE_PATTERN.test(referenceNumber);
-  const canSubmit = isReferenceValid && Boolean(proofFile);
+  // GCash gives no change, so what was sent must equal the bill exactly
+  // (the server re-checks this).
+  const toCents = (v) => Math.round(Number(v) * 100);
+  const isAmountValid =
+    amountSent !== "" && amount != null && toCents(amountSent) === toCents(amount);
+  const canSubmit = isReferenceValid && isAmountValid && Boolean(proofFile);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -41,6 +69,7 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
     try {
       const formData = new FormData();
       formData.append("gcash_reference_number", referenceNumber);
+      formData.append("amount_paid", amountSent);
       formData.append("payment_proof_image", proofFile);
       await submitPaymentProof(paymentId, formData);
       await queryClient.invalidateQueries({ queryKey: ["clientPortal", "payments"] });
@@ -53,7 +82,7 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
   }
 
   return (
-    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose(submitted)}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Pay via GCash</DialogTitle>
@@ -70,10 +99,43 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
             <p className="text-sm text-slate-600 dark:text-slate-300">
               We'll confirm it once staff verifies your reference number.
             </p>
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={() => onClose(true)}>Done</Button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* What this bill is for */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-1.5 text-sm">
+              {[
+                ["Pet", details?.pets_name],
+                ["Service", details?.service_name],
+                ["Staff", details?.staff_name],
+                ["Date", formatVisitDate(details?.appointment_date)],
+                [
+                  "Time",
+                  details?.start_time &&
+                    `${formatClock(details.start_time)} – ${formatClock(details.end_time)}`,
+                ],
+              ]
+                .filter(([, value]) => value)
+                .map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3">
+                    <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100 text-right">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              {amount != null && (
+                <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-200 dark:border-slate-800">
+                  <span className="text-slate-700 dark:text-slate-300 font-medium">
+                    Amount to pay
+                  </span>
+                  <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">
+                    ₱{Number(amount).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
             <div className="flex justify-center">
               {isQrPending ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -113,6 +175,27 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                Amount Sent (₱)
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={amountSent}
+                onChange={(e) => setAmountSent(e.target.value)}
+                placeholder={amount != null ? Number(amount).toFixed(2) : "0.00"}
+                className="text-slate-900 dark:text-slate-100"
+              />
+              {amountSent !== "" && !isAmountValid && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  Must be exactly ₱{Number(amount ?? 0).toFixed(2)} — GCash doesn't give change.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                 Payment Screenshot
               </label>
               <input
@@ -131,8 +214,8 @@ export default function PortalPaySubmitModal({ paymentId, onClose }) {
             )}
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancel
+              <Button type="button" variant="ghost" onClick={() => onClose(false)}>
+                Pay later
               </Button>
               <Button type="submit" disabled={!canSubmit || isSubmitting}>
                 {isSubmitting ? "Submitting..." : "Submit Proof"}

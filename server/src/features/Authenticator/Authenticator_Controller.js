@@ -2,6 +2,11 @@ import AuthenticatorService from "./Authenticator_Service.js";
 import { sendError } from "../../../utils/errorResponse.js";
 const authService = new AuthenticatorService();
 
+// The session's password fingerprint is server-only.
+function publicUser({ pwd_fp, ...user }) {
+  return user;
+}
+
 export default class AuthenticatorController {
   async login(req, res) {
     try {
@@ -20,11 +25,12 @@ export default class AuthenticatorController {
           user_level_id: user.user_level_id,
           level_ids: user.level_ids,
           user_picture: user.user_picture,
+          pwd_fp: user.pwd_fp, // see is-auth.js
         };
         req.session.isLoggedIn = true;
         res
           .status(200)
-          .json({ message: "Login successful", user: req.session.user });
+          .json({ message: "Login successful", user: publicUser(req.session.user) });
       });
     } catch (error) {
       const status = error.status || 500;
@@ -54,7 +60,7 @@ export default class AuthenticatorController {
   }
 
   async me(req, res) {
-    res.status(200).json({ user: req.session.user });
+    res.status(200).json({ user: publicUser(req.session.user) });
   }
 
   // /me and /nav both just read req.session.user rather than querying the
@@ -76,7 +82,7 @@ export default class AuthenticatorController {
         if (err) {
           return res.status(500).json({ message: "Failed to save session" });
         }
-        res.status(200).json({ user: req.session.user });
+        res.status(200).json({ user: publicUser(req.session.user) });
       });
     } catch (error) {
       return sendError(res, error, "Failed to update profile picture.");

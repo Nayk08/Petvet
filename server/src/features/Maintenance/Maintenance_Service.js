@@ -3,6 +3,10 @@ import MaintenanceModel from "./Maintenance_Model.js";
 const maintenanceModel = new MaintenanceModel();
 
 export default class MaintenanceService {
+  async getServiceCategories() {
+    return maintenanceModel.getServiceCategories();
+  }
+
   async getServices() {
     return maintenanceModel.getServices();
   }
@@ -17,21 +21,5 @@ export default class MaintenanceService {
 
   async setServiceActive(payload) {
     return maintenanceModel.setServiceActive(payload);
-  }
-
-  async getGroomingTiers() {
-    return maintenanceModel.getGroomingTiers();
-  }
-
-  async addGroomingTier(payload) {
-    return maintenanceModel.addGroomingTier(payload);
-  }
-
-  async updateGroomingTier(payload) {
-    return maintenanceModel.updateGroomingTier(payload);
-  }
-
-  async deleteGroomingTier(tier_id) {
-    return maintenanceModel.deleteGroomingTier(tier_id);
   }
 }

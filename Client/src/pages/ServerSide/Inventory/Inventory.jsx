@@ -20,12 +20,7 @@ import { toast } from "sonner";
 import ModuleTabs from "@/components/ui/ModuleTabs";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
-import Container from "@/components/ui/Container";
-
 export default function Inventory() {
-  const SALES_REVENUE = 8000;
-  const SERVICES_REVENUE = 4450;
-  const TOTAL_REVENUE = SALES_REVENUE + SERVICES_REVENUE;
   const navigate = useNavigate();
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
@@ -145,22 +140,6 @@ export default function Inventory() {
           />
           {!isPending && !isError && (
             <>
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  <Container
-                    title="Sales Revenue"
-                    value={`₱ ${SALES_REVENUE.toLocaleString()}`}
-                    trend="+12.5%"
-                  />
-                  <Container
-                    title="Services Revenue"
-                    value={`₱ ${SERVICES_REVENUE.toLocaleString()}`}
-                    trend="+8.2%"
-                  />
-                  <Container title="Today's Queue" value="5" trend="+2" />
-                  <Container title="Today's Queue" value="5" trend="+2" />
-                </div>
-              </div>
               <DynamicGrid
                 data={data?.rows ?? []}
                 columnsConfig={getInventoryColumns(categories)}

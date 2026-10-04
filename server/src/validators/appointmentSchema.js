@@ -1,24 +1,33 @@
 import { z } from "zod";
 import { GCASH_REFERENCE_PATTERN } from "../../utils/validatePaymentMethod.js";
+import { manilaInstant } from "../../utils/manilaTime.js";
 
-const BOOKING_START_HOUR = 9; // 9 AM
-const BOOKING_LAST_START_HOUR = 17; // 5 PM start → 6 PM end is the last slot
+// Clinic day, in minutes after midnight (Manila wall clock). Shared with the
+// model, which also checks that start + the sub-service's duration ends
+// by CLINIC_CLOSE_MINUTE and lands on that sub-service's slot grid.
+export const CLINIC_OPEN_MINUTE = 9 * 60; // 9:00 AM
+export const CLINIC_CLOSE_MINUTE = 18 * 60; // 6:00 PM
 
-// start_time/end_time travel as bare "HH:mm" or "HH:mm:ss" wall-clock
+// start_time travels as a bare "HH:mm" or "HH:mm:ss" wall-clock
 // strings, never a coercible date (see Appointment_Model.js's
 // toTimestampString and the FIXED comment in AddAppointmentModal.jsx) — so
 // this parses hour/minute directly instead of calling Date methods on them.
 const TIME_STRING_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
 
-function parseTimeString(value) {
+export function parseTimeString(value) {
   const match = TIME_STRING_PATTERN.exec(value ?? "");
   if (!match) return null;
   return { hour: Number(match[1]), minute: Number(match[2]) };
 }
 
-function validateSlot(data, ctx) {
-  const { appointment_date, start_time, end_time } = data;
+// allowPast: an edit may keep a slot that has already started (e.g. adding
+// notes to an in-progress visit) — the service only rejects a past slot when
+// the edit actually MOVES the appointment there.
+function validateSlot(data, ctx, { allowPast = false } = {}) {
+  const { appointment_date, start_time } = data;
 
+  // end_time is never taken from the client: the model computes it from
+  // the selected sub-service's CURRENT duration.
   const start = parseTimeString(start_time);
   if (!start) {
     ctx.addIssue({
@@ -29,29 +38,8 @@ function validateSlot(data, ctx) {
     return;
   }
 
-  const end = parseTimeString(end_time);
-  if (!end) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Invalid end time",
-      path: ["end_time"],
-    });
-    return;
-  }
-
-  if (start.minute !== 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Appointments can only start on the hour (e.g. 9:00 AM)",
-      path: ["start_time"],
-    });
-    return;
-  }
-
-  if (
-    start.hour < BOOKING_START_HOUR ||
-    start.hour > BOOKING_LAST_START_HOUR
-  ) {
+  const startMinute = start.hour * 60 + start.minute;
+  if (startMinute < CLINIC_OPEN_MINUTE || startMinute >= CLINIC_CLOSE_MINUTE) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Appointments can only be booked between 9:00 AM and 6:00 PM",
@@ -60,23 +48,10 @@ function validateSlot(data, ctx) {
     return;
   }
 
-  if (end.hour !== start.hour + 1 || end.minute !== 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Appointments are booked in fixed one-hour slots (e.g. 9-10 AM)",
-      path: ["end_time"],
-    });
-    return;
-  }
-
-  // Compare the requested civil date+time against "now" using UTC
-  // components on both sides — matches how appointment_date is treated as
-  // UTC-midnight everywhere else in this flow (toTimestampString), so this
-  // stays consistent with what actually gets written to the DB instead of
-  // drifting through local-timezone Date math.
-  const requested = new Date(appointment_date);
-  requested.setUTCHours(start.hour, start.minute, 0, 0);
-  if (requested.getTime() < Date.now()) {
+  // The slot is Manila wall-clock time. Treating it as UTC (as this used
+  // to) let anyone book a slot up to 8 hours in the past — e.g. 10 AM at
+  // 3 PM the same day.
+  if (!allowPast && manilaInstant(new Date(appointment_date), start.hour, start.minute) < Date.now()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Cannot book an appointment in the past",
@@ -124,7 +99,6 @@ const baseAppointmentSlotFields = {
     error: "Invalid appointment date",
   }),
   start_time: timeOfDaySchema,
-  end_time: timeOfDaySchema,
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
 };
 
@@ -163,13 +137,12 @@ export const editAppointmentSchema = z
       error: "Invalid appointment date",
     }),
     start_time: timeOfDaySchema,
-    end_time: timeOfDaySchema,
     status_name: z.enum(["Pending", "In Queue", "Completed", "No Show"], {
       error: "Invalid status",
-    }),
+    }).optional(),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
   })
-  .superRefine(validateSlot);
+  .superRefine((data, ctx) => validateSlot(data, ctx, { allowPast: true }));
 
 function validatePaymentFields(data, ctx) {
   const needsReference =
@@ -248,7 +221,6 @@ export const bookAppointmentWithPaymentSchema = z
       error: "Invalid appointment date",
     }),
     start_time: timeOfDaySchema,
-    end_time: timeOfDaySchema,
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
     amount: z.coerce
       .number({ error: "Amount must be a valid number" })
@@ -301,3 +273,9 @@ export const appointmentIdParamSchema = z.object({
     .int()
     .positive("Invalid appointment ID"),
 });
+
+// Real instant a slot starts at (Manila wall-clock date + "HH:mm[:ss]").
+export function slotStartInstant(appointment_date, start_time) {
+  const start = parseTimeString(start_time);
+  return manilaInstant(new Date(appointment_date), start.hour, start.minute);
+}

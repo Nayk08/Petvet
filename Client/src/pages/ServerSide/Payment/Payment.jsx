@@ -1,12 +1,14 @@
 import DynamicGrid from "@/components/ui/DynamicGrid";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { FileDown, QrCode, ShieldCheck, Printer } from "lucide-react";
+import { FileDown, QrCode, ShieldCheck, Printer, Undo2 } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   fetchPayments,
   fetchRevenueSummary,
   fetchRevenueTransactions,
+  markPaymentRefunded,
 } from "@/api/http";
 import { PaymentColumns, PaymentTransactionModalColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
@@ -37,6 +39,18 @@ const REVENUE_MODALS = {
 
 export function Component() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [refundPayment, setRefundPayment] = useState(null);
+  const refundMutation = useMutation({
+    mutationFn: markPaymentRefunded,
+    onSuccess: () => {
+      toast.success("Payment marked refunded");
+      setRefundPayment(null);
+      queryClient.invalidateQueries({ queryKey: ["Payments"] });
+    },
+    onError: (error) =>
+      toast.error("Could not mark refunded", { description: error.message }),
+  });
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
   const { page, limit, setPage, setLimit } = usePagination({
@@ -88,7 +102,6 @@ export function Component() {
     data: revenueSummary,
     isPending: isRevenuePending,
     isError: isRevenueError,
-    error: revenueError,
   } = useQuery({
     queryKey: ["RevenueSummary"],
     queryFn: ({ signal }) => fetchRevenueSummary({ signal }),
@@ -99,6 +112,12 @@ export function Component() {
   const InvoiceRevenue = Number(revenueSummary?.total_invoice ?? 0);
   const AppointmentRevenue = Number(revenueSummary?.total_appointment ?? 0);
   const totalRevenue = cashRevenue + gcashRevenue;
+  const revenueDisplay = (value) =>
+    isRevenuePending
+      ? "…"
+      : isRevenueError
+        ? "—"
+        : `₱ ${value.toLocaleString()}`;
 
   const [showQrModal, setShowQrModal] = useState(false);
 
@@ -163,20 +182,18 @@ export function Component() {
         <Container
           variant="hero"
           title="Total Revenue"
-          value={`₱ ${totalRevenue.toLocaleString()}`}
-          trend="+12.5%"
-          trendLabel="from last month"
+          value={revenueDisplay(totalRevenue)}
           breakdown={[
             {
               label: "Sales",
               value: InvoiceRevenue,
-              displayValue: `₱ ${InvoiceRevenue.toLocaleString()}`,
+              displayValue: revenueDisplay(InvoiceRevenue),
               barColor: "bg-rose-500",
             },
             {
               label: "Services",
               value: AppointmentRevenue,
-              displayValue: `₱ ${AppointmentRevenue.toLocaleString()}`,
+              displayValue: revenueDisplay(AppointmentRevenue),
               barColor: "bg-teal-500",
             },
           ]}
@@ -186,14 +203,12 @@ export function Component() {
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
           <Container
             title="Cash"
-            value={`₱ ${cashRevenue.toLocaleString()}`}
-            trend="+12.5%"
+            value={revenueDisplay(cashRevenue)}
             onClick={() => openRevenueModal("cash")}
           />
           <Container
             title="Cashless"
-            value={`₱ ${gcashRevenue.toLocaleString()}`}
-            trend="+8.2%"
+            value={revenueDisplay(gcashRevenue)}
             onClick={() => openRevenueModal("cashless")}
           />
         </div>
@@ -290,6 +305,14 @@ export function Component() {
                   }),
                 show: (row) => row.payment_status_name === "Completed",
               },
+              {
+                label: "Mark Refunded",
+                icon: Undo2,
+                className:
+                  "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40",
+                onClick: (row) => setRefundPayment(row),
+                show: (row) => row.payment_status_name === "Refund Needed",
+              },
             ]}
             limit={limit}
             search={search}
@@ -325,6 +348,16 @@ export function Component() {
           <Outlet />
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(refundPayment)}
+        onOpenChange={(open) => !open && setRefundPayment(null)}
+        title="Mark as refunded?"
+        description={`Confirm the ₱${Number(refundPayment?.total_amount ?? 0).toFixed(2)} for ${refundPayment?.control_number ?? "this payment"} has been returned to the client. This closes it out.`}
+        confirmLabel="Mark Refunded"
+        isConfirming={refundMutation.isPending}
+        onConfirm={() => refundMutation.mutate(refundPayment.payment_id)}
+      />
 
       {showQrModal && (
         <ManageQrCodeModal onClose={() => setShowQrModal(false)} />

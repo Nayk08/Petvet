@@ -3,12 +3,22 @@ import { paginateQuery } from "../../../utils/paginateQuery.js";
 
 const ALLOWED_FILTER_COLUMNS = ["payment_status_name"];
 
+// Staff payment lists show real payment activity only. Hidden:
+//   - an online booking the client hasn't paid yet (Pending, made in the
+//     client portal, no GCash proof sent) — staff collect it at the clinic
+//     via Appointments -> Confirm Payment;
+//   - a bill cancelled without ever being paid (cancelled booking,
+//     abandoned checkout) — no money ever moved.
+// Paid-then-refunded bills (Cancelled with a payment_method) stay visible.
+export const REAL_PAYMENT_ACTIVITY_SQL = `NOT (payment_status_name = 'Cancelled' AND payment_method IS NULL)
+  AND NOT (payment_status_name = 'Pending' AND created_by = 'Client Portal')`;
+
 export default class PaymentModel {
   async getPayments({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
     try {
       const values = [];
-      const conditions = [];
+      const conditions = [REAL_PAYMENT_ACTIVITY_SQL];
 
       for (const [key, value] of Object.entries(filters)) {
         if (key === "payment_type") {
@@ -178,6 +188,9 @@ export default class PaymentModel {
           `SELECT product_id, product_price, product_quantity
            FROM tbl_products
            WHERE product_name = $1 AND is_deleted = false AND product_quantity > 0
+             -- FEFO must never pick a batch that has already expired (same
+             -- rule as v_products.is_expired)
+             AND (product_expiry_date IS NULL OR product_expiry_date > CURRENT_TIMESTAMP)
            ORDER BY product_expiry_date ASC NULLS LAST, product_id ASC
            FOR UPDATE`,
           [item.product_name],
@@ -199,7 +212,7 @@ export default class PaymentModel {
         }
 
         if (remaining > 0) {
-          throw new Error(`Insufficient stock for ${item.product_name}`);
+          throw new Error(`Insufficient stock for ${item.product_name} (expired batches can't be sold)`);
         }
       }
 
@@ -246,6 +259,7 @@ export default class PaymentModel {
     gcash_reference_number,
     cash_amount,
     gcash_amount,
+    expected_status = "Pending",
   }) {
     const client = await pool.connect();
     let queryError = null;
@@ -262,6 +276,7 @@ export default class PaymentModel {
          FROM tbl_payments p
          JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
          WHERE p.payment_id = $1
+           AND p.is_deleted = false -- an archived bill must never be charged
          FOR UPDATE OF p`,
         [payment_id],
       );
@@ -270,9 +285,9 @@ export default class PaymentModel {
         err.statusCode = 404;
         throw err;
       }
-      if (lockRes.rows[0].payment_status_name !== "Pending") {
+      if (lockRes.rows[0].payment_status_name !== expected_status) {
         const err = new Error(
-          `Only pending payments can be completed. Payment is already ${lockRes.rows[0].payment_status_name}.`,
+          `Only ${expected_status.toLowerCase()} payments can be completed here. Payment is already ${lockRes.rows[0].payment_status_name}.`,
         );
         err.statusCode = 409;
         throw err;
@@ -289,12 +304,17 @@ export default class PaymentModel {
          SET product_quantity = product_quantity - $1,
              date_updated = NOW()
          WHERE product_id = $2 AND product_quantity >= $1
+           -- the batch may have expired or been archived since checkout
+           AND is_deleted = false
+           AND (product_expiry_date IS NULL OR product_expiry_date > CURRENT_TIMESTAMP)
          RETURNING *`,
           [item.quantity, item.product_id],
         );
 
         if (stockRes.rows.length === 0) {
-          throw new Error(`Insufficient stock for product ${item.product_id}`);
+          throw new Error(
+            `Insufficient stock for product ${item.product_id} — it sold out, expired or was archived since checkout. Cancel this order and check out again.`,
+          );
         }
       }
 
@@ -319,6 +339,22 @@ export default class PaymentModel {
         ],
       );
 
+      // A paid appointment charge confirms its (still Pending) appointment —
+      // in this same transaction, so a paid appointment can't end up stuck
+      // on Pending if a second, separate write failed.
+      if (paymentRes.rows[0].appointment_id) {
+        await client.query(
+          `UPDATE tbl_appointments
+           SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                        WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'),
+               updated_by = $2, date_updated = NOW()
+           WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+             AND appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                          WHERE LOWER(TRIM(appointment_status_name)) = 'pending')`,
+          [paymentRes.rows[0].appointment_id, updated_by],
+        );
+      }
+
       await client.query("COMMIT");
       return paymentRes.rows[0];
     } catch (error) {
@@ -331,29 +367,47 @@ export default class PaymentModel {
     }
   }
 
-  async updatePaymentStatus({ payment_id, payment_status_id, updated_by }) {
-    const client = await pool.connect();
-    try {
-      const res = await client.query(
-        `UPDATE tbl_payments SET
-        payment_status_id = $1,
-        updated_by = $2,
-        date_updated = NOW()
-        WHERE payment_id = $3 RETURNING *`,
-        [payment_status_id, updated_by, payment_id],
-      );
-      return res.rows[0];
-    } catch (error) {
-      console.log("Error on Model updatePaymentStatus function");
-      throw error;
-    } finally {
-      client.release();
-    }
+  // Rejected GCash proof -> back to Pending with the rejected reference,
+  // method and screenshot cleared, so the next attempt (or a cash payment at
+  // the desk) starts clean instead of inheriting the bad GCash details.
+  async rejectProof({ payment_id, payment_status_id, updated_by }) {
+    const res = await pool.query(
+      `UPDATE tbl_payments SET
+         payment_status_id = $1, updated_by = $2, date_updated = NOW(),
+         gcash_reference_number = NULL, payment_method = NULL, payment_proof_image = NULL
+       WHERE payment_id = $3
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE LOWER(TRIM(payment_status_name)) = 'awaiting verification')
+       RETURNING *`,
+      [payment_status_id, updated_by, payment_id],
+    );
+    return res.rows[0];
   }
 
+  // Closes out a "Refund Needed" payment once staff have actually returned
+  // the money. Ends as Cancelled, so it stays out of revenue.
+  async markRefunded({ payment_id, updated_by }) {
+    const res = await pool.query(
+      `UPDATE tbl_payments
+       SET payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                WHERE LOWER(TRIM(payment_status_name)) = 'cancelled'),
+           updated_by = $2, date_updated = NOW()
+       WHERE payment_id = $1 AND is_deleted = false
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE LOWER(TRIM(payment_status_name)) = 'refund needed')
+       RETURNING *`,
+      [payment_id, updated_by],
+    );
+    return res.rows[0];
+  }
+
+  // One transaction: the payment and (if any) its appointment are cancelled
+  // together. "Still Pending" is checked in the UPDATE itself, so a payment
+  // completed a moment ago can't be cancelled out from under the cashier.
   async cancelPayment({ payment_id, payment_status_id, updated_by }) {
     const client = await pool.connect();
     try {
+      await client.query("BEGIN");
       const res = await client.query(
         `UPDATE tbl_payments SET
            is_deleted = true,
@@ -361,13 +415,42 @@ export default class PaymentModel {
            updated_by = $3,
            deleted_by = $3,
            date_updated = NOW()
-         WHERE payment_id = $1
+         WHERE payment_id = $1 AND is_deleted = false
+           AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                    WHERE LOWER(TRIM(payment_status_name)) = 'pending')
          RETURNING *`,
         [payment_id, payment_status_id, updated_by],
       );
+      if (!res.rows.length) {
+        const err = new Error(
+          "This payment is no longer pending — refresh and try again.",
+        );
+        err.statusCode = 409;
+        throw err;
+      }
 
+      // Its unpaid appointment can't go ahead any more. Soft-delete it like
+      // a normal cancel does, which also frees the staff's time slot (the
+      // slot index ignores deleted rows) — leaving it undeleted used to
+      // block that slot forever.
+      if (res.rows[0].appointment_id) {
+        await client.query(
+          `UPDATE tbl_appointments
+           SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                        WHERE LOWER(TRIM(appointment_status_name)) = 'cancelled'),
+               is_deleted = true, deleted_by = $2, date_deleted = NOW(),
+               updated_by = $2, date_updated = NOW()
+           WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+             AND appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                          WHERE LOWER(TRIM(appointment_status_name)) = 'pending')`,
+          [res.rows[0].appointment_id, updated_by],
+        );
+      }
+
+      await client.query("COMMIT");
       return res.rows[0];
     } catch (error) {
+      await client.query("ROLLBACK");
       console.log("Error on Model cancelPayment function");
       throw error;
     } finally {

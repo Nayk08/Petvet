@@ -33,6 +33,10 @@ export default function hasPermission(moduleCode, ...actions) {
         `SELECT 1 FROM v_user_permissions vp
          JOIN tbl_user_level_assignments a
            ON a.user_level_id = vp.user_level_id AND a.is_active = true
+         -- v_user_permissions only filters inactive roles; a deleted role
+         -- must not keep granting access either.
+         JOIN tbl_user_level ul
+           ON ul.user_level_id = a.user_level_id AND ul.is_deleted IS NOT TRUE
          WHERE a.users_id = $1 AND vp.module_code = $2
          AND ${conditions}
          LIMIT 1`,

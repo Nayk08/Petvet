@@ -33,6 +33,11 @@ router.patch(
   (req, res) => paymentController.cancelPayment(req, res),
 );
 router.patch(
+  "/payments/:id/refunded",
+  hasPermission("PAYMENTS", "can_delete"),
+  (req, res) => paymentController.markRefunded(req, res),
+);
+router.patch(
   "/payments/:id/verify",
   hasPermission("PAYMENTS", "can_edit"),
   (req, res) => paymentController.verifyPayment(req, res),

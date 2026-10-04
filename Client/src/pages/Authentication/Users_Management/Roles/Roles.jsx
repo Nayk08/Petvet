@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { usersLevelColumns } from "../../../../utils/COLUMNS.jsx";
 import DynamicGrid from "../../../../components/ui/DynamicGrid.jsx";
 import { useQuery } from "@tanstack/react-query";
-import { fetchUserLevel, queryClient } from "../../../../api/http.js";
+import { fetchUserLevel } from "../../../../api/http.js";
 import { Outlet, useNavigate } from "react-router-dom";
 import { usePagination } from "@/hooks/usePagination.jsx";
 import { Pagination } from "@/components/ui/Pagination.jsx";

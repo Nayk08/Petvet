@@ -100,12 +100,14 @@ export function estimatePaymentSplit({
 // eventually rejects instead of hanging forever, so at worst a query
 // retries or errors out — it can no longer wedge every other page shut.
 const FETCH_TIMEOUT_MS = 15000;
+// Image uploads on a slow clinic connection legitimately take longer.
+const UPLOAD_TIMEOUT_MS = 120000;
 
-function fetchWithTimeout(url, { signal, ...options } = {}) {
+function rawFetchWithTimeout(url, { signal, ...options } = {}) {
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
-    FETCH_TIMEOUT_MS,
+    options.body instanceof FormData ? UPLOAD_TIMEOUT_MS : FETCH_TIMEOUT_MS,
   );
 
   if (signal) {
@@ -116,6 +118,34 @@ function fetchWithTimeout(url, { signal, ...options } = {}) {
   return fetch(url, { ...options, signal: controller.signal }).finally(() =>
     clearTimeout(timeoutId),
   );
+}
+
+// Every request goes through here. A mutating request carries a cached
+// CSRF token (see getCsrfToken); that token is bound to the session id,
+// which changes on login/logout/expiry — so on a 403 we fetch a fresh
+// token and retry once instead of failing the user's action.
+export async function fetchWithTimeout(url, options = {}) {
+  const response = await rawFetchWithTimeout(url, options);
+  if (response.status !== 403 || !options.headers?.["x-csrf-token"]) {
+    return response;
+  }
+  csrfTokenPromise = null;
+  const headers = { ...options.headers, "x-csrf-token": await getCsrfToken() };
+  return rawFetchWithTimeout(url, { ...options, headers });
+}
+
+// Login page URL that sends the user back to where they were afterwards.
+export function loginUrlReturningHere() {
+  const { pathname, search } = window.location;
+  if (pathname === "/" || pathname.startsWith("/login")) return "/login?mode=login";
+  return `/login?mode=login&redirect=${encodeURIComponent(pathname + search)}`;
+}
+
+// Only same-site paths — never "//evil.com" or "https://..." (open redirect).
+export function safeRedirectPath(value) {
+  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\")
+    ? value
+    : null;
 }
 
 async function handleResponse(
@@ -135,7 +165,7 @@ async function handleResponse(
       !window.location.pathname.startsWith("/login")
     ) {
       queryClient.clear();
-      window.location.assign("/login?mode=login");
+      window.location.assign(loginUrlReturningHere());
     }
     throw new Error("Session expired. Please log in again.");
   }
@@ -153,21 +183,27 @@ async function handleResponse(
 // ─────────────────────────────
 // CSRF
 // ─────────────────────────────
-// Every mutating request (POST/PUT/PATCH/DELETE) needs a fresh CSRF
-// token attached as the x-csrf-token header, since doubleCsrfProtection
-// is applied globally on the backend for all non-GET routes.
-async function getCsrfToken() {
-  const response = await fetch(`${baseUrl}/csrf-token`, {
-    method: "GET",
+// Every mutating request (POST/PUT/PATCH/DELETE) needs a CSRF token
+// attached as the x-csrf-token header, since doubleCsrfProtection is
+// applied globally on the backend for all non-GET routes. Fetched once and
+// reused — one /csrf-token round trip per mutation was burning through the
+// per-IP csrfLimiter (shared by every PC on the clinic network) and caused
+// 429s. fetchWithTimeout refreshes it when the server rejects it.
+let csrfTokenPromise = null;
+
+export function getCsrfToken() {
+  csrfTokenPromise ??= rawFetchWithTimeout(`${baseUrl}/csrf-token`, {
     credentials: "include",
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not fetch CSRF token.");
-  }
-
-  const { csrfToken } = await response.json();
-  return csrfToken;
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("Could not fetch CSRF token.");
+      return (await response.json()).csrfToken;
+    })
+    .catch((error) => {
+      csrfTokenPromise = null; // don't cache a failure
+      throw error;
+    });
+  return csrfTokenPromise;
 }
 
 // ─────────────────────────────
@@ -185,7 +221,7 @@ export async function fetchCurrentUser({ signal }) {
 export async function logoutUser() {
   const csrfToken = await getCsrfToken();
 
-  const response = await fetch(`${AuthUrl}/logout`, {
+  const response = await fetchWithTimeout(`${AuthUrl}/logout`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -197,7 +233,7 @@ export async function logoutUser() {
 export async function updateMyProfilePicture(formData) {
   const csrfToken = await getCsrfToken();
 
-  const response = await fetch(`${AuthUrl}/me/picture`, {
+  const response = await fetchWithTimeout(`${AuthUrl}/me/picture`, {
     method: "PATCH",
     headers: { "x-csrf-token": csrfToken },
     body: formData,
@@ -220,7 +256,7 @@ export async function fetchNavbar({ signal }) {
 }
 
 export async function getCategoryUserLevel({ signal }) {
-  const response = await fetch(`${baseUrl}/categoryUserLevel`, {
+  const response = await fetchWithTimeout(`${baseUrl}/categoryUserLevel`, {
     signal,
     credentials: "include",
   });
@@ -255,7 +291,7 @@ export async function fetchUsers({
     }
   });
 
-  const response = await fetch(`${baseUrl}/users?${params.toString()}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users?${params.toString()}`, {
     signal,
     credentials: "include",
   });
@@ -263,7 +299,7 @@ export async function fetchUsers({
 }
 
 export async function fetchUserById(id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/users/${id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/${id}`, {
     signal,
     credentials: "include",
   });
@@ -272,7 +308,7 @@ export async function fetchUserById(id, { signal } = {}) {
 
 export async function addNewUser(user) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/users/add-user`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/add-user`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -283,7 +319,7 @@ export async function addNewUser(user) {
 
 export async function updateUser(id, user) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/users/${id}/edit-user`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/${id}/edit-user`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -294,7 +330,7 @@ export async function updateUser(id, user) {
 
 export async function deleteUser(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/users/${id}/delete-user`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/${id}/delete-user`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -317,7 +353,7 @@ export async function fetchArchivedUsers({
     ...(search && { search }),
   });
 
-  const response = await fetch(`${baseUrl}/users/archived?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/archived?${params}`, {
     signal,
     credentials: "include",
   });
@@ -326,7 +362,7 @@ export async function fetchArchivedUsers({
 
 export async function restoreUser(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/users/${id}/restore`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/${id}/restore`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -338,7 +374,7 @@ export async function restoreUser(id) {
 // appointment history (the backend rejects it with a 409 otherwise).
 export async function permanentlyDeleteUser(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/users/${id}/permanent`, {
+  const response = await fetchWithTimeout(`${baseUrl}/users/${id}/permanent`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -374,7 +410,7 @@ export async function fetchUserLevel({
     }
   });
 
-  const response = await fetch(`${baseUrl}/usersLevel?${params.toString()}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/usersLevel?${params.toString()}`, {
     signal,
     credentials: "include",
   });
@@ -382,7 +418,7 @@ export async function fetchUserLevel({
 }
 
 export async function fetchUserLevelById(id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/usersLevel/${id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/usersLevel/${id}`, {
     signal,
     credentials: "include",
   });
@@ -391,7 +427,7 @@ export async function fetchUserLevelById(id, { signal } = {}) {
 
 export async function addNewUserLevel(userlevel, description) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/usersLevel/add-user-level`, {
+  const response = await fetchWithTimeout(`${baseUrl}/usersLevel/add-user-level`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -402,7 +438,7 @@ export async function addNewUserLevel(userlevel, description) {
 
 export async function updateUserLevel({ id, userLevel, description }) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/usersLevel/${id}/edit-user-level`, {
+  const response = await fetchWithTimeout(`${baseUrl}/usersLevel/${id}/edit-user-level`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -416,7 +452,7 @@ export async function updateUserLevel({ id, userLevel, description }) {
 
 export async function deleteUserLevel(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/usersLevel/${id}/delete-user-level`,
     {
       method: "DELETE",
@@ -432,7 +468,7 @@ export async function deleteUserLevel(id) {
 // ─────────────────────────────
 
 export async function getPermissionMatrix({ userLevelId, signal }) {
-  const response = await fetch(`${baseUrl}/permissions/${userLevelId}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/permissions/${userLevelId}`, {
     signal,
     credentials: "include",
   });
@@ -450,7 +486,7 @@ export async function updatePermissionField({
   value,
 }) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/permissions`, {
+  const response = await fetchWithTimeout(`${baseUrl}/permissions`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -493,7 +529,7 @@ export async function fetchInventory({
     }
   });
 
-  const response = await fetch(`${baseUrl}/inventory?${params.toString()}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory?${params.toString()}`, {
     signal,
     credentials: "include",
   });
@@ -501,7 +537,7 @@ export async function fetchInventory({
 }
 
 export async function fetchInventoryById({ product_id, signal } = {}) {
-  const response = await fetch(`${baseUrl}/inventory/${product_id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${product_id}`, {
     signal,
     credentials: "include",
   });
@@ -511,7 +547,7 @@ export async function fetchInventoryById({ product_id, signal } = {}) {
 // The individual batches (own quantity/expiry/price) grouped under one
 // product name in the main inventory list.
 export async function fetchProductBatches({ product_name, signal } = {}) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/inventory/batches/${encodeURIComponent(product_name)}`,
     { signal, credentials: "include" },
   );
@@ -519,7 +555,7 @@ export async function fetchProductBatches({ product_name, signal } = {}) {
 }
 
 export async function fetchProductCategories({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/inventory/categories`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/categories`, {
     signal,
     credentials: "include",
   });
@@ -528,7 +564,7 @@ export async function fetchProductCategories({ signal } = {}) {
 
 export async function addProductCategory(category_name) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/categories`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/categories`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -539,7 +575,7 @@ export async function addProductCategory(category_name) {
 
 export async function addProduct(formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/add-product`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/add-product`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
     body: formData,
@@ -550,7 +586,7 @@ export async function addProduct(formData) {
 
 export async function updateProduct(id, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/${id}/edit-product`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${id}/edit-product`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     body: formData,
@@ -566,7 +602,7 @@ export async function addProductQuantity(
   { quantity, product_price, product_expiry_date },
 ) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/${id}/add-quantity`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${id}/add-quantity`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     body: JSON.stringify({ quantity, product_price, product_expiry_date }),
@@ -577,7 +613,7 @@ export async function addProductQuantity(
 
 export async function deleteProduct(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/${id}/delete-product`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${id}/delete-product`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -600,7 +636,7 @@ export async function fetchArchivedProducts({
     ...(search && { search }),
   });
 
-  const response = await fetch(`${baseUrl}/inventory/archived?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/archived?${params}`, {
     signal,
     credentials: "include",
   });
@@ -609,7 +645,7 @@ export async function fetchArchivedProducts({
 
 export async function restoreProduct(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/${id}/restore`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${id}/restore`, {
     method: "PATCH",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -621,7 +657,7 @@ export async function restoreProduct(id) {
 // history (the backend rejects it with a 409 otherwise).
 export async function permanentlyDeleteProduct(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/${id}/permanent`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/${id}/permanent`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -632,7 +668,7 @@ export async function permanentlyDeleteProduct(id) {
 // Bulk-removes every already-expired product batch in one call.
 export async function pullExpiredProducts() {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/inventory/pull-expired`, {
+  const response = await fetchWithTimeout(`${baseUrl}/inventory/pull-expired`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -658,7 +694,7 @@ export async function checkoutOrder(cartItems) {
     })),
   };
 
-  const response = await fetch(`${baseUrl}/checkout`, {
+  const response = await fetchWithTimeout(`${baseUrl}/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -669,7 +705,7 @@ export async function checkoutOrder(cartItems) {
 }
 export async function completePayment(paymentId, payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/checkout/${paymentId}/complete`, {
+  const response = await fetchWithTimeout(`${baseUrl}/checkout/${paymentId}/complete`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -685,7 +721,7 @@ export async function completePayment(paymentId, payload) {
 // GCash proof submission (see ClientPortal's submitPaymentProof).
 export async function verifyPayment(paymentId, decision) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/payments/${paymentId}/verify`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${paymentId}/verify`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -698,7 +734,7 @@ export async function verifyPayment(paymentId, decision) {
 }
 
 export async function fetchGcashQrCode({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/payments/gcash-qr-code`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/gcash-qr-code`, {
     signal,
     credentials: "include",
   });
@@ -707,7 +743,7 @@ export async function fetchGcashQrCode({ signal } = {}) {
 
 export async function updateGcashQrCode(formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/payments/gcash-qr-code`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/gcash-qr-code`, {
     method: "PATCH",
     headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
     body: formData,
@@ -740,7 +776,7 @@ export async function fetchPayments({
     }
   });
 
-  const response = await fetch(`${baseUrl}/payments?${params.toString()}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments?${params.toString()}`, {
     signal,
     credentials: "include",
   });
@@ -771,7 +807,7 @@ export async function fetchTodayPayments({
     }
   });
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/dashboard/today-payments?${params.toString()}`,
     { signal, credentials: "include" },
   );
@@ -797,7 +833,7 @@ export async function fetchTodayRevenueTransactions({
     ...(search && { search }),
   });
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/dashboard/today-revenue-transactions?${params.toString()}`,
     { signal, credentials: "include" },
   );
@@ -805,24 +841,16 @@ export async function fetchTodayRevenueTransactions({
 }
 
 export async function fetchPaymentById(payment_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/payments/${payment_id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${payment_id}`, {
     signal,
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch payment");
 }
 
-export async function fetchCartItemsByPaymentId(payment_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/payments/${payment_id}/cart-items`, {
-    signal,
-    credentials: "include",
-  });
-  return handleResponse(response, "Failed to fetch cart items");
-}
-
 export async function deletePayment(payment_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/payments/${payment_id}/cancel`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${payment_id}/cancel`, {
     method: "PATCH",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -830,8 +858,20 @@ export async function deletePayment(payment_id) {
   return handleResponse(response, "Failed to cancel payment");
 }
 
+// "Refund Needed" (a paid appointment that got cancelled) -> closed out,
+// once staff have actually returned the money.
+export async function markPaymentRefunded(payment_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${payment_id}/refunded`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to mark payment refunded");
+}
+
 export async function fetchRevenueSummary({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/revenue-summary`, {
+  const response = await fetchWithTimeout(`${baseUrl}/revenue-summary`, {
     signal,
     credentials: "include",
   });
@@ -839,7 +879,7 @@ export async function fetchRevenueSummary({ signal } = {}) {
 }
 
 export async function fetchTodayRevenue({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/revenue-summary/today`, {
+  const response = await fetchWithTimeout(`${baseUrl}/revenue-summary/today`, {
     signal,
     credentials: "include",
   });
@@ -865,7 +905,7 @@ export async function fetchRevenueTransactions({
     ...(search && { search }),
   });
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/revenue-transactions?${params.toString()}`,
     { signal, credentials: "include" },
   );
@@ -900,7 +940,7 @@ export async function fetchClientRecords({
     }
   });
 
-  const response = await fetch(`${baseUrl}/client?${params.toString()}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client?${params.toString()}`, {
     signal,
     credentials: "include",
   });
@@ -908,7 +948,7 @@ export async function fetchClientRecords({
 }
 
 export async function fetchClientById({ client_id, signal }) {
-  const response = await fetch(`${baseUrl}/client/${client_id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${client_id}`, {
     signal,
     credentials: "include",
   });
@@ -917,7 +957,7 @@ export async function fetchClientById({ client_id, signal }) {
 
 export async function addClient(formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/add-client`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/add-client`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
     body: formData,
@@ -928,7 +968,7 @@ export async function addClient(formData) {
 
 export async function editClient(id, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/${id}/edit-client`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${id}/edit-client`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
     body: formData,
@@ -939,7 +979,7 @@ export async function editClient(id, formData) {
 
 export async function deleteClient(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/${id}/delete-client`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${id}/delete-client`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -962,7 +1002,7 @@ export async function fetchArchivedClients({
     ...(search && { search }),
   });
 
-  const response = await fetch(`${baseUrl}/client/archived?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/archived?${params}`, {
     signal,
     credentials: "include",
   });
@@ -971,7 +1011,7 @@ export async function fetchArchivedClients({
 
 export async function restoreClient(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/${id}/restore`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${id}/restore`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -983,7 +1023,7 @@ export async function restoreClient(id) {
 // or appointment history (the backend rejects it with a 409 otherwise).
 export async function permanentlyDeleteClient(id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/${id}/permanent`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${id}/permanent`, {
     method: "DELETE",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -1005,7 +1045,7 @@ export async function fetchPetRecordsByClientId(
     ...(search && { search }),
   });
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/client/${client_id}/pets?${params}`,
     {
       signal,
@@ -1017,7 +1057,7 @@ export async function fetchPetRecordsByClientId(
 
 export async function addPet(client_id, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/client/${client_id}/pets`, {
+  const response = await fetchWithTimeout(`${baseUrl}/client/${client_id}/pets`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken }, // no Content-Type — browser sets multipart boundary for FormData
     body: formData,
@@ -1027,7 +1067,7 @@ export async function addPet(client_id, formData) {
 }
 
 export async function fetchPetById(pets_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/pets/${pets_id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}`, {
     signal,
     credentials: "include",
   });
@@ -1036,7 +1076,7 @@ export async function fetchPetById(pets_id, { signal } = {}) {
 
 export async function editPet(pets_id, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/pets/${pets_id}/edit-pet`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}/edit-pet`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     body: formData,
@@ -1047,7 +1087,7 @@ export async function editPet(pets_id, formData) {
 
 export async function deletePet(pets_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/pets/${pets_id}/delete-pet`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}/delete-pet`, {
     method: "PUT",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -1057,7 +1097,7 @@ export async function deletePet(pets_id) {
 
 export async function transferPetOwner(pets_id, new_client_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/pets/${pets_id}/transfer-owner`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}/transfer-owner`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -1070,14 +1110,14 @@ export async function transferPetOwner(pets_id, new_client_id) {
 }
 
 export async function fetchPetHistory(pets_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/pets/${pets_id}/history`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}/history`, {
     credentials: "include",
     signal,
   });
   return handleResponse(response, "Failed to load pet history");
 }
 export async function selectSpecies({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/species`, {
+  const response = await fetchWithTimeout(`${baseUrl}/species`, {
     signal,
     credentials: "include",
   });
@@ -1085,7 +1125,7 @@ export async function selectSpecies({ signal } = {}) {
 }
 
 export async function selectGender({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/gender`, {
+  const response = await fetchWithTimeout(`${baseUrl}/gender`, {
     signal,
     credentials: "include",
   });
@@ -1093,7 +1133,7 @@ export async function selectGender({ signal } = {}) {
 }
 
 export async function selectPetStatus({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/pet-status`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pet-status`, {
     signal,
     credentials: "include",
   });
@@ -1125,7 +1165,7 @@ export async function fetchAppointments({
     }
   });
 
-  const response = await fetch(`${baseUrl}/appointments?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments?${params}`, {
     signal,
     credentials: "include",
   });
@@ -1156,7 +1196,7 @@ export async function fetchConsultationAppointments({
   signal,
 } = {}) {
   const params = buildAppointmentFilterParams({ page, limit, search, filters });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/consultation?${params}`,
     { signal, credentials: "include" },
   );
@@ -1171,7 +1211,7 @@ export async function fetchGroomingAppointments({
   signal,
 } = {}) {
   const params = buildAppointmentFilterParams({ page, limit, search, filters });
-  const response = await fetch(`${baseUrl}/appointments/grooming?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/grooming?${params}`, {
     signal,
     credentials: "include",
   });
@@ -1186,7 +1226,7 @@ export async function fetchOperationAppointments({
   signal,
 } = {}) {
   const params = buildAppointmentFilterParams({ page, limit, search, filters });
-  const response = await fetch(`${baseUrl}/appointments/operation?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/operation?${params}`, {
     signal,
     credentials: "include",
   });
@@ -1201,7 +1241,7 @@ export async function fetchTodayAppointments({
   signal,
 } = {}) {
   const params = buildAppointmentFilterParams({ page, limit, search, filters });
-  const response = await fetch(`${baseUrl}/dashboard/today-appointments?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/dashboard/today-appointments?${params}`, {
     signal,
     credentials: "include",
   });
@@ -1209,7 +1249,7 @@ export async function fetchTodayAppointments({
 }
 
 export async function fetchAppointmentById(appointment_id, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointments/${appointment_id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/${appointment_id}`, {
     signal,
     credentials: "include",
   });
@@ -1218,7 +1258,7 @@ export async function fetchAppointmentById(appointment_id, { signal } = {}) {
 
 export async function addAppointment(payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/appointments/add-appointment`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/add-appointment`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1232,7 +1272,7 @@ export async function addAppointment(payload) {
 
 export async function bookAppointmentWithPayment(payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/appointments/book-with-payment`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/book-with-payment`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1246,7 +1286,7 @@ export async function bookAppointmentWithPayment(payload) {
 
 export async function completeAppointmentPayment(appointment_id, payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/${appointment_id}/complete-payment`,
     {
       method: "PATCH",
@@ -1263,7 +1303,7 @@ export async function completeAppointmentPayment(appointment_id, payload) {
 
 export async function editAppointment(appointment_id, payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/${appointment_id}/edit-appointment`,
     {
       method: "PUT",
@@ -1280,7 +1320,7 @@ export async function editAppointment(appointment_id, payload) {
 
 export async function cancelAppointment(appointment_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/${appointment_id}/cancel-appointment`,
     {
       method: "PUT",
@@ -1293,7 +1333,7 @@ export async function cancelAppointment(appointment_id) {
 
 export async function markNoShow(appointment_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/${appointment_id}/mark-no-show`,
     {
       method: "PUT",
@@ -1309,7 +1349,7 @@ export async function markNoShow(appointment_id) {
 // why this isn't gated by a module permission like the others here.
 export async function completeAppointment(appointment_id) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/${appointment_id}/complete-appointment`,
     {
       method: "PUT",
@@ -1320,8 +1360,33 @@ export async function completeAppointment(appointment_id) {
   return handleResponse(response, "Failed to complete appointment");
 }
 
+export async function addConsultation(appointment_id, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(
+    `${baseUrl}/appointments/${appointment_id}/consultation`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    },
+  );
+  return handleResponse(response, "Failed to save consultation record");
+}
+
+export async function fetchPetMedicalRecords(pets_id, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${pets_id}/medical-records`, {
+    credentials: "include",
+    signal,
+  });
+  return handleResponse(response, "Failed to load medical records");
+}
+
 export async function selectAppointmentServices({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointment-services`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-services`, {
     signal,
     credentials: "include",
   });
@@ -1329,27 +1394,19 @@ export async function selectAppointmentServices({ signal } = {}) {
 }
 
 export async function selectAppointmentStaff({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointment-staff`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-staff`, {
     signal,
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch staff list");
 }
 
-export async function selectGroomingPriceTiers({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointment-grooming-tiers`, {
-    signal,
-    credentials: "include",
-  });
-  return handleResponse(response, "Failed to fetch grooming price tiers");
-}
-
 // ─────────────────────────────
-// Maintenance (services & grooming tiers catalog)
+// Maintenance (service categories & sub-services)
 // ─────────────────────────────
 
 export async function fetchMaintenanceServices({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/maintenance/services`, {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/services`, {
     signal,
     credentials: "include",
   });
@@ -1358,7 +1415,7 @@ export async function fetchMaintenanceServices({ signal } = {}) {
 
 export async function addMaintenanceService(payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/services`, {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/services`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -1369,7 +1426,7 @@ export async function addMaintenanceService(payload) {
 
 export async function updateMaintenanceService(id, payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/services/${id}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/services/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -1380,7 +1437,7 @@ export async function updateMaintenanceService(id, payload) {
 
 export async function setMaintenanceServiceActive(id, is_active) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/services/${id}/active`, {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/services/${id}/active`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -1389,44 +1446,12 @@ export async function setMaintenanceServiceActive(id, is_active) {
   return handleResponse(response, "Failed to update service status");
 }
 
-export async function fetchMaintenanceGroomingTiers({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers`, {
+export async function fetchMaintenanceServiceCategories({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/service-categories`, {
     signal,
     credentials: "include",
   });
-  return handleResponse(response, "Failed to fetch grooming tiers");
-}
-
-export async function addMaintenanceGroomingTier(payload) {
-  const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(response, "Failed to add grooming tier");
-}
-
-export async function updateMaintenanceGroomingTier(id, payload) {
-  const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(response, "Failed to update grooming tier");
-}
-
-export async function deleteMaintenanceGroomingTier(id) {
-  const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/maintenance/grooming-tiers/${id}`, {
-    method: "DELETE",
-    headers: { "x-csrf-token": csrfToken },
-    credentials: "include",
-  });
-  return handleResponse(response, "Failed to delete grooming tier");
+  return handleResponse(response, "Failed to fetch service categories");
 }
 
 // ─────────────────────────────
@@ -1451,7 +1476,7 @@ export async function fetchRevenueTrend({
   signal,
 } = {}) {
   const params = buildDateRangeParams({ start_date, end_date });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/analytics/revenue-trend?${params}`,
     { signal, credentials: "include" },
   );
@@ -1464,7 +1489,7 @@ export async function fetchAppointmentsBreakdown({
   signal,
 } = {}) {
   const params = buildDateRangeParams({ start_date, end_date });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/analytics/appointments-breakdown?${params}`,
     { signal, credentials: "include" },
   );
@@ -1478,7 +1503,7 @@ export async function fetchTopProducts({
   signal,
 } = {}) {
   const params = buildDateRangeParams({ start_date, end_date, limit });
-  const response = await fetch(`${baseUrl}/analytics/top-products?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/analytics/top-products?${params}`, {
     signal,
     credentials: "include",
   });
@@ -1491,7 +1516,7 @@ export async function fetchClientGrowth({
   signal,
 } = {}) {
   const params = buildDateRangeParams({ start_date, end_date });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/analytics/client-growth?${params}`,
     { signal, credentials: "include" },
   );
@@ -1501,7 +1526,7 @@ export async function fetchClientGrowth({
 export async function fetchProductMovers({ month, signal } = {}) {
   const params = new URLSearchParams();
   if (month) params.set("month", month);
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/analytics/product-movers?${params}`,
     { signal, credentials: "include" },
   );
@@ -1509,7 +1534,7 @@ export async function fetchProductMovers({ month, signal } = {}) {
 }
 
 export async function fetchCriticalStock({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/analytics/critical-stock`, {
+  const response = await fetchWithTimeout(`${baseUrl}/analytics/critical-stock`, {
     signal,
     credentials: "include",
   });
@@ -1518,7 +1543,7 @@ export async function fetchCriticalStock({ signal } = {}) {
 
 export async function fetchPeakTimes({ start_date, end_date, signal } = {}) {
   const params = buildDateRangeParams({ start_date, end_date });
-  const response = await fetch(`${baseUrl}/analytics/peak-times?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/analytics/peak-times?${params}`, {
     signal,
     credentials: "include",
   });

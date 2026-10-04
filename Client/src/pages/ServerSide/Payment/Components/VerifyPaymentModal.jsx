@@ -150,11 +150,24 @@ export function Component() {
                 Submitted Proof
               </p>
               {payment.payment_proof_image ? (
-                <img
-                  src={payment.payment_proof_image}
-                  alt="Payment proof"
-                  className="w-full max-h-80 object-contain rounded-lg border border-slate-200 dark:border-slate-800"
-                />
+                // Click for full size — staff need to read the reference
+                // number and amount on the screenshot.
+                <a
+                  href={payment.payment_proof_image}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open full size"
+                  className="block"
+                >
+                  <img
+                    src={payment.payment_proof_image}
+                    alt="GCash payment screenshot submitted by the client"
+                    className="w-full max-h-80 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-950/40 hover:opacity-90 transition-opacity"
+                  />
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Click to open full size
+                  </span>
+                </a>
               ) : (
                 <p className="text-sm text-slate-400 dark:text-slate-500 italic">
                   No screenshot was uploaded.

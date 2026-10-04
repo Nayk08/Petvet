@@ -36,8 +36,25 @@ export default class UsersService {
     }
   }
 
-  async updateUser(userId, updatedData, updatedBy) {
+  async updateUser(userId, updatedData, updatedBy, requestingUser) {
     try {
+      // Nobody edits their own roles — otherwise anyone with Users edit
+      // access could simply grant themselves Admin.
+      const sameRoles = (a = [], b = []) =>
+        [...a].map(Number).sort().join() === [...b].map(Number).sort().join();
+      if (
+        requestingUser &&
+        String(userId) === String(requestingUser.id) &&
+        updatedData.level_ids &&
+        !sameRoles(updatedData.level_ids, requestingUser.level_ids)
+      ) {
+        const err = new Error(
+          "You can't change your own roles. Ask another administrator.",
+        );
+        err.status = 403;
+        throw err;
+      }
+
       if (
         updatedData.level_ids &&
         (await userModel.isLastAdminAfterRoleChange(userId, updatedData.level_ids))

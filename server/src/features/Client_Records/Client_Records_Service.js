@@ -3,6 +3,19 @@ import AppointmentService from "../Appointment/Appointment_Service.js";
 
 const clientRecordModel = new ClientRecordModel();
 const appointmentService = new AppointmentService();
+
+// A duplicate email/mobile used to surface as a generic 500 "Failed to add
+// client." — say what's actually wrong. (Archived clients count too: the
+// unique constraints cover them, so restore the archived record instead.)
+function duplicateClientError(error) {
+  if (error?.code !== "23505") return null;
+  const field = /mobile/i.test(error.constraint ?? "") ? "mobile number" : "email";
+  const err = new Error(
+    `A client with this ${field} already exists (check Archived clients too).`,
+  );
+  err.status = 409;
+  return err;
+}
 export default class ClientRecordsService {
   async getClients({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     try {
@@ -52,7 +65,7 @@ export default class ClientRecordsService {
       return res;
     } catch (error) {
       console.log(`Error on addClient Service ${error}`);
-      throw error;
+      throw duplicateClientError(error) ?? error;
     }
   }
 
@@ -80,11 +93,21 @@ export default class ClientRecordsService {
       return res;
     } catch (error) {
       console.log(`Error on editClient Service ${error}`);
-      throw error;
+      throw duplicateClientError(error) ?? error;
     }
   }
 
   async deleteClient({ client_id, deleted_by }) {
+    // Archiving a client used to leave their upcoming appointments and
+    // unpaid bills live, attached to an archived record nobody could see.
+    const open = await clientRecordModel.getOpenItemsForClient(client_id);
+    if (open.appointments > 0 || open.payments > 0) {
+      const err = new Error(
+        `This client still has ${open.appointments} upcoming appointment(s) and ${open.payments} unpaid/unsettled payment(s). Cancel or settle them first.`,
+      );
+      err.status = 409;
+      throw err;
+    }
     try {
       const res = await clientRecordModel.deleteClient({
         client_id,
@@ -237,6 +260,15 @@ export default class ClientRecordsService {
   }
 
   async deletePet({ pets_id, deleted_by }) {
+    // Archiving a pet used to leave its upcoming bookings live.
+    const upcoming = await clientRecordModel.countOpenAppointmentsForPet(pets_id);
+    if (upcoming > 0) {
+      const err = new Error(
+        `This pet still has ${upcoming} upcoming appointment(s). Cancel them first.`,
+      );
+      err.status = 409;
+      throw err;
+    }
     try {
       const res = await clientRecordModel.deletePet({ pets_id, deleted_by });
       return res;

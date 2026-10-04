@@ -1,3 +1,4 @@
+import { isAdmin as isAdminUser } from "../../../utils/isAdmin.js";
 import AppointmentService from "./Appointment_Service.js";
 import { sendError } from "../../../utils/errorResponse.js";
 
@@ -12,12 +13,14 @@ export default class AppointmentController {
         search,
         appointment_status_name,
         service_name,
+        category_name,
         assigned_staff_id,
         appointment_date,
       } = req.query;
       const filters = {
         appointment_status_name,
         service_name,
+        category_name,
         assigned_staff_id,
         appointment_date,
       };
@@ -41,7 +44,7 @@ export default class AppointmentController {
   // so it can't be bypassed by editing the query string. Admin keeps full
   // visibility and can still use the staff filter normally.
   resolveStaffFilter(req, requestedStaffId) {
-    const isAdmin = req.session.user?.role?.trim() === "Admin";
+    const isAdmin = isAdminUser(req.session.user);
     return isAdmin ? requestedStaffId : String(req.session.user.id);
   }
 
@@ -53,7 +56,7 @@ export default class AppointmentController {
         appointment_status_name,
         assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
-        service_name: "Consultation",
+        category_name: "Consultation",
       };
 
       const result = await appointmentService.getAppointments({
@@ -77,7 +80,7 @@ export default class AppointmentController {
         appointment_status_name,
         assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
-        service_name: "Grooming",
+        category_name: "Grooming",
       };
 
       const result = await appointmentService.getAppointments({
@@ -101,7 +104,7 @@ export default class AppointmentController {
         appointment_status_name,
         assigned_staff_id: this.resolveStaffFilter(req, assigned_staff_id),
         appointment_date,
-        service_name: "Operation",
+        category_name: "Operation",
       };
 
       const result = await appointmentService.getAppointments({
@@ -138,7 +141,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
       } = req.body;
 
@@ -149,7 +151,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
         created_by: req.session.user.name,
       });
@@ -168,7 +169,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         status_name,
         notes,
       } = req.body;
@@ -180,7 +180,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         status_name,
         notes,
         updated_by: req.session.user.name,
@@ -251,16 +250,6 @@ export default class AppointmentController {
     }
   }
 
-  async getGroomingPriceTiers(req, res) {
-    try {
-      const tiers = await appointmentService.getGroomingPriceTiers();
-      res.json(tiers);
-    } catch (error) {
-      console.log("Error on Controller getGroomingPriceTiers function");
-      sendError(res, error, "Something went wrong. Please try again.");
-    }
-  }
-
   async bookAppointmentWithPayment(req, res) {
     try {
       const {
@@ -270,7 +259,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
         amount,
         payment_method,
@@ -288,7 +276,6 @@ export default class AppointmentController {
         assigned_staff_id,
         appointment_date,
         start_time,
-        end_time,
         notes,
         payment_method,
         gcash_reference_number,

@@ -6,7 +6,7 @@ export default class CommonController {
   // commonController.js
   async getNavbarData(req, res) {
     try {
-      const user = req.session.user;
+      const { pwd_fp, ...user } = req.session.user; // fingerprint stays server-side
 
       if (!user?.level_ids?.length) {
         return res.status(403).json({ error: "User has no assigned roles" });

@@ -5,7 +5,7 @@
 // It now uses an httpOnly cookie instead (see is-client-auth.js), issued by
 // the server on login — no client-side token handling at all, just
 // `credentials: "include"` on every request, same as the staff side.
-import { queryClient } from "./http.js";
+import { queryClient, fetchWithTimeout, getCsrfToken } from "./http.js";
 
 const rootBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const baseUrl = `${rootBaseUrl}/client-portal`;
@@ -21,7 +21,9 @@ async function handlePortalResponse(response, fallbackMessage) {
     ) {
       window.location.assign("/login");
     }
-    throw new Error("Session expired. Please log in again.");
+    const error = new Error("Session expired. Please log in again.");
+    error.code = 401; // requireClientAuth keys its redirect off this
+    throw error;
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -34,27 +36,10 @@ async function handlePortalResponse(response, fallbackMessage) {
   return response.json();
 }
 
-// Every mutating request needs a fresh CSRF token, same shared endpoint and
-// mechanism the staff side (http.js) already uses — the httpOnly auth
-// cookie is attached automatically by the browser, so unlike the old
-// bearer-token approach, these routes are now a real CSRF target without
-// this.
-async function getCsrfToken() {
-  const response = await fetch(`${rootBaseUrl}/csrf-token`, {
-    method: "GET",
-    credentials: "include",
-  });
-  if (!response.ok) {
-    throw new Error("Could not fetch CSRF token.");
-  }
-  const { csrfToken } = await response.json();
-  return csrfToken;
-}
-
 // ── Auth ──────────────────────────────────────────────
 
 export async function loginWithGoogle(credential) {
-  const response = await fetch(`${baseUrl}/auth/google`, {
+  const response = await fetchWithTimeout(`${baseUrl}/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -65,7 +50,7 @@ export async function loginWithGoogle(credential) {
 
 export async function logoutClient() {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/logout`, {
+  const response = await fetchWithTimeout(`${baseUrl}/logout`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -74,7 +59,7 @@ export async function logoutClient() {
 }
 
 export async function fetchMyProfile({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/me`, {
+  const response = await fetchWithTimeout(`${baseUrl}/me`, {
     credentials: "include",
     signal,
   });
@@ -99,16 +84,28 @@ export async function fetchMyAppointments({
     if (value) params.set(key, value);
   });
 
-  const response = await fetch(`${baseUrl}/appointments?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments?${params}`, {
     credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch appointments");
 }
 
+// Back out of a booking that hasn't been paid yet (releases the time slot
+// and cancels its unpaid bill).
+export async function cancelMyUnpaidAppointment(appointment_id) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/${appointment_id}/cancel`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handlePortalResponse(response, "Failed to cancel the booking");
+}
+
 export async function bookMyAppointment(payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/appointments`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -123,7 +120,7 @@ export async function fetchStaffBookedSlots({
   signal,
 } = {}) {
   const params = new URLSearchParams({ assigned_staff_id, appointment_date });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/appointments/booked-slots?${params}`,
     { credentials: "include", signal },
   );
@@ -134,7 +131,7 @@ export async function fetchStaffBookedSlots({
 // no client/pet names (see ClientPortal_Model.js:getClinicSchedule).
 export async function fetchClinicSchedule({ start_date, end_date, signal } = {}) {
   const params = new URLSearchParams({ start_date, end_date });
-  const response = await fetch(`${baseUrl}/clinic-schedule?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/clinic-schedule?${params}`, {
     credentials: "include",
     signal,
   });
@@ -145,13 +142,20 @@ export async function fetchClinicSchedule({ start_date, end_date, signal } = {})
 // signed in at all. Deliberately does NOT go through handlePortalResponse:
 // that helper bounces to /login on a 401, which would be wrong for a page
 // anonymous visitors land on directly.
+// Landing page: the clinic's active services (no sign-in needed).
+export async function fetchPublicServices({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/public/services`, { signal });
+  if (!response.ok) throw new Error("Failed to load services");
+  return response.json();
+}
+
 export async function fetchPublicClinicSchedule({
   start_date,
   end_date,
   signal,
 } = {}) {
   const params = new URLSearchParams({ start_date, end_date });
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/public/clinic-schedule?${params}`,
     { signal },
   );
@@ -166,7 +170,7 @@ export async function fetchPublicClinicSchedule({
 
 export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
   const params = new URLSearchParams({ page, limit });
-  const response = await fetch(`${baseUrl}/payments?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments?${params}`, {
     credentials: "include",
     signal,
   });
@@ -176,7 +180,7 @@ export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
 // Returns { payment, appointment } — both needed by the shared
 // ReceiptContent component (see Payment/Components/ReceiptContent.jsx).
 export async function fetchMyPaymentReceipt(paymentId, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/payments/${paymentId}/receipt`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${paymentId}/receipt`, {
     credentials: "include",
     signal,
   });
@@ -187,7 +191,7 @@ export async function fetchMyPaymentReceipt(paymentId, { signal } = {}) {
 // No Content-Type set — the browser fills in the multipart boundary.
 export async function submitPaymentProof(paymentId, formData) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/payments/${paymentId}/proof`, {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/${paymentId}/proof`, {
     method: "POST",
     headers: { "x-csrf-token": csrfToken },
     credentials: "include",
@@ -197,7 +201,7 @@ export async function submitPaymentProof(paymentId, formData) {
 }
 
 export async function fetchClinicQrCode({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/gcash-qr-code`, {
+  const response = await fetchWithTimeout(`${baseUrl}/gcash-qr-code`, {
     credentials: "include",
     signal,
   });
@@ -217,7 +221,7 @@ export async function fetchMyPets({
     limit,
     ...(search && { search }),
   });
-  const response = await fetch(`${baseUrl}/pets?${params}`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets?${params}`, {
     credentials: "include",
     signal,
   });
@@ -226,7 +230,7 @@ export async function fetchMyPets({
 
 export async function addMyPet(payload) {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${baseUrl}/pets`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
     credentials: "include",
@@ -238,15 +242,24 @@ export async function addMyPet(payload) {
 // A simple timeline of this pet's past appointments (service, staff, date,
 // status, notes) — not a full EMR, just what's already on file.
 export async function fetchMyPetHistory(petsId, { signal } = {}) {
-  const response = await fetch(`${baseUrl}/pets/${petsId}/history`, {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${petsId}/history`, {
     credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to load pet history");
 }
 
+// Consultations, vaccinations, and prescriptions on file for this pet.
+export async function fetchMyPetMedicalRecords(petsId, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${petsId}/medical-records`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to load medical records");
+}
+
 export async function fetchPortalSpecies({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/species`, {
+  const response = await fetchWithTimeout(`${baseUrl}/species`, {
     credentials: "include",
     signal,
   });
@@ -254,7 +267,7 @@ export async function fetchPortalSpecies({ signal } = {}) {
 }
 
 export async function fetchPortalGender({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/gender`, {
+  const response = await fetchWithTimeout(`${baseUrl}/gender`, {
     credentials: "include",
     signal,
   });
@@ -264,7 +277,7 @@ export async function fetchPortalGender({ signal } = {}) {
 // ── Booking form lookups ──────────────────────────────
 
 export async function fetchPortalAppointmentServices({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointment-services`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-services`, {
     credentials: "include",
     signal,
   });
@@ -272,17 +285,10 @@ export async function fetchPortalAppointmentServices({ signal } = {}) {
 }
 
 export async function fetchPortalAppointmentStaff({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/appointment-staff`, {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-staff`, {
     credentials: "include",
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch staff");
 }
 
-export async function fetchPortalGroomingPriceTiers({ signal } = {}) {
-  const response = await fetch(`${baseUrl}/grooming-price-tiers`, {
-    credentials: "include",
-    signal,
-  });
-  return handlePortalResponse(response, "Failed to fetch grooming price tiers");
-}

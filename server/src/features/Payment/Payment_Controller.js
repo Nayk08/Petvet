@@ -67,6 +67,18 @@ export default class PaymentController {
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }
+  async markRefunded(req, res) {
+    try {
+      const payment = await paymentService.markRefunded(
+        req.params.id,
+        req.session.user?.name ?? null,
+      );
+      res.json(payment);
+    } catch (error) {
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async cancelPayment(req, res) {
     try {
       const updated_by = req.session.user?.name ?? null;

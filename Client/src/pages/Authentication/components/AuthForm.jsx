@@ -25,7 +25,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { queryClient, fetchNavbar } from "@/api/http";
+import { queryClient, fetchNavbar, safeRedirectPath } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
 import { loginWithGoogle, fetchMyProfile } from "@/api/clientPortal.js";
 
@@ -146,7 +146,7 @@ export default function AuthForm() {
 
           {/* Error Message Box */}
           {(actionData?.error || actionData?.message) && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm animate-in shake-1 duration-200">
+            <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm animate-in shake-1 duration-200">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <p className="font-medium leading-tight">
                 {actionData.error || actionData.message}
@@ -188,13 +188,13 @@ export default function AuthForm() {
             </GoogleOAuthProvider>
           </div>
         ) : (
-          <p className="text-center text-xs text-rose-500 dark:text-rose-400">
+          <p role="alert" className="text-center text-xs text-rose-500 dark:text-rose-400">
             Google sign-in isn't configured yet.
           </p>
         )}
 
         {googleError && (
-          <div className="flex items-center gap-2 p-3 mt-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+          <div role="alert" className="flex items-center gap-2 p-3 mt-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <p className="font-medium leading-tight">{googleError}</p>
           </div>
@@ -282,6 +282,12 @@ export async function action({ request }) {
     }
 
     queryClient.clear();
+    // Back to the page that bounced them here (its own loader still checks
+    // permissions), else the role's default landing page.
+    const returnTo = safeRedirectPath(
+      new URLSearchParams(window.location.search).get("redirect"),
+    );
+    if (returnTo) return redirect(returnTo);
     const { modules } = await fetchNavbar({});
     return redirect(resolveLandingPath(modules));
   } catch (err) {

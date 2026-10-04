@@ -18,6 +18,8 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  confirmingLabel = "Deleting...",
   isConfirming = false,
   onConfirm,
 }) {
@@ -39,7 +41,7 @@ export default function ConfirmDialog({
             onClick={() => onOpenChange(false)}
             className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            Cancel
+            {cancelLabel}
           </Button>
           <Button
             type="button"
@@ -48,7 +50,7 @@ export default function ConfirmDialog({
             disabled={isConfirming}
             className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-600/90 dark:hover:bg-red-600 transition-colors"
           >
-            {isConfirming ? "Deleting..." : confirmLabel}
+            {isConfirming ? confirmingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

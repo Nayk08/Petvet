@@ -210,7 +210,7 @@ export function Component() {
                       </p>
                     </div>
                     <span className="font-medium text-slate-700 dark:text-slate-300 shrink-0">
-                      ${(item.item_price * item.quantity).toFixed(2)}
+                      ₱{(item.item_price * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 ))}
@@ -220,7 +220,7 @@ export function Component() {
             <div className="flex justify-between items-center font-bold text-base pt-3">
               <span className="text-slate-700 dark:text-slate-300">Total</span>
               <span className="text-cyan-700 dark:text-cyan-400 text-lg">
-                ${subtotal.toFixed(2)}
+                ₱{subtotal.toFixed(2)}
               </span>
             </div>
 
@@ -237,7 +237,7 @@ export function Component() {
                   </label>
                   <div className="flex items-center gap-1 w-36">
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
-                      $
+                      ₱
                     </span>
                     <Input
                       id="amount-paid-cash"
@@ -262,7 +262,7 @@ export function Component() {
                   </label>
                   <div className="flex items-center gap-1 w-36">
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
-                      $
+                      ₱
                     </span>
                     <Input
                       id="amount-paid-gcash"
@@ -289,7 +289,7 @@ export function Component() {
                 </label>
                 <div className="flex items-center gap-1 w-36">
                   <span className="text-slate-500 dark:text-slate-400 text-sm">
-                    $
+                    ₱
                   </span>
                   <Input
                     id="amount-paid"
@@ -313,15 +313,15 @@ export function Component() {
                 : amountPaid !== "") && (
                 <p className="text-xs text-amber-500 dark:text-amber-400 text-right pt-1">
                   {requiresExactAmount(paymentMethod)
-                    ? `Amount received must exactly equal $${subtotal.toFixed(2)} — GCash doesn't give change`
-                    : `Amount received must be at least $${subtotal.toFixed(2)}`}
+                    ? `Amount received must exactly equal ₱${subtotal.toFixed(2)} — GCash doesn't give change`
+                    : `Amount received must be at least ₱${subtotal.toFixed(2)}`}
                 </p>
               )}
 
             <div className="flex justify-between items-center font-bold text-base pt-3 pb-1">
               <span className="text-slate-700 dark:text-slate-300">Change</span>
               <span className="text-cyan-700 dark:text-cyan-400 text-lg">
-                ${change.toFixed(2)}
+                ₱{change.toFixed(2)}
               </span>
             </div>
 

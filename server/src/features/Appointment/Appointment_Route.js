@@ -107,12 +107,6 @@ router.get(
   (req, res) => appointmentController.selectStaff(req, res),
 );
 
-router.get(
-  "/appointment-grooming-tiers",
-  hasPermission("APPOINTMENT", "can_view"),
-  (req, res) => appointmentController.getGroomingPriceTiers(req, res),
-);
-
 router.patch(
   "/appointments/:appointment_id/complete-payment",
   hasPermission("APPOINTMENT", "can_edit"),

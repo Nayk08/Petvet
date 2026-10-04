@@ -259,8 +259,6 @@ export function Component() {
           variant="hero"
           title="Revenue"
           value={revenueDisplay(totalRevenue)}
-          trend="+12.5%"
-          trendLabel="from last month"
           breakdown={[
             {
               label: "Sales",
@@ -282,19 +280,16 @@ export function Component() {
           <Container
             title="Cash"
             value={revenueDisplay(cashRevenue)}
-            trend="+12.5%"
             onClick={() => openRevenueModal("cash")}
           />
           <Container
             title="Cashless"
             value={revenueDisplay(gcashRevenue)}
-            trend="+8.2%"
             onClick={() => openRevenueModal("cashless")}
           />
           <Container
             title="Today's Appointments"
             value={appointmentQueueCount}
-            trend="+2"
           />
         </div>
       </div>

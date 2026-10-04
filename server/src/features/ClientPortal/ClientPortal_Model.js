@@ -120,8 +120,13 @@ export default class ClientPortalModel {
       const whereClause = `WHERE a.client_id = $1 AND p.is_deleted = false`;
 
       return await paginateQuery(client, {
-        baseQuery: `SELECT p.* FROM v_payments p
+        // The appointment's details travel with each bill, so the GCash pay
+        // window can show what is being paid for.
+        baseQuery: `SELECT p.*, va.pets_name, va.service_name, va.staff_name,
+                           va.appointment_date, va.start_time, va.end_time
+                    FROM v_payments p
                     JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
+                    JOIN v_appointments va ON va.appointment_id = p.appointment_id
                     ${whereClause}
                     ORDER BY p.date_updated DESC NULLS LAST, p.date_created DESC`,
         countQuery: `SELECT COUNT(*) AS total FROM v_payments p
@@ -171,7 +176,7 @@ export default class ClientPortalModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `SELECT appointment_id, start_time, appointment_status_name
+        `SELECT appointment_id, start_time, end_time, appointment_status_name
          FROM v_appointments
          WHERE assigned_staff_id = $1
            AND appointment_date = $2

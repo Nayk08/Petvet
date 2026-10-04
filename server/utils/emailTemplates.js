@@ -28,14 +28,24 @@ function formatVisitDate(dateString) {
 
 // Sent the moment a groomer/veterinarian marks their assigned appointment
 // completed (see Appointment_Service.js:completeAppointment).
-export function appointmentCompletedEmail({
-  client_name,
-  pets_name,
-  service_name,
-  staff_name,
-  appointment_date,
-}) {
-  const subject = `${pets_name}'s ${service_name} is complete!`;
+// Names are typed in by staff/clients — escape them so a name like
+// "<a href=...>" can't inject links/markup into the email.
+function escapeHtml(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+}
+
+export function appointmentCompletedEmail(raw) {
+  const { appointment_date } = raw;
+  const [client_name, pets_name, service_name, staff_name] = [
+    raw.client_name,
+    raw.pets_name,
+    raw.service_name,
+    raw.staff_name,
+  ].map((v) => (v ? escapeHtml(v) : v));
+  const subject = `${raw.pets_name}'s ${raw.service_name} is complete!`; // plain text, not HTML
 
   const html = layout(`
     <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 16px; margin-bottom: 20px; text-align: center;">

@@ -77,6 +77,9 @@ export function Component() {
   const appointmentsByDay = useMemo(() => {
     const map = new Map();
     for (const appt of appointments) {
+      // A cancelled booking no longer takes up the day — keep it off the
+      // calendar (it stays in the Consultation/Grooming/Operation lists).
+      if (appt.appointment_status_name === "Cancelled") continue;
       const key = dateKey(appt.appointment_date);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(appt);
@@ -262,26 +265,28 @@ export function Component() {
                           key={appt.appointment_id}
                           className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2"
                         >
-                          <div className="flex items-center justify-between">
+                          {/* Wraps instead of squeezing: in the narrow day
+                              panel the badge drops under the time. */}
+                          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                              {formatTime(appt.start_time)} –{" "}
+                              {formatTime(appt.end_time)}
+                            </span>
                             <span
-                              className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide border ${
+                              className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide border whitespace-nowrap ${
                                 STATUS_BADGE[appt.appointment_status_name] ||
                                 STATUS_BADGE.Pending
                               }`}
                             >
                               {appt.appointment_status_name}
                             </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                              {formatTime(appt.start_time)} -{" "}
-                              {formatTime(appt.end_time)}
-                            </span>
                           </div>
                           <div>
                             <p className="font-bold text-sm text-slate-950 dark:text-white">
-                              {appt.pets_name}{" "}
-                              <span className="font-normal text-slate-500 dark:text-slate-400">
-                                ({appt.client_name})
-                              </span>
+                              {appt.pets_name}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Owner: {appt.client_name}
                             </p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {appt.service_name}
