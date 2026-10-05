@@ -100,6 +100,10 @@ export function Component() {
 
   const cartItems = payment?.items ?? [];
   const subtotal = Number(payment?.total_amount ?? 0);
+  // Online deposit already verified: only the balance is collected here.
+  const isBalance = payment?.payment_status_name === "Partially Paid";
+  const deposit = isBalance ? Number(payment?.gcash_amount ?? 0) : 0;
+  const amountDue = Math.round((subtotal - deposit) * 100) / 100;
 
   useEffect(() => {
     const hasAnyInput = isSplit
@@ -119,11 +123,11 @@ export function Component() {
     const { isValid, change: computedChange } = evaluatePaymentAmount({
       paymentMethod,
       receivedTotal: paid,
-      total: subtotal,
+      total: amountDue,
     });
     setHasValidPayment(isValid);
     setChange(computedChange);
-  }, [amountPaid, splitCashPaid, splitGcashPaid, isSplit, paymentMethod, subtotal]);
+  }, [amountPaid, splitCashPaid, splitGcashPaid, isSplit, paymentMethod, amountDue]);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -135,10 +139,16 @@ export function Component() {
       <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-md shadow-2xl transition-colors">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
-            {payment?.appointment_id ? "Appointment Payment" : "Order Summary"}
+            {isBalance
+              ? "Collect Balance"
+              : payment?.appointment_id
+                ? "Appointment Payment"
+                : "Order Summary"}
           </DialogTitle>
           <DialogDescription className="text-slate-500 dark:text-slate-400">
-            {payment?.appointment_id
+            {isBalance
+              ? "The client paid a deposit online. Collect the remaining balance."
+              : payment?.appointment_id
               ? "Review the appointment details before completing payment."
               : "Review your purchase details before completing payment."}
           </DialogDescription>
@@ -224,7 +234,30 @@ export function Component() {
               </span>
             </div>
 
-            <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
+            {isBalance && (
+              <>
+                <div className="flex justify-between items-center text-sm pt-1">
+                  <span className="text-slate-600 dark:text-slate-300">
+                    Paid online (GCash · Ref {payment.gcash_reference_number ?? "—"})
+                  </span>
+                  <span className="font-medium text-teal-700 dark:text-teal-300">
+                    −₱{deposit.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center font-bold text-base pt-1 pb-2">
+                  <span className="text-slate-700 dark:text-slate-300">Balance due</span>
+                  <span className="text-cyan-700 dark:text-cyan-400 text-lg">
+                    ₱{amountDue.toFixed(2)}
+                  </span>
+                </div>
+              </>
+            )}
+
+            <PaymentMethodPicker
+              value={paymentMethod}
+              onChange={setPaymentMethod}
+              allowed={isBalance ? ["Cash", "GCash"] : undefined}
+            />
 
             {isSplit ? (
               <>
@@ -313,8 +346,8 @@ export function Component() {
                 : amountPaid !== "") && (
                 <p className="text-xs text-amber-500 dark:text-amber-400 text-right pt-1">
                   {requiresExactAmount(paymentMethod)
-                    ? `Amount received must exactly equal ₱${subtotal.toFixed(2)} — GCash doesn't give change`
-                    : `Amount received must be at least ₱${subtotal.toFixed(2)}`}
+                    ? `Amount received must exactly equal ₱${amountDue.toFixed(2)} — GCash doesn't give change`
+                    : `Amount received must be at least ₱${amountDue.toFixed(2)}`}
                 </p>
               )}
 
@@ -347,7 +380,11 @@ export function Component() {
                 disabled={!hasValidPayment || state === "submitting"}
                 className="bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-semibold shadow-sm transition-all disabled:opacity-50"
               >
-                {state === "submitting" ? "Placing order..." : "Confirm Order"}
+                {state === "submitting"
+                  ? "Saving..."
+                  : isBalance
+                    ? "Collect Balance"
+                    : "Confirm Order"}
               </Button>
             </DialogFooter>
           </form>
@@ -405,12 +442,20 @@ export async function action({ params, request }) {
   // loader) already has total_amount/appointment_id — enough to estimate
   // the revenue bump without waiting on the server's response.
   const cachedPayment = queryClient.getQueryData(["Payment", params.payment_id]);
-  const { cashAmount, gcashAmount } = estimatePaymentSplit({
+  let { cashAmount, gcashAmount } = estimatePaymentSplit({
     paymentMethod: payment_method,
     totalAmount: cachedPayment?.total_amount,
     cashReceived: formData.get("cash_received"),
     gcashReceived: formData.get("gcash_received"),
   });
+  // Collecting a balance: the GCash deposit counts too (the server records
+  // cash balance + GCash deposit, or GCash for the whole bill).
+  if (cachedPayment?.payment_status_name === "Partially Paid") {
+    const deposit = Number(cachedPayment.gcash_amount ?? 0);
+    const balance = Number(cachedPayment.total_amount ?? 0) - deposit;
+    cashAmount = payment_method === "Cash" ? balance : 0;
+    gcashAmount = deposit + (payment_method === "GCash" ? balance : 0);
+  }
   const rollbackRevenue = applyOptimisticRevenue({
     cashAmount,
     gcashAmount,

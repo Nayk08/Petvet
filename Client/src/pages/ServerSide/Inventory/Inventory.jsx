@@ -15,7 +15,9 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 import BatchesModal from "./components/BatchesModal.jsx";
-import { Layers, PackagePlus, RotateCcw, Trash2 } from "lucide-react";
+import ProductSalesInsights from "./components/ProductSalesInsights.jsx";
+import ProductHistoryModal from "./components/ProductHistoryModal.jsx";
+import { History, Layers, PackagePlus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ModuleTabs from "@/components/ui/ModuleTabs";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -30,6 +32,14 @@ export default function Inventory() {
   const [filters, setFilters] = useState({});
   const debouncedSearch = useDebouncedValue(search, 400);
   const [batchesFor, setBatchesFor] = useState(null);
+  const [historyFor, setHistoryFor] = useState(null);
+  const historyAction = {
+    label: "History",
+    icon: History,
+    className:
+      "text-slate-600 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+    onClick: (row) => setHistoryFor(row.product_name),
+  };
   const queryClient = useQueryClient();
 
   // Archive tab — soft-deleted products, viewed/paginated independently of
@@ -124,12 +134,15 @@ export default function Inventory() {
         tabs={[
           { value: "active", label: "Active" },
           { value: "archived", label: "Archived" },
+          { value: "sales", label: "Product Sales" },
         ]}
         active={view}
         onChange={setView}
       />
 
-      {view === "active" ? (
+      {view === "sales" ? (
+        <ProductSalesInsights />
+      ) : view === "active" ? (
         <>
           <QueryState
             isLoading={isPending}
@@ -174,6 +187,8 @@ export default function Inventory() {
                     onClick: (row) => setBatchesFor(row.product_name),
                     show: (row) => row.batch_count > 1,
                   },
+                  // Several batches: each has its own History inside View Batches.
+                  { ...historyAction, show: (row) => row.batch_count === 1 },
                 ]}
                 limit={limit}
                 search={search}
@@ -243,6 +258,7 @@ export default function Inventory() {
                       "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-rose-400 dark:hover:bg-rose-950/50",
                     onClick: (row) => setConfirmDeleteProduct(row),
                   },
+                  historyAction,
                 ]}
                 search={archivedSearch}
                 onSearchChange={setArchivedSearch}
@@ -258,6 +274,13 @@ export default function Inventory() {
             </>
           )}
         </>
+      )}
+
+      {historyFor && (
+        <ProductHistoryModal
+          productName={historyFor}
+          onClose={() => setHistoryFor(null)}
+        />
       )}
 
       <ConfirmDialog

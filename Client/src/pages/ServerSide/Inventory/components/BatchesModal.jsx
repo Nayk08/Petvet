@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2, PackagePlus } from "lucide-react";
+import { Pencil, Trash2, PackagePlus, History } from "lucide-react";
+import ProductHistoryModal from "./ProductHistoryModal.jsx";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +48,7 @@ function formatExpiry(dateString) {
 
 export default function BatchesModal({ productName, onClose }) {
   const navigate = useNavigate();
+  const [historyFor, setHistoryFor] = useState(null); // batch product_id
 
   const { data: batches, isPending, isError, error } = useQuery({
     queryKey: ["inventory-batches", productName],
@@ -130,6 +133,16 @@ export default function BatchesModal({ productName, onClose }) {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    title="History of this batch"
+                    onClick={() => setHistoryFor(batch.product_id)}
+                    className="h-8 w-8 text-slate-500 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     title="Add quantity to this batch"
                     onClick={() =>
                       navigate(`add-quantity/${batch.product_id}`)
@@ -166,6 +179,16 @@ export default function BatchesModal({ productName, onClose }) {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Inside DialogContent so Radix treats it as a nested layer:
+            clicks in it don't count as "outside" and close this modal. */}
+        {historyFor && (
+          <ProductHistoryModal
+            productName={productName}
+            productId={historyFor}
+            onClose={() => setHistoryFor(null)}
+          />
         )}
       </DialogContent>
     </Dialog>

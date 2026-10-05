@@ -12,12 +12,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button.jsx";
+import ChartCard from "@/components/ui/ChartCard.jsx";
+import ProductSalesInsights from "./Inventory/components/ProductSalesInsights.jsx";
 import {
   fetchRevenueTrend,
   fetchAppointmentsBreakdown,
-  fetchTopProducts,
   fetchClientGrowth,
-  fetchProductMovers,
   fetchCriticalStock,
   fetchPeakTimes,
   pullExpiredProducts,
@@ -105,54 +105,6 @@ function DateRangeControl({ range, onChange }) {
   );
 }
 
-// ── Month control (Product Movers section) ─────────────────────────────
-
-function currentMonthString() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function MonthControl({ month, onChange }) {
-  function shiftMonth(delta) {
-    const [y, m] = month.split("-").map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-
-  const label = new Date(`${month}-01T00:00:00`).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
-
-  const btnClass =
-    "w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:hover:bg-slate-50 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white";
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => shiftMonth(-1)}
-        className={btnClass}
-        aria-label="Previous month"
-      >
-        ‹
-      </button>
-      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 w-28 text-center">
-        {label}
-      </span>
-      <button
-        type="button"
-        onClick={() => shiftMonth(1)}
-        disabled={month >= currentMonthString()}
-        className={btnClass}
-        aria-label="Next month"
-      >
-        ›
-      </button>
-    </div>
-  );
-}
-
 // ── Chart primitives (inline SVG, no library) ──────────────────────────
 
 const CHART_H = 220;
@@ -170,38 +122,6 @@ function niceTicks(max, count = 4) {
   const ticks = [];
   for (let v = 0; v <= max + step; v += step) ticks.push(v);
   return ticks;
-}
-
-function ChartCard({ title, subtitle, children, isPending, isError, error, isEmpty }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-        {title}
-      </h3>
-      {subtitle && (
-        <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-          {subtitle}
-        </p>
-      )}
-      <div className="mt-4">
-        {isPending ? (
-          <div className="h-[220px] flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-            Loading...
-          </div>
-        ) : isError ? (
-          <div className="h-[220px] flex items-center justify-center text-sm text-rose-500 dark:text-rose-400">
-            {error?.message ?? "Failed to load"}
-          </div>
-        ) : isEmpty ? (
-          <div className="h-[220px] flex items-center justify-center text-sm text-slate-400 italic dark:text-slate-500">
-            No data for this range.
-          </div>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
 }
 
 function Legend({ items }) {
@@ -422,68 +342,6 @@ function BarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }
   );
 }
 
-// Horizontal ranked bar chart (top products).
-function RankedBarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }) {
-  const rowH = 32;
-  const width = 640;
-  const height = Math.max(1, data.length) * rowH + 12;
-  const labelColW = 140;
-  const innerW = width - labelColW - 70;
-  const maxVal = Math.max(1, ...data.map((d) => Number(d[valueKey]) || 0));
-
-  return (
-    <div className="analytics-viz">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-auto"
-        role="img"
-        aria-label="Ranked bar chart"
-      >
-        {data.map((d, i) => {
-          const val = Number(d[valueKey]) || 0;
-          const barW = (val / maxVal) * innerW;
-          const cy = i * rowH + rowH / 2;
-          return (
-            <g key={d[labelKey]}>
-              <text
-                x={labelColW - 8}
-                y={cy + 4}
-                textAnchor="end"
-                fontSize="11"
-                fill="var(--text-secondary)"
-              >
-                {d[labelKey]?.length > 18
-                  ? `${d[labelKey].slice(0, 17)}…`
-                  : d[labelKey]}
-              </text>
-              <rect
-                x={labelColW}
-                y={cy - 9}
-                width={Math.max(2, barW)}
-                height={18}
-                rx="4"
-                fill={`var(${colorVar})`}
-              >
-                <title>
-                  {d[labelKey]}: {formatValue(val)}
-                </title>
-              </rect>
-              <text
-                x={labelColW + Math.max(2, barW) + 6}
-                y={cy + 4}
-                fontSize="11"
-                fill="var(--text-secondary)"
-              >
-                {formatValue(val)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 const formatCurrency = (v) => `₱${Number(v).toLocaleString()}`;
 const formatCount = (v) => Number(v).toLocaleString();
 const formatHourLabel = (hour) => {
@@ -538,7 +396,6 @@ function formatExpiryDate(dateString) {
 
 export function Component() {
   const [range, setRange] = useState(() => daysAgoRange(30));
-  const [month, setMonth] = useState(() => currentMonthString());
 
   const revenueQuery = useQuery({
     queryKey: ["AnalyticsRevenueTrend", range.start_date, range.end_date],
@@ -555,19 +412,9 @@ export function Component() {
     queryFn: ({ signal }) => fetchPeakTimes({ ...range, signal }),
   });
 
-  const topProductsQuery = useQuery({
-    queryKey: ["AnalyticsTopProducts", range.start_date, range.end_date],
-    queryFn: ({ signal }) => fetchTopProducts({ ...range, limit: 8, signal }),
-  });
-
   const clientGrowthQuery = useQuery({
     queryKey: ["AnalyticsClientGrowth", range.start_date, range.end_date],
     queryFn: ({ signal }) => fetchClientGrowth({ ...range, signal }),
-  });
-
-  const productMoversQuery = useQuery({
-    queryKey: ["AnalyticsProductMovers", month],
-    queryFn: ({ signal }) => fetchProductMovers({ month, signal }),
   });
 
   const criticalStockQuery = useQuery({
@@ -614,33 +461,6 @@ export function Component() {
 
   return (
     <div className="w-full space-y-6 py-8">
-      <style>{`
-        .analytics-viz {
-          --slot-1: #2a78d6;
-          --slot-2: #eb6834;
-          --slot-3: #1baf7a;
-          --status-good: #0ca30c;
-          --status-warning: #fab219;
-          --status-serious: #ec835a;
-          --status-critical: #d03b3b;
-          --gridline: #e1e0d9;
-          --muted: #898781;
-          --text-secondary: #52514e;
-        }
-        .dark .analytics-viz {
-          --slot-1: #3987e5;
-          --slot-2: #d95926;
-          --slot-3: #199e70;
-          --status-good: #0ca30c;
-          --status-warning: #fab219;
-          --status-serious: #ec835a;
-          --status-critical: #d03b3b;
-          --gridline: #2c2c2a;
-          --muted: #898781;
-          --text-secondary: #c3c2b7;
-        }
-      `}</style>
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6 dark:border-slate-800">
         <div>
@@ -771,25 +591,8 @@ export function Component() {
         </ChartCard>
       </div>
 
-      {/* Top products + Client growth */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard
-          title="Top-Selling Products"
-          subtitle="Ranked by revenue"
-          isPending={topProductsQuery.isPending}
-          isError={topProductsQuery.isError}
-          error={topProductsQuery.error}
-          isEmpty={(topProductsQuery.data?.length ?? 0) === 0}
-        >
-          <RankedBarChart
-            data={topProductsQuery.data ?? []}
-            valueKey="total_revenue"
-            labelKey="product_name"
-            colorVar="--slot-1"
-            formatValue={formatCurrency}
-          />
-        </ChartCard>
-
+      {/* Client growth */}
+      <div>
         <ChartCard
           title="Client Growth"
           subtitle="New clients registered"
@@ -808,55 +611,8 @@ export function Component() {
         </ChartCard>
       </div>
 
-      {/* Product movers */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Product Movers
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-              Units sold per product this month, ranked
-            </p>
-          </div>
-          <MonthControl month={month} onChange={setMonth} />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard
-            title="Fast Moving"
-            subtitle="Top 5 by units sold"
-            isPending={productMoversQuery.isPending}
-            isError={productMoversQuery.isError}
-            error={productMoversQuery.error}
-            isEmpty={(productMoversQuery.data?.fastMoving?.length ?? 0) === 0}
-          >
-            <RankedBarChart
-              data={productMoversQuery.data?.fastMoving ?? []}
-              valueKey="total_quantity"
-              labelKey="product_name"
-              colorVar="--status-good"
-              formatValue={formatCount}
-            />
-          </ChartCard>
-
-          <ChartCard
-            title="Slow Moving"
-            subtitle="Bottom 5 by units sold (at least 1 sale)"
-            isPending={productMoversQuery.isPending}
-            isError={productMoversQuery.isError}
-            error={productMoversQuery.error}
-            isEmpty={(productMoversQuery.data?.slowMoving?.length ?? 0) === 0}
-          >
-            <RankedBarChart
-              data={productMoversQuery.data?.slowMoving ?? []}
-              valueKey="total_quantity"
-              labelKey="product_name"
-              colorVar="--status-critical"
-              formatValue={formatCount}
-            />
-          </ChartCard>
-        </div>
-      </div>
+      {/* Best sellers + fast/slow movers — same section as Inventory's Product Sales tab */}
+      <ProductSalesInsights />
 
       {/* Critical stock */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
@@ -1001,17 +757,8 @@ export async function loader() {
       queryFn: ({ signal }) => fetchAppointmentsBreakdown({ ...range, signal }),
     }),
     queryClient.prefetchQuery({
-      queryKey: ["AnalyticsTopProducts", range.start_date, range.end_date],
-      queryFn: ({ signal }) => fetchTopProducts({ ...range, limit: 8, signal }),
-    }),
-    queryClient.prefetchQuery({
       queryKey: ["AnalyticsClientGrowth", range.start_date, range.end_date],
       queryFn: ({ signal }) => fetchClientGrowth({ ...range, signal }),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ["AnalyticsProductMovers", currentMonthString()],
-      queryFn: ({ signal }) =>
-        fetchProductMovers({ month: currentMonthString(), signal }),
     }),
     queryClient.prefetchQuery({
       queryKey: ["AnalyticsCriticalStock"],

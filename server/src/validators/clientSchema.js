@@ -21,6 +21,12 @@ export const addClientSchema = z.object({
   address: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+// Client self-registration after Google sign-in — the email comes from the
+// signed registration token, not the body.
+export const clientPortalRegisterSchema = addClientSchema
+  .pick({ client_name: true, contact_no: true })
+  .extend({ registration_token: z.string().min(1, "Registration expired") });
+
 export const editClientBodySchema = addClientSchema
   .partial()
   .refine((data) => Object.keys(data).length > 0, {

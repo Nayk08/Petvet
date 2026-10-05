@@ -16,7 +16,10 @@ export default function PaymentMethodPicker({
   value,
   onChange,
   defaultValue = "Cash",
+  // Restrict the choices, e.g. ["Cash", "GCash"] for a deposit's balance.
+  allowed,
 }) {
+  const methods = allowed ? METHODS.filter((m) => allowed.includes(m.value)) : METHODS;
   // Falls back to owning its own state when the parent doesn't need to
   // react to the selection — pass `value`/`onChange` to make it controlled.
   const [internalMethod, setInternalMethod] = useState(defaultValue);
@@ -32,8 +35,8 @@ export default function PaymentMethodPicker({
       <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
         Payment Method
       </label>
-      <div className="grid grid-cols-3 gap-2">
-        {METHODS.map((m) => (
+      <div className={`grid gap-2 ${methods.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+        {methods.map((m) => (
           <label
             key={m.value}
             className={`flex items-center justify-center text-center h-10 rounded-lg border text-xs font-medium cursor-pointer transition-colors px-1 ${

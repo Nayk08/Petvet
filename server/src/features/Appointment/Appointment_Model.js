@@ -76,6 +76,22 @@ function httpError(statusCode, message) {
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
+// The price a booking is charged, as SQL. Grooming (fixed category id 1,
+// seeded by migrations/001) is priced by the pet's weight: the smallest tier
+// whose max_weight_kg covers it (NULL max = no upper limit). No weight on
+// file, or heavier than every tier → NULL = staff enter the price by hand,
+// same as any unpriced sub-service. Every other category uses the
+// sub-service's own fixed price.
+// `svc` is the tbl_appointment_services alias, `petIdSql` the pet id SQL.
+export const GROOMING_CATEGORY_ID = 1;
+const effectivePriceSql = (svc, petIdSql) => `CASE WHEN ${svc}.category_id = ${GROOMING_CATEGORY_ID} THEN (
+    SELECT t.price FROM tbl_grooming_price_tiers t
+    JOIN tbl_pets gp ON gp.pets_id = ${petIdSql}
+    WHERE gp.weight_kg IS NOT NULL
+      AND (t.max_weight_kg IS NULL OR t.max_weight_kg >= gp.weight_kg)
+    ORDER BY t.max_weight_kg ASC NULLS LAST LIMIT 1
+  ) ELSE ${svc}.service_price END`;
+
 // Resolves a booking's time slot from the sub-service's CURRENT duration and
 // checks it, inside the caller's transaction:
 //   - the end time is start + duration_minutes (never sent by the client),
@@ -102,10 +118,12 @@ async function resolveSlot(
     keep_end_time_full = null,
   },
 ) {
+  // service_price here is the price THIS pet is charged (see effectivePriceSql).
   const { rows } = await client.query(
-    `SELECT appointment_services, service_price, duration_minutes
-     FROM tbl_appointment_services WHERE appointment_services_id = $1`,
-    [appointment_services_id],
+    `SELECT s.appointment_services, s.duration_minutes,
+            ${effectivePriceSql("s", "$2")} AS service_price
+     FROM tbl_appointment_services s WHERE s.appointment_services_id = $1`,
+    [appointment_services_id, pets_id],
   );
   if (!rows.length) throw httpError(404, "Selected service not found");
   const service = rows[0];
@@ -228,6 +246,16 @@ export default class AppointmentModel {
           AND a.is_deleted IS NOT TRUE
           AND a.end_time < (NOW() AT TIME ZONE 'Asia/Manila')
           AND LOWER(TRIM(s.appointment_status_name)) IN ('pending', 'in queue')
+          -- A visit with an online deposit and an uncollected balance stays
+          -- In Queue: staff either collect the balance and complete it, or
+          -- mark it No Show (which forfeits the deposit). Neither can be
+          -- guessed from the clock.
+          AND NOT EXISTS (
+            SELECT 1 FROM tbl_payments pp
+            JOIN tbl_payment_status pps ON pps.payment_status_id = pp.payment_status_id
+            WHERE pp.appointment_id = a.appointment_id AND pp.is_deleted = false
+              AND pps.payment_status_name = 'Partially Paid'
+          )
         RETURNING a.appointment_id, LOWER(TRIM(s.appointment_status_name)) AS was
         )
         UPDATE tbl_payments p
@@ -616,7 +644,7 @@ export default class AppointmentModel {
            -- money for it, which must not just be forgotten.
            AND payment_status_id IN (
              SELECT payment_status_id FROM tbl_payment_status
-             WHERE LOWER(TRIM(payment_status_name)) IN ('completed', 'awaiting verification')
+             WHERE LOWER(TRIM(payment_status_name)) IN ('completed', 'awaiting verification', 'partially paid')
            )`,
         [appointment_id, deleted_by],
       );
@@ -704,6 +732,24 @@ export default class AppointmentModel {
   // Only active services — a deactivated one (see Maintenance module) drops
   // out of the booking dropdown and can't be newly booked, without losing
   // its data or breaking FK references from past appointments.
+  // What this pet would be charged for this sub-service (null = priced by hand).
+  async getEffectivePrice(appointment_services_id, pets_id) {
+    const { rows } = await pool.query(
+      `SELECT ${effectivePriceSql("s", "$2")} AS price
+       FROM tbl_appointment_services s WHERE s.appointment_services_id = $1`,
+      [appointment_services_id, pets_id],
+    );
+    return rows[0]?.price ?? null;
+  }
+
+  async getGroomingTiers() {
+    const { rows } = await pool.query(
+      `SELECT tier_id, tier_name, max_weight_kg, price
+       FROM tbl_grooming_price_tiers ORDER BY max_weight_kg ASC NULLS LAST`,
+    );
+    return rows;
+  }
+
   async selectAppointmentServices() {
     const client = await pool.connect();
     try {
@@ -716,7 +762,12 @@ export default class AppointmentModel {
          WHERE s.is_active = true
          ORDER BY sc.sort_order, s.appointment_services ASC`,
       );
-      return res.rows;
+      // Grooming rows carry the weight tiers so every booking screen can
+      // show this pet's price before booking (the server still re-prices).
+      const tiers = await this.getGroomingTiers();
+      return res.rows.map((s) =>
+        s.category_id === GROOMING_CATEGORY_ID ? { ...s, grooming_tiers: tiers } : s,
+      );
     } catch (error) {
       console.log(
         `Error on Model selectAppointmentServices function: ${error}`,
@@ -905,7 +956,8 @@ export default class AppointmentModel {
       await client.query("BEGIN");
 
       const apptRes = await client.query(
-        `SELECT a.*, ast.appointment_status_name, s.appointment_services, s.service_price
+        `SELECT a.*, ast.appointment_status_name, s.appointment_services,
+                ${effectivePriceSql("s", "a.pets_id")} AS service_price
          FROM tbl_appointments a
          JOIN tbl_appointment_status ast ON ast.appointment_status_id = a.appointment_status_id
          JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id

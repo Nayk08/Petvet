@@ -33,6 +33,9 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
     service?.allowed_roles ?? [],
   );
 
+  // Grooming (fixed category id 1) is priced by weight tier, not a flat price.
+  const isGrooming = form.category_id === "1";
+
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -70,7 +73,7 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
       appointment_services: form.appointment_services.trim(),
       category_id: Number(form.category_id),
       description: form.description.trim(),
-      service_price: form.service_price,
+      service_price: isGrooming ? "" : String(form.service_price ?? ""),
       duration_minutes: Number(form.duration_minutes),
       allowed_roles: selectedRoles,
     });
@@ -160,6 +163,12 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
               />
             </div>
 
+            {isGrooming ? (
+              <p className="text-xs rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-3 py-2">
+                Grooming is priced by the pet's weight. Set the prices in the
+                Grooming Tiers table on the Grooming tab.
+              </p>
+            ) : (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 Price (₱)
@@ -179,6 +188,7 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
                 staff enter the amount when the client pays.
               </p>
             </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block">

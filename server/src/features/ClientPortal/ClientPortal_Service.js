@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import { depositError } from "../../../utils/deposit.js";
 import ClientPortalModel from "./ClientPortal_Model.js";
 import ClientRecordsService from "../Client_Records/Client_Records_Service.js";
 import AppointmentService from "../Appointment/Appointment_Service.js";
@@ -15,10 +16,10 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export default class ClientPortalService {
   // Verifies the Google ID token server-side (signature, audience, issuer),
-  // then looks up a matching tbl_clients row by email. Never creates a new
-  // client record — Google sign-in only links an EXISTING record a staff
-  // member already created; someone the clinic has never seen gets a
-  // clear rejection instead of a self-registered account.
+  // then looks up a matching tbl_clients row by email. An unknown email
+  // isn't rejected: it gets a short-lived registration token instead, which
+  // registerWithGoogle trades for a new client record once the client adds
+  // the mobile number Google doesn't provide.
   async loginWithGoogle(credential) {
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
@@ -36,20 +37,60 @@ export default class ClientPortalService {
       payload.email,
     );
     if (!existingClient) {
-      const err = new Error(
-        "No client record found for this email. Please visit the clinic to register first.",
+      // The email/name come from Google's verified token, never from the
+      // browser — signing them here stops a client registering someone
+      // else's email in step two.
+      const registration_token = jwt.sign(
+        { purpose: "register", email: payload.email, name: payload.name, sub: payload.sub },
+        process.env.CLIENT_JWT_SECRET,
+        { expiresIn: "15m" },
       );
-      err.statusCode = 403;
+      return {
+        needs_registration: true,
+        registration_token,
+        profile: { name: payload.name ?? "", email: payload.email },
+      };
+    }
+
+    return this.#signIn(existingClient, payload.sub);
+  }
+
+  // Step two of a first Google sign-in: creates the Client Records row
+  // (same insert + duplicate handling as staff "Add Client"), then signs in.
+  async registerWithGoogle({ registration_token, client_name, contact_no }) {
+    let reg;
+    try {
+      reg = jwt.verify(registration_token, process.env.CLIENT_JWT_SECRET);
+    } catch {
+      reg = null;
+    }
+    if (reg?.purpose !== "register") {
+      const err = new Error("Registration expired. Please sign in with Google again.");
+      err.statusCode = 401;
       throw err;
     }
 
+    // Registered in another tab meanwhile — just sign in.
+    const existingClient = await clientPortalModel.findClientByEmail(reg.email);
+    if (existingClient) return this.#signIn(existingClient, reg.sub);
+
+    const newClient = await clientRecordsService.addClient({
+      client_name,
+      client_email: reg.email,
+      contact_no,
+      created_by: "Client Portal",
+    });
+    return this.#signIn(newClient, reg.sub);
+  }
+
+  async #signIn(clientRow, google_sub) {
     await clientPortalModel.linkGoogleAccount({
-      client_id: existingClient.client_id,
-      google_sub: payload.sub,
+      client_id: clientRow.client_id,
+      google_sub,
     });
 
     const token = jwt.sign(
-      { client_id: existingClient.client_id, email: existingClient.email },
+      { client_id: clientRow.client_id, email: clientRow.email },
       process.env.CLIENT_JWT_SECRET,
       { expiresIn: "7d" },
     );
@@ -57,9 +98,9 @@ export default class ClientPortalService {
     return {
       token,
       client: {
-        client_id: existingClient.client_id,
-        name: existingClient.name,
-        email: existingClient.email,
+        client_id: clientRow.client_id,
+        name: clientRow.name,
+        email: clientRow.email,
       },
     };
   }
@@ -335,13 +376,11 @@ export default class ClientPortalService {
       throw err;
     }
 
-    // GCash never gives change: the amount the client says they sent must
-    // be exactly the bill, or staff would be verifying a short payment.
-    const toCents = (v) => Math.round(Number(v) * 100);
-    if (!(Number(amount_paid) > 0) || toCents(amount_paid) !== toCents(payment.total_amount)) {
-      const err = new Error(
-        `The amount sent must be exactly ₱${Number(payment.total_amount).toFixed(2)}.`,
-      );
+    // At least 50% online, up to the full bill; the rest is paid at the
+    // clinic. Staff verify this amount against the screenshot.
+    const amountError = depositError(payment.total_amount, amount_paid);
+    if (amountError) {
+      const err = new Error(amountError);
       err.statusCode = 400;
       throw err;
     }
@@ -350,6 +389,7 @@ export default class ClientPortalService {
       payment_id,
       gcash_reference_number,
       payment_proof_image,
+      amount_sent: amount_paid,
     });
   }
 

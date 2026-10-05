@@ -123,7 +123,34 @@ export default function ReceiptContent({ payment, appointment }) {
           <span className="text-slate-500">Payment Method</span>
           <span>{payment.payment_method ?? "—"}</span>
         </div>
-        {payment.payment_method === "Split" ? (
+        {payment.amount_sent != null &&
+        Number(payment.amount_sent) < Number(payment.total_amount) ? (
+          // Online deposit + balance paid at the clinic: show both payments.
+          <>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Deposit (GCash, online)</span>
+              <span>{fmt(payment.amount_sent)}</span>
+            </div>
+            {payment.gcash_reference_number && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Deposit Ref.</span>
+                <span>{payment.gcash_reference_number}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-500">
+                Balance ({payment.balance_gcash_reference ? "GCash" : "Cash"}, at clinic)
+              </span>
+              <span>{fmt(Number(payment.total_amount) - Number(payment.amount_sent))}</span>
+            </div>
+            {payment.balance_gcash_reference && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Balance Ref.</span>
+                <span>{payment.balance_gcash_reference}</span>
+              </div>
+            )}
+          </>
+        ) : payment.payment_method === "Split" ? (
           <>
             <div className="flex justify-between">
               <span className="text-slate-500">Cash</span>
@@ -133,6 +160,24 @@ export default function ReceiptContent({ payment, appointment }) {
               <span className="text-slate-500">GCash</span>
               <span>{fmt(payment.gcash_amount)}</span>
             </div>
+          </>
+        ) : payment.original_total != null ? (
+          // No-show: the online deposit was kept; no balance is owed.
+          <>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Deposit kept (no-show)</span>
+              <span>{fmt(payment.total_amount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Original bill</span>
+              <span>{fmt(payment.original_total)}</span>
+            </div>
+            {payment.gcash_reference_number && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">GCash Ref.</span>
+                <span>{payment.gcash_reference_number}</span>
+              </div>
+            )}
           </>
         ) : payment.payment_method === "GCash" && payment.gcash_reference_number ? (
           <div className="flex justify-between">

@@ -34,6 +34,7 @@ import {
   selectAppointmentStaff,
 } from "@/api/http";
 import { formatDate } from "@/utils/COLUMNS";
+import { priceForPet } from "@/utils/groomingTier.js";
 import {
   CLINIC_CLOSE_MINUTE,
   buildServiceSlots,
@@ -299,6 +300,7 @@ export function Component() {
   });
 
   const selectedPet = pets?.find((p) => String(p.pet_id) === selectedPetId);
+  const petPrice = priceForPet(selectedService, selectedPet?.weight_kg);
 
   function closeModal() {
     navigate(`..${location.search}`);
@@ -349,11 +351,9 @@ export function Component() {
           serviceName: selectedServiceName,
           // Computed server-side from the sub-service's duration.
           endTime: appointment.end_time,
-          servicePrice: services?.find(
-            (s) =>
-              String(s.appointment_services_id) ===
-              payload.appointment_services_id,
-          )?.service_price,
+          // Grooming: this pet's weight-tier price (null = enter by hand).
+          servicePrice: petPrice.price,
+          tierName: petPrice.tier?.tier_name,
           staffName: selectedStaffMember?.user_name,
         },
       });
@@ -505,6 +505,13 @@ export function Component() {
                       ? `${selectedPet.weight_kg} kg`
                       : "—"}
                   </div>
+                  {selectedService?.grooming_tiers && (
+                    <div className="col-span-2 font-medium text-indigo-700 dark:text-indigo-400">
+                      {petPrice.tier
+                        ? `Grooming: ₱${Number(petPrice.price).toFixed(2)} (${petPrice.tier.tier_name} tier)`
+                        : "Grooming: no weight tier fits — enter the price at payment"}
+                    </div>
+                  )}
                   <div className="text-slate-500 dark:text-slate-400">
                     {selectedPet.is_spayed_neutered
                       ? "Spayed/Neutered"

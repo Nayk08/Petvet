@@ -384,10 +384,15 @@ export function Component() {
         onDelete={(row) =>
           navigate(`/payments/delete-payment/${row.payment_id}`)
         }
-        canProcess={(row) => row.payment_status_name === "Pending"}
+        // Partially Paid: "Process" collects the balance of an online deposit.
+        canProcess={(row) =>
+          row.payment_status_name === "Pending" ||
+          row.payment_status_name === "Partially Paid"
+        }
         canView={(row) =>
           row.payment_status_name === "Completed" ||
-          row.payment_status_name === "Cancelled"
+          row.payment_status_name === "Cancelled" ||
+          row.payment_status_name === "Partially Paid"
         }
         canDelete={(row) => row.payment_status_name === "Pending"}
         limit={salesLimit}

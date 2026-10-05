@@ -13,6 +13,22 @@ const ALLOWED_FILTER_COLUMNS = ["payment_status_name"];
 export const REAL_PAYMENT_ACTIVITY_SQL = `NOT (payment_status_name = 'Cancelled' AND payment_method IS NULL)
   AND NOT (payment_status_name = 'Pending' AND created_by = 'Client Portal')`;
 
+// Paid (fully, or a verified deposit) → its Pending appointment goes In Queue.
+// Runs inside the caller's transaction.
+async function confirmPendingAppointment(client, appointment_id, updated_by) {
+  if (!appointment_id) return;
+  await client.query(
+    `UPDATE tbl_appointments
+     SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                  WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'),
+         updated_by = $2, date_updated = NOW()
+     WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+       AND appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                    WHERE LOWER(TRIM(appointment_status_name)) = 'pending')`,
+    [appointment_id, updated_by],
+  );
+}
+
 export default class PaymentModel {
   async getPayments({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
@@ -342,18 +358,7 @@ export default class PaymentModel {
       // A paid appointment charge confirms its (still Pending) appointment —
       // in this same transaction, so a paid appointment can't end up stuck
       // on Pending if a second, separate write failed.
-      if (paymentRes.rows[0].appointment_id) {
-        await client.query(
-          `UPDATE tbl_appointments
-           SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
-                                        WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'),
-               updated_by = $2, date_updated = NOW()
-           WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
-             AND appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
-                                          WHERE LOWER(TRIM(appointment_status_name)) = 'pending')`,
-          [paymentRes.rows[0].appointment_id, updated_by],
-        );
-      }
+      await confirmPendingAppointment(client, paymentRes.rows[0].appointment_id, updated_by);
 
       await client.query("COMMIT");
       return paymentRes.rows[0];
@@ -374,12 +379,97 @@ export default class PaymentModel {
     const res = await pool.query(
       `UPDATE tbl_payments SET
          payment_status_id = $1, updated_by = $2, date_updated = NOW(),
-         gcash_reference_number = NULL, payment_method = NULL, payment_proof_image = NULL
+         gcash_reference_number = NULL, payment_method = NULL, payment_proof_image = NULL,
+         amount_sent = NULL
        WHERE payment_id = $3
          AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
                                   WHERE LOWER(TRIM(payment_status_name)) = 'awaiting verification')
        RETURNING *`,
       [payment_status_id, updated_by, payment_id],
+    );
+    return res.rows[0];
+  }
+
+  // Staff approved a partial GCash proof: the deposit (amount_sent) is now
+  // money received, the bill is "Partially Paid" and the appointment is
+  // confirmed — one transaction. Not Completed, so not in revenue yet.
+  async approveDeposit({ payment_id, updated_by }) {
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+      const res = await client.query(
+        `UPDATE tbl_payments SET
+           payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                WHERE payment_status_name = 'Partially Paid'),
+           payment_method = 'GCash',
+           gcash_amount = amount_sent,
+           cash_amount = 0,
+           updated_by = $2, date_updated = NOW()
+         WHERE payment_id = $1 AND is_deleted = false AND amount_sent > 0
+           AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                    WHERE payment_status_name = 'Awaiting Verification')
+         RETURNING *`,
+        [payment_id, updated_by],
+      );
+      if (res.rows.length) {
+        await confirmPendingAppointment(client, res.rows[0].appointment_id, updated_by);
+      }
+      await client.query("COMMIT");
+      return res.rows[0];
+    } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release(queryError);
+    }
+  }
+
+  // No-show on a visit with a verified online deposit: the clinic keeps the
+  // deposit. The bill closes as Completed for the deposit amount (so revenue
+  // is the money actually kept); original_total records what it was.
+  async forfeitDeposit(appointment_id, updated_by) {
+    const res = await pool.query(
+      `UPDATE tbl_payments SET
+         original_total = total_amount,
+         total_amount = gcash_amount,
+         cash_amount = 0,
+         payment_method = 'GCash',
+         payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                              WHERE payment_status_name = 'Completed'),
+         updated_by = $2, date_updated = NOW()
+       WHERE appointment_id = $1 AND is_deleted = false
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE payment_status_name = 'Partially Paid')
+       RETURNING *`,
+      [appointment_id, updated_by],
+    );
+    return res.rows[0];
+  }
+
+  // The balance of a "Partially Paid" bill, collected at the clinic. The
+  // status guard stops a double submit from recording it twice.
+  async completeBalance({
+    payment_id,
+    updated_by,
+    payment_method,
+    cash_amount,
+    gcash_amount,
+    balance_gcash_reference,
+  }) {
+    const res = await pool.query(
+      `UPDATE tbl_payments SET
+         payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                              WHERE payment_status_name = 'Completed'),
+         payment_method = $2, cash_amount = $3, gcash_amount = $4,
+         balance_gcash_reference = $5,
+         updated_by = $6, date_updated = NOW()
+       WHERE payment_id = $1 AND is_deleted = false
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE payment_status_name = 'Partially Paid')
+       RETURNING *`,
+      [payment_id, payment_method, cash_amount, gcash_amount, balance_gcash_reference, updated_by],
     );
     return res.rows[0];
   }
@@ -414,6 +504,7 @@ export default class PaymentModel {
            payment_status_id = $2,
            updated_by = $3,
            deleted_by = $3,
+           date_deleted = NOW(),
            date_updated = NOW()
          WHERE payment_id = $1 AND is_deleted = false
            AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
@@ -625,10 +716,10 @@ export default class PaymentModel {
       const res = await client.query(
         `SELECT 1 FROM tbl_payments p
          JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
-         WHERE p.gcash_reference_number = $1
+         WHERE (p.gcash_reference_number = $1 OR p.balance_gcash_reference = $1)
            AND p.is_deleted IS NOT TRUE
            AND p.payment_id IS DISTINCT FROM $2
-           AND ps.payment_status_name IN ('Completed', 'Awaiting Verification')
+           AND ps.payment_status_name IN ('Completed', 'Awaiting Verification', 'Partially Paid')
          LIMIT 1`,
         [gcash_reference_number, excludePaymentId ?? null],
       );
@@ -651,6 +742,7 @@ export default class PaymentModel {
     payment_status_id,
     gcash_reference_number,
     payment_proof_image,
+    amount_sent,
   }) {
     const client = await pool.connect();
     try {
@@ -660,10 +752,11 @@ export default class PaymentModel {
            payment_method = 'GCash',
            gcash_reference_number = $2,
            payment_proof_image = $3,
+           amount_sent = $5,
            date_updated = NOW()
          WHERE payment_id = $4
          RETURNING *`,
-        [payment_status_id, gcash_reference_number, payment_proof_image, payment_id],
+        [payment_status_id, gcash_reference_number, payment_proof_image, payment_id, amount_sent],
       );
       return res.rows[0];
     } catch (error) {

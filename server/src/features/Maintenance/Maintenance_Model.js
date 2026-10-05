@@ -112,6 +112,60 @@ export default class MaintenanceModel {
     }
   }
 
+  // ── Grooming price tiers (price by pet weight, Grooming category only) ──
+
+  async getGroomingTiers() {
+    const res = await pool.query(
+      `SELECT tier_id, tier_name, max_weight_kg, price, description
+       FROM tbl_grooming_price_tiers ORDER BY max_weight_kg ASC NULLS LAST`,
+    );
+    return res.rows;
+  }
+
+  async addGroomingTier({ tier_name, max_weight_kg, price, description }) {
+    try {
+      const res = await pool.query(
+        `INSERT INTO tbl_grooming_price_tiers (tier_name, max_weight_kg, price, description)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [tier_name, max_weight_kg === "" ? null : max_weight_kg, price, description || null],
+      );
+      return res.rows[0];
+    } catch (error) {
+      if (error.code === "23505") throw httpError(409, "A tier with this name already exists.");
+      throw error;
+    }
+  }
+
+  async updateGroomingTier({ tier_id, tier_name, max_weight_kg, price, description }) {
+    try {
+      const res = await pool.query(
+        `UPDATE tbl_grooming_price_tiers SET
+           tier_name = COALESCE($1, tier_name),
+           max_weight_kg = $2,
+           price = COALESCE($3, price),
+           description = $4
+         WHERE tier_id = $5 RETURNING *`,
+        [tier_name, max_weight_kg === "" ? null : max_weight_kg, price, description || null, tier_id],
+      );
+      if (!res.rows.length) throw httpError(404, "Grooming tier not found");
+      return res.rows[0];
+    } catch (error) {
+      if (error.code === "23505") throw httpError(409, "A tier with this name already exists.");
+      throw error;
+    }
+  }
+
+  // Real delete is fine: nothing references a tier — bookings store their
+  // price on the payment row.
+  async deleteGroomingTier(tier_id) {
+    const res = await pool.query(
+      `DELETE FROM tbl_grooming_price_tiers WHERE tier_id = $1 RETURNING *`,
+      [tier_id],
+    );
+    if (!res.rows.length) throw httpError(404, "Grooming tier not found");
+    return res.rows[0];
+  }
+
   // Soft delete / restore. Not a real DELETE — tbl_appointments references
   // this row, so its booking history must stay intact.
   async setServiceActive({ service_id, is_active, updated_by }) {

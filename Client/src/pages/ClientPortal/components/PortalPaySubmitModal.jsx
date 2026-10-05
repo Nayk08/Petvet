@@ -53,11 +53,14 @@ export default function PortalPaySubmitModal({ paymentId, amount, details, onClo
   });
 
   const isReferenceValid = GCASH_REFERENCE_PATTERN.test(referenceNumber);
-  // GCash gives no change, so what was sent must equal the bill exactly
-  // (the server re-checks this).
+  // At least 50% (rounded up to the centavo) up to the full bill; the rest
+  // is paid at the clinic. Mirrors server/utils/deposit.js, which re-checks.
   const toCents = (v) => Math.round(Number(v) * 100);
+  const minCents = Math.ceil(toCents(amount ?? 0) * 0.5);
+  const sentCents = toCents(amountSent);
   const isAmountValid =
-    amountSent !== "" && amount != null && toCents(amountSent) === toCents(amount);
+    amountSent !== "" && amount != null && sentCents >= minCents && sentCents <= toCents(amount);
+  const balanceLeft = isAmountValid ? (toCents(amount) - sentCents) / 100 : 0;
   const canSubmit = isReferenceValid && isAmountValid && Boolean(proofFile);
 
   async function handleSubmit(event) {
@@ -89,7 +92,7 @@ export default function PortalPaySubmitModal({ paymentId, amount, details, onClo
           <DialogDescription>
             {submitted
               ? "Your payment is now awaiting staff verification."
-              : "Scan the QR code, pay the full amount, then submit your reference number and a screenshot."}
+              : "Scan the QR code and pay the full amount or at least 50% now — the rest is paid at the clinic. Then submit your reference number and a screenshot."}
           </DialogDescription>
         </DialogHeader>
 
@@ -128,10 +131,18 @@ export default function PortalPaySubmitModal({ paymentId, amount, details, onClo
               {amount != null && (
                 <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-200 dark:border-slate-800">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">
-                    Amount to pay
+                    Total
                   </span>
                   <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">
                     ₱{Number(amount).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {amount != null && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Minimum to pay online (50%)</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    ₱{(minCents / 100).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -189,7 +200,13 @@ export default function PortalPaySubmitModal({ paymentId, amount, details, onClo
               />
               {amountSent !== "" && !isAmountValid && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                  Must be exactly ₱{Number(amount ?? 0).toFixed(2)} — GCash doesn't give change.
+                  Enter the exact amount you sent: at least ₱{(minCents / 100).toFixed(2)} (50%),
+                  up to ₱{Number(amount ?? 0).toFixed(2)}.
+                </p>
+              )}
+              {balanceLeft > 0 && (
+                <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                  Partial payment — the remaining ₱{balanceLeft.toFixed(2)} is paid at the clinic.
                 </p>
               )}
             </div>

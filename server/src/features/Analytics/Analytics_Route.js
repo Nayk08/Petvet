@@ -17,9 +17,11 @@ router.get(
   (req, res) => analyticsController.getAppointmentsBreakdown(req, res),
 );
 
+// Product sales charts are shown in both Inventory (Product Sales tab) and
+// Analytics, so view access to either module is enough.
 router.get(
   "/analytics/top-products",
-  hasPermission("ANALYTICS", "can_view"),
+  hasPermission(["INVENTORY", "ANALYTICS"], "can_view"),
   (req, res) => analyticsController.getTopProducts(req, res),
 );
 
@@ -31,7 +33,7 @@ router.get(
 
 router.get(
   "/analytics/product-movers",
-  hasPermission("ANALYTICS", "can_view"),
+  hasPermission(["INVENTORY", "ANALYTICS"], "can_view"),
   (req, res) => analyticsController.getProductMovers(req, res),
 );
 

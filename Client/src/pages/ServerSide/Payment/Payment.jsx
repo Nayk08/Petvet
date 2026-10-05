@@ -273,11 +273,16 @@ export function Component() {
               })
             }
             // Only show "Process" when the payment is still pending
-            canProcess={(row) => row.payment_status_name === "Pending"}
-            // Only show "View" when the payment is completed or cancelled
+            // Partially Paid: "Process" collects the balance of an online deposit.
+            canProcess={(row) =>
+              row.payment_status_name === "Pending" ||
+              row.payment_status_name === "Partially Paid"
+            }
+            // Only show "View" when money has moved (or the bill is closed)
             canView={(row) =>
               row.payment_status_name === "Completed" ||
-              row.payment_status_name === "Cancelled"
+              row.payment_status_name === "Cancelled" ||
+              row.payment_status_name === "Partially Paid"
             }
             canDelete={(row) => row.payment_status_name === "Pending"}
             actions={[

@@ -36,6 +36,7 @@ import petvetC1 from "../assets/petVet/petvet-customer1.jpg";
 import petvetC2 from "../assets/petVet/petvet-customer2.jpg";
 import petvetC3 from "../assets/petVet/petvet-customer3.jpg";
 import petvetC4 from "../assets/petVet/petvet-customer4.jpg";
+import { tierPriceRange } from "@/utils/groomingTier.js";
 
 export default function LandingPage() {
   const [activeImage, setActiveImage] = useState(null);
@@ -795,12 +796,14 @@ function ServicesList() {
                     {s.duration_minutes} min
                   </span>
                   <span className="font-bold text-green-700 dark:text-green-400">
-                    {s.service_price != null
-                      ? `₱${Number(s.service_price).toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}`
-                      : "Price at clinic"}
+                    {s.grooming_tiers
+                      ? (tierPriceRange(s.grooming_tiers) ?? "Price at clinic")
+                      : s.service_price != null
+                        ? `₱${Number(s.service_price).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`
+                        : "Price at clinic"}
                   </span>
                 </div>
               </div>

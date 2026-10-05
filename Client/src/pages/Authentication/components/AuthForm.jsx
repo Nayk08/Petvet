@@ -27,15 +27,15 @@ import {
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { queryClient, fetchNavbar, safeRedirectPath } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
-import { loginWithGoogle, fetchMyProfile } from "@/api/clientPortal.js";
+import { loginWithGoogle, registerWithGoogle, fetchMyProfile } from "@/api/clientPortal.js";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL;
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-// Staff sign-in only — there is no self-registration path here. Staff
-// accounts are created by an admin (Users Management); clients sign in
-// with Google below, which only links an existing record a staff member
-// already created (see ClientPortal_Service.js).
+// Staff sign in with email/password (accounts are created by an admin in
+// Users Management). Clients sign in with Google below; a first-time client
+// adds a mobile number and is saved to Client Records (see
+// ClientPortal_Service.js:registerWithGoogle).
 export default function AuthForm() {
   const actionData = useActionData();
   const { state } = useNavigation();
@@ -55,16 +55,125 @@ export default function AuthForm() {
     try {
       // The server sets the auth cookie itself (Set-Cookie on the login
       // response) — nothing for the client to store.
-      await loginWithGoogle(credentialResponse.credential);
+      const result = await loginWithGoogle(credentialResponse.credential);
+      if (result.needs_registration) {
+        setRegistration({
+          registration_token: result.registration_token,
+          email: result.profile.email,
+          client_name: result.profile.name,
+          contact_no: "",
+        });
+        return;
+      }
       navigate("/portal");
     } catch (err) {
-      setGoogleError(
-        err.message ||
-          "Sign-in failed. If you're a first-time visitor, please contact the clinic to set up your record first.",
-      );
+      setGoogleError(err.message || "Sign-in failed. Please try again.");
     } finally {
       setIsGoogleSubmitting(false);
     }
+  }
+
+  // Set when Google sign-in finds no client record — shows the
+  // "complete registration" step instead of the sign-in form.
+  const [registration, setRegistration] = useState(null);
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    setGoogleError(null);
+    setIsGoogleSubmitting(true);
+    try {
+      await registerWithGoogle(registration);
+      navigate("/portal");
+    } catch (err) {
+      setGoogleError(err.message);
+      // An expired token can't be retried — back to the Google button.
+      if (err.code === 401) setRegistration(null);
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  }
+
+  if (registration) {
+    return (
+      <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
+        <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
+          <CardTitle className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Complete Registration
+          </CardTitle>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[300px] mx-auto">
+            Welcome to PetVet! Add your mobile number so the clinic can reach
+            you about your appointments.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Email (from Google)
+              </label>
+              <Input value={registration.email} disabled className="bg-zinc-100 dark:bg-zinc-950/50" />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="reg_name" className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Full Name
+              </label>
+              <Input
+                id="reg_name"
+                required
+                maxLength={100}
+                value={registration.client_name}
+                onChange={(e) => setRegistration((r) => ({ ...r, client_name: e.target.value }))}
+                className="bg-zinc-50/50 dark:bg-zinc-950/50 focus-visible:ring-emerald-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="reg_mobile" className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Mobile Number
+              </label>
+              <Input
+                id="reg_mobile"
+                type="tel"
+                inputMode="tel"
+                required
+                placeholder="09XXXXXXXXX"
+                pattern="(\+63[\s\-]?9\d{2}[\s\-]?\d{3}[\s\-]?\d{4}|09\d{9})"
+                title="Use 09XXXXXXXXX or +63 9XX XXX XXXX"
+                value={registration.contact_no}
+                onChange={(e) => setRegistration((r) => ({ ...r, contact_no: e.target.value }))}
+                className="bg-zinc-50/50 dark:bg-zinc-950/50 focus-visible:ring-emerald-500"
+              />
+            </div>
+
+            {googleError && (
+              <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <p className="font-medium leading-tight">{googleError}</p>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={isGoogleSubmitting}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-10 disabled:opacity-60"
+            >
+              {isGoogleSubmitting ? "Creating your account..." : "Register & Continue"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setRegistration(null);
+                setGoogleError(null);
+              }}
+              className="w-full text-zinc-500"
+            >
+              Cancel
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -201,8 +310,7 @@ export default function AuthForm() {
         )}
 
         <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-500 mt-3">
-          New client? Visit the clinic in person first so we can set up your
-          record.
+          New client? Continue with Google to register.
         </p>
       </CardContent>
 

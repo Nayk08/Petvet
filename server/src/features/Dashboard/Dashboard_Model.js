@@ -95,7 +95,15 @@ export default class DashboardModel {
     const client = await pool.connect();
     try {
       const values = [];
-      const conditions = ["date_created::date = CURRENT_DATE", REAL_PAYMENT_ACTIVITY_SQL];
+      const conditions = [
+        // Created today — or an online deposit whose visit is today, since
+        // that's when its balance is collected (the bill itself is older).
+        `(date_created::date = CURRENT_DATE
+          OR (payment_status_name = 'Partially Paid'
+              AND appointment_id IN (SELECT appointment_id FROM tbl_appointments
+                                     WHERE appointment_date = CURRENT_DATE)))`,
+        REAL_PAYMENT_ACTIVITY_SQL,
+      ];
 
       for (const [key, value] of Object.entries(filters)) {
         if (key === "payment_type") {

@@ -9,7 +9,10 @@ const ALLOWED_ACTIONS = new Set([
   "can_export",
 ]);
 
+// `moduleCode` may be an array: the action on ANY of those modules is enough
+// (e.g. product sales charts shown in both Inventory and Analytics).
 export default function hasPermission(moduleCode, ...actions) {
+  const moduleCodes = [moduleCode].flat();
   if (actions.length === 0) actions = ["can_view"];
   for (const action of actions) {
     if (!ALLOWED_ACTIONS.has(action)) {
@@ -37,10 +40,10 @@ export default function hasPermission(moduleCode, ...actions) {
          -- must not keep granting access either.
          JOIN tbl_user_level ul
            ON ul.user_level_id = a.user_level_id AND ul.is_deleted IS NOT TRUE
-         WHERE a.users_id = $1 AND vp.module_code = $2
+         WHERE a.users_id = $1 AND vp.module_code = ANY($2::text[])
          AND ${conditions}
          LIMIT 1`,
-        [req.session.user.id, moduleCode],
+        [req.session.user.id, moduleCodes],
       );
 
       if (rows.length === 0) {

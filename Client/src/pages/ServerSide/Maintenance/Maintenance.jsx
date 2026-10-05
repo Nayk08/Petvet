@@ -6,13 +6,19 @@ import DynamicGrid from "@/components/ui/DynamicGrid";
 import ModuleTabs from "@/components/ui/ModuleTabs";
 import { Button } from "@/components/ui/button.jsx";
 import QueryState from "@/components/ui/QueryState";
-import { MaintenanceServiceColumns } from "@/utils/COLUMNS";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { MaintenanceServiceColumns, MaintenanceGroomingTierColumns } from "@/utils/COLUMNS";
 import {
   fetchMaintenanceServiceCategories,
   fetchMaintenanceServices,
   setMaintenanceServiceActive,
+  fetchMaintenanceGroomingTiers,
+  deleteMaintenanceGroomingTier,
 } from "@/api/http.js";
 import ServiceModal from "./components/ServiceModal.jsx";
+import GroomingTierModal from "./components/GroomingTierModal.jsx";
+
+const GROOMING_CATEGORY_ID = 1; // fixed seed id (migrations/001)
 
 // Three fixed categories (Grooming / Consultation / Operation) — one tab
 // each, listing only that category's sub-services. Categories themselves
@@ -21,6 +27,8 @@ export function Component() {
   const queryClient = useQueryClient();
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [editingService, setEditingService] = useState(null); // {} = add, row = edit
+  const [editingTier, setEditingTier] = useState(null); // {} = add, row = edit
+  const [confirmDeleteTier, setConfirmDeleteTier] = useState(null);
 
   const categoriesQuery = useQuery({
     queryKey: ["maintenance-service-categories"],
@@ -51,6 +59,28 @@ export function Component() {
     },
     onError: (error) => {
       toast.error("Could not update sub-service", { description: error.message });
+    },
+  });
+
+  const isGroomingTab = categoryId === GROOMING_CATEGORY_ID;
+  const tiersQuery = useQuery({
+    queryKey: ["maintenance-grooming-tiers"],
+    queryFn: ({ signal }) => fetchMaintenanceGroomingTiers({ signal }),
+    enabled: isGroomingTab,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const deleteTierMutation = useMutation({
+    mutationFn: deleteMaintenanceGroomingTier,
+    onSuccess: () => {
+      toast.success("Grooming tier deleted");
+      setConfirmDeleteTier(null);
+      queryClient.invalidateQueries({ queryKey: ["maintenance-grooming-tiers"] });
+      queryClient.invalidateQueries({ queryKey: ["appointment-services"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-appointment-services"] });
+    },
+    onError: (error) => {
+      toast.error("Could not delete grooming tier", { description: error.message });
     },
   });
 
@@ -121,8 +151,64 @@ export function Component() {
               },
             ]}
           />
+
+          {isGroomingTab && (
+            <>
+              <QueryState
+                isLoading={tiersQuery.isPending}
+                isError={tiersQuery.isError}
+                error={tiersQuery.error}
+                loadingLabel="Loading grooming tiers..."
+                errorLabel="Error loading grooming tiers"
+              />
+              {tiersQuery.isSuccess && (
+                <DynamicGrid
+                  data={tiersQuery.data}
+                  columnsConfig={MaintenanceGroomingTierColumns}
+                  title="Grooming Tiers"
+                  subtitle="Grooming is priced by the pet's weight — the smallest tier that covers it applies. A pet with no weight, or heavier than every tier, is priced by staff at payment."
+                  extraActions={
+                    <Button
+                      onClick={() => setEditingTier({})}
+                      className="flex items-center gap-1.5 font-medium bg-indigo-600 hover:bg-indigo-500 text-white"
+                    >
+                      <Plus size={16} />
+                      Add Tier
+                    </Button>
+                  }
+                  onEdit={(row) => setEditingTier(row)}
+                  actions={[
+                    {
+                      label: "Delete",
+                      icon: Trash2,
+                      className:
+                        "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50",
+                      onClick: (row) => setConfirmDeleteTier(row),
+                    },
+                  ]}
+                />
+              )}
+            </>
+          )}
         </>
       )}
+
+      {editingTier !== null && (
+        <GroomingTierModal
+          tier={Object.keys(editingTier).length ? editingTier : null}
+          onClose={() => setEditingTier(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteTier)}
+        onOpenChange={(open) => !open && setConfirmDeleteTier(null)}
+        title="Delete grooming tier?"
+        description={`Delete the "${confirmDeleteTier?.tier_name}" tier? Existing bookings keep their price.`}
+        confirmLabel="Delete"
+        isConfirming={deleteTierMutation.isPending}
+        onConfirm={() => deleteTierMutation.mutate(confirmDeleteTier.tier_id)}
+      />
 
       {editingService !== null && (
         <ServiceModal

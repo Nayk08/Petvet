@@ -68,3 +68,24 @@
     width: 100%;
   }
 }
+
+/* Chart palette for the inline-SVG charts (Analytics, Inventory product sales). */
+.analytics-viz {
+  --slot-1: #2a78d6;
+  --slot-2: #eb6834;
+  --slot-3: #1baf7a;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --gridline: #e1e0d9;
+  --muted: #898781;
+  --text-secondary: #52514e;
+}
+.dark .analytics-viz {
+  --slot-1: #3987e5;
+  --slot-2: #d95926;
+  --slot-3: #199e70;
+  --gridline: #2c2c2a;
+  --text-secondary: #c3c2b7;
+}

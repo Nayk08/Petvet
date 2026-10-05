@@ -48,6 +48,17 @@ export async function loginWithGoogle(credential) {
   return handlePortalResponse(response, "Failed to sign in with Google");
 }
 
+// First Google sign-in: creates the client record, then signs in.
+export async function registerWithGoogle({ registration_token, client_name, contact_no }) {
+  const response = await fetchWithTimeout(`${baseUrl}/auth/google/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ registration_token, client_name, contact_no }),
+  });
+  return handlePortalResponse(response, "Failed to complete registration");
+}
+
 export async function logoutClient() {
   const csrfToken = await getCsrfToken();
   const response = await fetchWithTimeout(`${baseUrl}/logout`, {

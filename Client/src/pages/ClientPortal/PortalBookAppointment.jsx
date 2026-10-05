@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import PortalPaySubmitModal from "./components/PortalPaySubmitModal.jsx";
+import { priceForPet } from "@/utils/groomingTier.js";
 import {
   CLINIC_CLOSE_MINUTE,
   buildServiceSlots,
@@ -132,6 +133,14 @@ export function Component() {
   const bookedRanges = toBookedRanges(bookedSlotRows);
 
   const selectedPet = pets?.find((p) => String(p.pet_id) === selectedPetId);
+  // Grooming is priced by this pet's weight tier.
+  const petPrice = priceForPet(selectedService, selectedPet?.weight_kg);
+  const petPriceLabel =
+    petPrice.price != null
+      ? `₱${Number(petPrice.price).toFixed(2)}${petPrice.tier ? ` (${petPrice.tier.tier_name})` : ""}`
+      : selectedService?.grooming_tiers && !selectedPet
+        ? "price depends on your pet's weight"
+        : "price set at the clinic";
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -426,7 +435,7 @@ export function Component() {
         </div>
         <p className="text-[11px] -mt-2 text-slate-500 dark:text-slate-400">
           {selectedService
-            ? `${selectedService.appointment_services} takes ${selectedService.duration_minutes} minutes · ${selectedService.service_price == null ? "price set at the clinic" : `₱${Number(selectedService.service_price).toFixed(2)}`}. The end time is set automatically. Clinic hours: 9:00 AM to 6:00 PM.`
+            ? `${selectedService.appointment_services} takes ${selectedService.duration_minutes} minutes · ${petPriceLabel}. The end time is set automatically. Clinic hours: 9:00 AM to 6:00 PM.`
             : "Pick a service to see its start times. Clinic hours: 9:00 AM to 6:00 PM."}
         </p>
 

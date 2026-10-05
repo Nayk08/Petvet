@@ -66,11 +66,15 @@ async function assertStaffMatchesService(
   return service;
 }
 
-// A sub-service with no fixed price is priced by whatever amount staff enter
-// when the client pays — it just has to be a real, positive amount. (There
-// is no minimum price any more; it was removed from Maintenance.)
-function assertValidManualAmount(service, amount) {
-  if (service.service_price != null) return;
+// A booking with no price for this pet (an unpriced sub-service, or Grooming
+// for a pet with no weight / no matching tier) is priced by whatever amount
+// staff enter when the client pays — it just has to be a real, positive amount.
+async function assertValidManualAmount(service, pets_id, amount) {
+  const price = await appointmentModel.getEffectivePrice(
+    service.appointment_services_id,
+    pets_id,
+  );
+  if (price != null) return;
 
   if (!(Number(amount) > 0)) {
     const err = new Error(
@@ -280,6 +284,9 @@ export default class AppointmentService {
     });
     if (!updated) throw statusChangedError();
     await appointmentModel.cancelPendingPayment(appointment_id, updated_by);
+    // Clinic policy: an online deposit is forfeited on a no-show — the bill
+    // closes as Completed for the deposit only (no balance is owed).
+    await paymentModel.forfeitDeposit(appointment_id, updated_by);
     return updated;
   }
 
@@ -304,6 +311,18 @@ export default class AppointmentService {
     if (appointment.appointment_status_name !== "In Queue") {
       const err = new Error(
         `Only in-queue appointments can be marked completed. Appointment is already ${appointment.appointment_status_name}.`,
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // An online deposit was paid but the balance wasn't collected yet:
+    // finishing the visit now would let the client leave without paying it.
+    const payment = await paymentModel.getPaymentByAppointmentId(appointment_id);
+    if (payment?.payment_status_name === "Partially Paid") {
+      const balance = Number(payment.total_amount) - Number(payment.gcash_amount ?? 0);
+      const err = new Error(
+        `Collect the ₱${balance.toFixed(2)} balance first (Payments → Process on ${payment.control_number}), then complete the visit.`,
       );
       err.statusCode = 409;
       throw err;
@@ -402,7 +421,7 @@ export default class AppointmentService {
       appointment_services_id,
       assigned_staff_id,
     );
-    assertValidManualAmount(service, amount);
+    await assertValidManualAmount(service, pets_id, amount);
 
     return appointmentModel.addAppointmentWithPayment({
       client_id,
@@ -475,7 +494,7 @@ export default class AppointmentService {
       throw err;
     }
 
-    assertValidManualAmount(service, amount);
+    await assertValidManualAmount(service, appointment.pets_id, amount);
 
     return appointmentModel.completeAppointmentPayment({
       appointment_id,

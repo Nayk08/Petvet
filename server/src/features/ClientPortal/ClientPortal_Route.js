@@ -9,6 +9,7 @@ import {
   appointmentIdParamSchema,
 } from "../../validators/appointmentSchema.js";
 import { clientPortalAddPetSchema } from "../../validators/petSchema.js";
+import { clientPortalRegisterSchema } from "../../validators/clientSchema.js";
 import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
@@ -24,6 +25,14 @@ router.post(
   "/auth/google",
   authLimiter,
   (req, res) => clientPortalController.loginWithGoogle(req, res),
+);
+// First-time Google sign-in, step two. Same CSRF reasoning as above: the
+// body carries a server-signed registration token a cross-site page can't have.
+router.post(
+  "/auth/google/register",
+  authLimiter,
+  validateBody(clientPortalRegisterSchema),
+  (req, res) => clientPortalController.registerWithGoogle(req, res),
 );
 
 router.post(

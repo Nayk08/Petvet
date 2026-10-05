@@ -339,7 +339,7 @@ export function Component() {
           ) : (
             <div className="flex justify-between items-center py-1">
               <span className="text-sm text-slate-700 dark:text-slate-300">
-                Total
+                {draft.tierName ? `Total (${draft.tierName} tier)` : "Total"}
               </span>
               <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400">
                 ₱{total.toFixed(2)}

@@ -21,6 +21,8 @@ const StatusBadge = ({ label, variant = "default" }) => {
       "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
     no_show:
       "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+    partial:
+      "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-800",
     refund:
       "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800",
     default:
@@ -46,6 +48,20 @@ export function formatDate(value) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// "2026-10-05 13:22:10" (clinic time, as the API sends it) → "Oct 5, 2026, 1:22 PM".
+export function formatDateTime(value) {
+  if (!value) return "";
+  const d = new Date(String(value).replace(" ", "T"));
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export const usersColumns = [
@@ -328,10 +344,19 @@ export const PaymentColumns = [
     key: "total_amount",
     label: "PAYMENT AMOUNT",
     align: "right",
-    render: (value) =>
+    render: (value, row) =>
       value != null ? (
         <span className="font-semibold text-slate-900 dark:text-slate-100">
           ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          {/* Deposit received online; the rest is due at the clinic. */}
+          {row.payment_status_name === "Partially Paid" && (
+            <span className="block text-[11px] font-medium text-teal-700 dark:text-teal-300">
+              Balance ₱
+              {(Number(value) - Number(row.gcash_amount ?? 0)).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+              })}
+            </span>
+          )}
         </span>
       ) : (
         <span className="text-slate-400 dark:text-slate-500">—</span>
@@ -355,6 +380,7 @@ export const PaymentColumns = [
         value: "Awaiting Verification",
         label: "Awaiting Verification",
       },
+      { key: "partially_paid", value: "Partially Paid", label: "Partially Paid" },
       { key: "completed", value: "Completed", label: "Completed" },
       { key: "cancelled", value: "Cancelled", label: "Cancelled" },
       { key: "refund_needed", value: "Refund Needed", label: "Refund Needed" },
@@ -363,6 +389,7 @@ export const PaymentColumns = [
       const variantMap = {
         Pending: "pending",
         "Awaiting Verification": "awaiting",
+        "Partially Paid": "partial",
         Completed: "completed",
         Cancelled: "cancelled",
         "Refund Needed": "refund",
@@ -600,8 +627,13 @@ export const MaintenanceServiceColumns = [
   {
     key: "service_price",
     label: "PRICE",
-    render: (value) =>
-      value != null ? (
+    render: (value, row) =>
+      // Grooming (fixed category id 1) is priced by the Grooming Tiers below.
+      row.category_id === 1 ? (
+        <span className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">
+          By pet weight (tiers)
+        </span>
+      ) : value != null ? (
         <span className="font-medium text-slate-900 dark:text-slate-100">
           ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </span>
@@ -666,6 +698,30 @@ export const MaintenanceServiceColumns = [
         {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
       </span>
     ),
+  },
+];
+
+export const MaintenanceGroomingTierColumns = [
+  { key: "tier_name", label: "TIER" },
+  {
+    key: "max_weight_kg",
+    label: "PET WEIGHT",
+    render: (value) =>
+      value != null ? `Up to ${Number(value)} kg` : "No upper limit",
+  },
+  {
+    key: "price",
+    label: "PRICE",
+    render: (value) => (
+      <span className="font-medium text-slate-900 dark:text-slate-100">
+        ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+      </span>
+    ),
+  },
+  {
+    key: "description",
+    label: "DESCRIPTION",
+    render: (value) => value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
   },
 ];
 

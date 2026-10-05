@@ -59,4 +59,40 @@ export default class MaintenanceController {
       return sendError(res, error, "Failed to update service status.");
     }
   }
+
+  async getGroomingTiers(req, res) {
+    try {
+      return res.status(200).json(await maintenanceService.getGroomingTiers());
+    } catch (error) {
+      return sendError(res, error, "Failed to fetch grooming tiers.");
+    }
+  }
+
+  async addGroomingTier(req, res) {
+    try {
+      return res.status(201).json(await maintenanceService.addGroomingTier(req.body));
+    } catch (error) {
+      return sendError(res, error, "Failed to add grooming tier.");
+    }
+  }
+
+  async updateGroomingTier(req, res) {
+    try {
+      const tier = await maintenanceService.updateGroomingTier({
+        ...req.body,
+        tier_id: req.params.tier_id,
+      });
+      return res.status(200).json(tier);
+    } catch (error) {
+      return sendError(res, error, "Failed to update grooming tier.");
+    }
+  }
+
+  async deleteGroomingTier(req, res) {
+    try {
+      return res.status(200).json(await maintenanceService.deleteGroomingTier(req.params.tier_id));
+    } catch (error) {
+      return sendError(res, error, "Failed to delete grooming tier.");
+    }
+  }
 }

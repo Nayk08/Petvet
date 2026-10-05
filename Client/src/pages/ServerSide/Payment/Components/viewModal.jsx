@@ -9,6 +9,9 @@ import {
   Calendar,
   CreditCard,
   Hash,
+  PlusCircle,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -21,7 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { fetchPaymentById } from "@/api/http";
-import { formatDate } from "@/utils/COLUMNS";
+import { formatDate, formatDateTime } from "@/utils/COLUMNS";
 
 export function Component() {
   const navigate = useNavigate();
@@ -82,13 +85,15 @@ export function Component() {
     }
   };
 
+  const isPaid = payment?.payment_status_name === "Completed";
+
   const statusStyle = payment
     ? getStatusBadge(payment.payment_status_name)
     : null;
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-md p-0 overflow-hidden shadow-xl rounded-2xl transition-colors">
+      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-md p-0 max-h-[90vh] overflow-y-auto shadow-xl rounded-2xl transition-colors">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
           <div className="flex items-center gap-3">
@@ -176,6 +181,44 @@ export function Component() {
                     onCopy={() => copyToClipboard(payment.gcash_reference_number)}
                   />
                 )}
+                {payment.payment_status_name === "Partially Paid" && (
+                  <>
+                    <FieldCard
+                      icon={<CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />}
+                      label="Deposit paid online"
+                      value={`₱${Number(payment.gcash_amount ?? 0).toFixed(2)}`}
+                    />
+                    <FieldCard
+                      icon={<CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />}
+                      label="Balance due at clinic"
+                      value={`₱${(Number(payment.total_amount) - Number(payment.gcash_amount ?? 0)).toFixed(2)}`}
+                    />
+                  </>
+                )}
+                {payment.original_total != null && (
+                  <FieldCard
+                    icon={<CreditCard className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />}
+                    label="Deposit kept (no-show)"
+                    value={`Bill was ₱${Number(payment.original_total).toFixed(2)}`}
+                  />
+                )}
+                {payment.balance_gcash_reference && (
+                  <FieldCard
+                    icon={<Hash className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />}
+                    label="Balance GCash Reference"
+                    value={payment.balance_gcash_reference}
+                    onCopy={() => copyToClipboard(payment.balance_gcash_reference)}
+                  />
+                )}
+                {payment.additional_fee_label && (
+                  <FieldCard
+                    icon={
+                      <Receipt className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    }
+                    label={`Add-on: ${payment.additional_fee_label}`}
+                    value={`₱${Number(payment.additional_fee_amount ?? 0).toFixed(2)}`}
+                  />
+                )}
                 {payment.payment_method === "Split" && (
                   <>
                     <FieldCard
@@ -240,6 +283,48 @@ export function Component() {
                   </div>
                 </div>
               )}
+
+              {/* Record history: who created / updated / deleted it, and when */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+                  Record History
+                </p>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 divide-y divide-slate-200 dark:divide-slate-800">
+                  <HistoryRow
+                    icon={<PlusCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                    label="Created"
+                    date={payment.date_created}
+                    by={payment.created_by}
+                  />
+                  {/* Who took the money: completing a payment is its last
+                      update, so this matches the receipt's "Served By". A
+                      sale paid at checkout has no update — its creator took it. */}
+                  {isPaid && (
+                    <HistoryRow
+                      icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                      label="Processed"
+                      date={payment.date_updated ?? payment.date_created}
+                      by={payment.updated_by ?? payment.created_by}
+                    />
+                  )}
+                  {!isPaid && !payment.is_deleted && payment.date_updated && (
+                    <HistoryRow
+                      icon={<Pencil className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-300" />}
+                      label="Last updated"
+                      date={payment.date_updated}
+                      by={payment.updated_by}
+                    />
+                  )}
+                  {payment.is_deleted && (
+                    <HistoryRow
+                      icon={<Trash2 className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />}
+                      label="Deleted / cancelled"
+                      date={payment.date_deleted}
+                      by={payment.deleted_by}
+                    />
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -256,6 +341,23 @@ export function Component() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function HistoryRow({ icon, label, date, by }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs">
+      <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white">
+        {icon}
+        {label}
+      </span>
+      <span className="text-right text-slate-600 dark:text-slate-300">
+        {formatDateTime(date) || "date not recorded"}
+        <span className="block font-semibold text-slate-900 dark:text-white">
+          by {by || "unknown"}
+        </span>
+      </span>
+    </div>
   );
 }
 

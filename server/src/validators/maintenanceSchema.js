@@ -58,3 +58,27 @@ export const serviceIdParamSchema = z.object({
 export const setServiceActiveSchema = z.object({
   is_active: z.boolean({ error: "is_active must be true or false" }),
 });
+
+// Grooming price tiers: a pet is priced by the first tier whose
+// max_weight_kg covers its weight; blank max = no upper limit (largest tier).
+export const addGroomingTierSchema = z.object({
+  tier_name: z.string().trim().min(1, "Tier name is required").max(20),
+  max_weight_kg: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || (!isNaN(Number(v)) && Number(v) > 0), {
+      message: "Max weight must be greater than 0",
+    })
+    .optional()
+    .or(z.literal("")),
+  price: z.coerce
+    .number({ error: "Price must be a valid number" })
+    .positive("Price must be more than 0"),
+  description: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+export const updateGroomingTierSchema = addGroomingTierSchema.partial();
+
+export const tierIdParamSchema = z.object({
+  tier_id: z.coerce.number({ error: "Invalid tier ID" }).int().positive("Invalid tier ID"),
+});

@@ -416,7 +416,7 @@ export default class ClientRecordsModel {
           JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
           JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
           WHERE a.client_id = $1 AND p.is_deleted IS NOT TRUE
-            AND LOWER(TRIM(ps.payment_status_name)) IN ('pending', 'awaiting verification', 'refund needed'))::int AS payments`,
+            AND LOWER(TRIM(ps.payment_status_name)) IN ('pending', 'awaiting verification', 'partially paid', 'refund needed'))::int AS payments`,
       [client_id],
     );
     return res.rows[0];

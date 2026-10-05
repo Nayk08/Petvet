@@ -130,11 +130,29 @@ export function Component() {
             )}
 
             <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500 dark:text-slate-400">Amount</span>
-              <span className="font-bold text-lg text-cyan-700 dark:text-cyan-400">
+              <span className="text-slate-500 dark:text-slate-400">Total bill</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
                 ₱{Number(payment.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </span>
             </div>
+
+            {/* What the client says they sent — check it against the screenshot. */}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500 dark:text-slate-400">Amount sent (check screenshot)</span>
+              <span className="font-bold text-lg text-cyan-700 dark:text-cyan-400">
+                ₱{Number(payment.amount_sent ?? payment.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {payment.amount_sent != null &&
+              Number(payment.amount_sent) < Number(payment.total_amount) && (
+                <p className="text-xs rounded-md bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 px-3 py-2">
+                  Partial payment. Approving confirms the appointment and marks the bill
+                  Partially Paid — collect the remaining ₱
+                  {(Number(payment.total_amount) - Number(payment.amount_sent)).toFixed(2)} at the
+                  clinic with Process.
+                </p>
+              )}
 
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-500 dark:text-slate-400">
@@ -229,6 +247,11 @@ export async function action({ params, request }) {
   const formData = await request.formData();
   const decision = formData.get("decision");
 
+  // A partial proof is approved as a deposit, not a completed payment.
+  const cached = queryClient.getQueryData(["Payment", params.payment_id]);
+  const isDeposit =
+    cached?.amount_sent != null && Number(cached.amount_sent) < Number(cached.total_amount);
+
   try {
     await verifyPayment(params.payment_id, decision);
   } catch (error) {
@@ -268,7 +291,9 @@ export async function action({ params, request }) {
         "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-500 flex items-center gap-3 p-4 rounded-lg shadow-lg",
       description:
         decision === "approve"
-          ? "The payment is now marked Completed."
+          ? isDeposit
+            ? "Deposit verified: the bill is Partially Paid. Collect the balance at the clinic."
+            : "The payment is now marked Completed."
           : "The client can submit a corrected reference/screenshot.",
       descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
       duration: 2000,

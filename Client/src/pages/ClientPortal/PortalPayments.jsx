@@ -17,6 +17,7 @@ const PAYMENT_BADGE = {
   Completed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
   Cancelled: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
   "Refund Needed": "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800",
+  "Partially Paid": "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-800",
 };
 
 export function Component() {
@@ -94,6 +95,12 @@ export function Component() {
                         {Number(p.total_amount) > 0
                           ? `₱${Number(p.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                           : "Priced at clinic"}
+                        {p.payment_status_name === "Partially Paid" && (
+                          <span className="block text-xs font-medium text-teal-700 dark:text-teal-300">
+                            Paid ₱{Number(p.gcash_amount ?? 0).toFixed(2)} · pay ₱
+                            {(Number(p.total_amount) - Number(p.gcash_amount ?? 0)).toFixed(2)} at the clinic
+                          </span>
+                        )}
                       </span>
                       {canPay && (
                         <Button size="sm" onClick={() => setPayingPaymentId(p.payment_id)} className="gap-1">

@@ -3,6 +3,7 @@ import {
   validatePaymentMethod,
   resolvePaymentSplit,
 } from "../../../utils/validatePaymentMethod.js";
+import { isFullAmount, balanceDue } from "../../../utils/deposit.js";
 
 const paymentModel = new PaymentModel();
 
@@ -96,6 +97,10 @@ export default class PaymentService {
     } = {},
   ) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
+    // A verified online deposit: "Process" collects only the balance.
+    if (payment.payment_status_name === "Partially Paid" && expected_status === "Pending") {
+      return this.collectBalance(payment, updated_by, { payment_method, gcash_reference_number });
+    }
     if (payment.payment_status_name !== expected_status) {
       const err = new Error(
         `Only ${expected_status.toLowerCase()} payments can be completed here. Payment is already ${payment.payment_status_name}.`,
@@ -165,6 +170,68 @@ export default class PaymentService {
       }
       throw error;
     }
+  }
+
+  // Balance of a Partially Paid bill (GCash deposit already received), paid
+  // at the clinic in cash or by a second GCash transfer. Completes the bill.
+  async collectBalance(payment, updated_by, { payment_method, gcash_reference_number }) {
+    const deposit = Number(payment.gcash_amount ?? 0);
+    const balance = balanceDue(payment.total_amount, deposit);
+    if (!(balance > 0)) {
+      const err = new Error("This bill has no balance left to collect.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    let fields;
+    if (payment_method === "Cash") {
+      // Cash balance + GCash deposit: recorded like a split payment.
+      fields = {
+        payment_method: "Split",
+        cash_amount: balance,
+        gcash_amount: deposit,
+        balance_gcash_reference: null,
+      };
+    } else if (payment_method === "GCash") {
+      validatePaymentMethod({ payment_method: "GCash", gcash_reference_number });
+      if (gcash_reference_number === payment.gcash_reference_number) {
+        const err = new Error("That's the deposit's reference number — enter the reference of the balance transfer.");
+        err.statusCode = 400;
+        throw err;
+      }
+      if (
+        await paymentModel.isGcashReferenceInUse({
+          gcash_reference_number,
+          excludePaymentId: payment.payment_id,
+        })
+      ) {
+        const err = new Error("This GCash reference number has already been used for another payment.");
+        err.statusCode = 409;
+        throw err;
+      }
+      fields = {
+        payment_method: "GCash",
+        cash_amount: 0,
+        gcash_amount: Number(payment.total_amount),
+        balance_gcash_reference: gcash_reference_number,
+      };
+    } else {
+      const err = new Error("The balance can be paid in cash or by GCash.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const completed = await paymentModel.completeBalance({
+      payment_id: payment.payment_id,
+      updated_by,
+      ...fields,
+    });
+    if (!completed) {
+      const err = new Error("This balance was just collected by someone else — refresh.");
+      err.statusCode = 409;
+      throw err;
+    }
+    return completed;
   }
 
   async markRefunded(payment_id, updated_by) {
@@ -250,6 +317,7 @@ export default class PaymentService {
     payment_id,
     gcash_reference_number,
     payment_proof_image,
+    amount_sent,
   }) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
 
@@ -301,6 +369,7 @@ export default class PaymentService {
       payment_status_id: awaitingVerificationStatusId,
       gcash_reference_number,
       payment_proof_image,
+      amount_sent,
     });
   }
 
@@ -322,6 +391,23 @@ export default class PaymentService {
       );
       err.statusCode = 409;
       throw err;
+    }
+
+    // A deposit (less than the full bill) → "Partially Paid"; the balance
+    // is collected at the clinic. Proofs sent before deposits existed have
+    // no amount_sent and are full payments.
+    if (
+      decision === "approve" &&
+      payment.amount_sent != null &&
+      !isFullAmount(payment.total_amount, payment.amount_sent)
+    ) {
+      const approved = await paymentModel.approveDeposit({ payment_id, updated_by });
+      if (!approved) {
+        const err = new Error("This payment was just verified by someone else — refresh.");
+        err.statusCode = 409;
+        throw err;
+      }
+      return approved;
     }
 
     if (decision === "approve") {

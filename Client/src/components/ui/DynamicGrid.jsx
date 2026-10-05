@@ -443,7 +443,7 @@ export default function DynamicGrid({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {resolvedActions.length > 0 && (
-                  <TableHead className="py-4 px-4 text-[11px] font-bold text-left text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
+                  <TableHead className="py-4 px-4 text-[11px] font-bold text-center text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
                     Actions
                   </TableHead>
                 )}
@@ -474,7 +474,7 @@ export default function DynamicGrid({
                     >
                       {resolvedActions.length > 0 && (
                         <TableCell className="py-3.5 px-4">
-                          <div className="flex items-center justify-start gap-1.5">
+                          <div className="flex items-center justify-center gap-1.5">
                             {rowActions.length > 0 ? (
                               rowActions.map((action, i) => {
                                 // icon/label/className can be a fixed value or

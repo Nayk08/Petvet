@@ -148,6 +148,22 @@ export default class InventoryModel {
     }
   }
 
+  // Audit trail for one product (all its batches, deleted ones included):
+  // who created / last updated / deleted each batch, and when.
+  async getProductHistory(product_name) {
+    const res = await pool.query(
+      `SELECT product_id, product_name, product_quantity, product_price,
+              product_expiry_date, is_deleted,
+              created_by, date_created, updated_by, date_updated,
+              deleted_by, date_deleted
+       FROM tbl_products
+       WHERE product_name = $1
+       ORDER BY date_created DESC, product_id DESC`,
+      [product_name],
+    );
+    return res.rows;
+  }
+
   async getProductsById(product_id) {
     const client = await pool.connect();
     try {
@@ -568,7 +584,7 @@ export default class InventoryModel {
     try {
       const res = await client.query(
         `UPDATE tbl_products
-         SET is_deleted = false, deleted_by = NULL, updated_by = $2, date_updated = NOW()
+         SET is_deleted = false, deleted_by = NULL, date_deleted = NULL, updated_by = $2, date_updated = NOW()
          WHERE product_id = $1 AND is_deleted = true
          RETURNING *`,
         [product_id, updated_by],
@@ -625,7 +641,7 @@ export default class InventoryModel {
     try {
       const res = await client.query(
         `UPDATE tbl_products
-         SET is_deleted = true, deleted_by = $2, date_updated = NOW()
+         SET is_deleted = true, deleted_by = $2, date_deleted = NOW(), date_updated = NOW()
          WHERE product_id = $1
          RETURNING *`,
         [product_id, deleted_by],
@@ -647,7 +663,7 @@ export default class InventoryModel {
     try {
       const res = await client.query(
         `UPDATE tbl_products
-         SET is_deleted = true, deleted_by = $1, date_updated = NOW()
+         SET is_deleted = true, deleted_by = $1, date_deleted = NOW(), date_updated = NOW()
          WHERE is_deleted = false
            AND product_expiry_date IS NOT NULL
            AND product_expiry_date <= CURRENT_TIMESTAMP

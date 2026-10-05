@@ -16,15 +16,29 @@ export default class ClientPortalController {
       if (!credential) {
         return res.status(400).json({ message: "Missing Google credential" });
       }
-      const { token, client } = await clientPortalService.loginWithGoogle(credential);
-      res.cookie(CLIENT_TOKEN_COOKIE, token, CLIENT_TOKEN_COOKIE_OPTIONS);
+      const result = await clientPortalService.loginWithGoogle(credential);
+      // First-time client: no record yet, so no session — the page shows
+      // the registration step instead.
+      if (result.needs_registration) return res.json(result);
+      res.cookie(CLIENT_TOKEN_COOKIE, result.token, CLIENT_TOKEN_COOKIE_OPTIONS);
       // Deliberately NOT echoing the token back in the body — an httpOnly
       // cookie the browser stores for us defeats the purpose if the JSON
       // response then hands the same token to page JS anyway.
-      res.json({ client });
+      res.json({ client: result.client });
     } catch (error) {
       console.log("Error on Controller loginWithGoogle function");
       sendError(res, error, "Could not sign in with Google. Please try again.");
+    }
+  }
+
+  async registerWithGoogle(req, res) {
+    try {
+      const { token, client } = await clientPortalService.registerWithGoogle(req.body);
+      res.cookie(CLIENT_TOKEN_COOKIE, token, CLIENT_TOKEN_COOKIE_OPTIONS);
+      res.status(201).json({ client });
+    } catch (error) {
+      console.log("Error on Controller registerWithGoogle function");
+      sendError(res, error, "Could not complete registration. Please try again.");
     }
   }
 
@@ -183,6 +197,7 @@ export default class ClientPortalController {
           description: s.description,
           duration_minutes: s.duration_minutes,
           service_price: s.service_price,
+          grooming_tiers: s.grooming_tiers,
         })),
       );
     } catch (error) {

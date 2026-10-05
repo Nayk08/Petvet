@@ -554,6 +554,15 @@ export async function fetchProductBatches({ product_name, signal } = {}) {
   return handleResponse(response, "Failed to fetch product batches");
 }
 
+// Who created / updated / deleted each batch of a product, and when.
+export async function fetchProductHistory({ product_name, signal } = {}) {
+  const response = await fetchWithTimeout(
+    `${baseUrl}/inventory/history/${encodeURIComponent(product_name)}`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch product history");
+}
+
 export async function fetchProductCategories({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/inventory/categories`, {
     signal,
@@ -1453,6 +1462,33 @@ export async function fetchMaintenanceServiceCategories({ signal } = {}) {
   });
   return handleResponse(response, "Failed to fetch service categories");
 }
+
+// Grooming price tiers (Grooming is priced by pet weight).
+export async function fetchMaintenanceGroomingTiers({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/grooming-tiers`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch grooming tiers");
+}
+
+async function sendGroomingTier(method, path, payload, fallbackMessage) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/grooming-tiers${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  return handleResponse(response, fallbackMessage);
+}
+
+export const addMaintenanceGroomingTier = (payload) =>
+  sendGroomingTier("POST", "", payload, "Failed to add grooming tier");
+export const updateMaintenanceGroomingTier = (id, payload) =>
+  sendGroomingTier("PUT", `/${id}`, payload, "Failed to update grooming tier");
+export const deleteMaintenanceGroomingTier = (id) =>
+  sendGroomingTier("DELETE", `/${id}`, null, "Failed to delete grooming tier");
 
 // ─────────────────────────────
 // Analytics
