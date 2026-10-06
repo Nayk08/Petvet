@@ -67,7 +67,7 @@ export function Component() {
   // Set once booking succeeds — opens the GCash payment modal immediately
   // instead of sending the client to Payment History to find it themselves.
   const [booking, setBooking] = useState(null); // { appointmentId, paymentId, amount }
-  // Closed the GCash step without paying: offer "pay later" or "cancel".
+  // Closed the GCash step without paying: cancel, or go back and pay.
   const [askKeepOrCancel, setAskKeepOrCancel] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   // Booked a sub-service with no price yet: show the "coordinate with
@@ -175,6 +175,7 @@ export function Component() {
           appointmentId: result.appointment_id,
           paymentId: result.payment.payment_id,
           amount: result.payment.total_amount,
+          createdAt: result.payment.date_created,
           details: {
             pets_name: selectedPet?.pet_name,
             service_name: selectedService?.appointment_services,
@@ -217,6 +218,14 @@ export function Component() {
       setAskKeepOrCancel(false);
       navigate("/portal/appointments");
     } catch (error) {
+      // The 10-minute hold already ran out: the booking is cancelled anyway.
+      if (/already Cancelled/i.test(error.message)) {
+        await queryClient.invalidateQueries({ queryKey: ["clientPortal"] });
+        setBooking(null);
+        setAskKeepOrCancel(false);
+        navigate("/portal/appointments");
+        return;
+      }
       toast.error("Couldn't cancel the booking", { description: error.message });
     } finally {
       setIsCancelling(false);
@@ -239,8 +248,9 @@ export function Component() {
           Book an Appointment
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Your appointment will be marked Pending — payment is collected at
-          the clinic.
+          After booking, pay the reservation fee (50%) or the full amount by
+          GCash within 10 minutes to confirm your slot. The reservation fee is
+          non-refundable if you don't show up.
         </p>
       </div>
 
@@ -479,6 +489,8 @@ export function Component() {
           amount={booking.amount}
           details={booking.details}
           onClose={closeAfterPayment}
+          closeLabel="Cancel booking"
+          createdAt={booking.createdAt}
         />
       )}
 
@@ -520,14 +532,12 @@ export function Component() {
         open={askKeepOrCancel}
         onOpenChange={(open) => {
           if (open) return;
-          // "Keep & pay later": the booking stays Pending; Pay Now is under Payments.
+          // No "pay later": backing out of this just reopens the payment step.
           setAskKeepOrCancel(false);
-          setBooking(null);
-          navigate("/portal/appointments");
         }}
-        title="Your booking isn't paid yet"
-        description="It's saved as Pending and holds your time slot. Pay any time before the visit from Payments → Pay Now. Unpaid bookings are marked No Show once their time passes."
-        cancelLabel="Keep & pay later"
+        title="Cancel this booking?"
+        description="A booking is only confirmed once you pay the reservation fee (50%) or the full amount. If you leave now, this booking is cancelled and the time slot is released."
+        cancelLabel="Go back to payment"
         confirmLabel="Cancel booking"
         confirmingLabel="Cancelling..."
         isConfirming={isCancelling}

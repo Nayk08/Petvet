@@ -12,17 +12,14 @@ export function minDeposit(total) {
   return fromCents(Math.ceil(toCents(total) * MIN_DEPOSIT_RATIO));
 }
 
-// null when OK, otherwise the message to show the client.
+// null when OK, otherwise the message to show the client. The portal offers
+// exactly two fixed amounts (no typed amount): the 50% reservation fee, or
+// the full bill.
 export function depositError(total, amountSent) {
   const sent = toCents(amountSent);
-  if (!(Number(amountSent) > 0)) return "Enter the amount you sent.";
-  if (sent > toCents(total)) {
-    return `The amount sent can't be more than the total of ₱${Number(total).toFixed(2)}.`;
-  }
-  if (sent < toCents(minDeposit(total))) {
-    return `Send at least ₱${minDeposit(total).toFixed(2)} (50% of ₱${Number(total).toFixed(2)}). The rest is paid at the clinic.`;
-  }
-  return null;
+  if (!(Number(amountSent) > 0)) return "Choose the reservation fee or full payment.";
+  if (sent === toCents(minDeposit(total)) || sent === toCents(total)) return null;
+  return `Pay either the ₱${minDeposit(total).toFixed(2)} reservation fee (50%) or the full ₱${Number(total).toFixed(2)}.`;
 }
 
 export function isFullAmount(total, amountSent) {

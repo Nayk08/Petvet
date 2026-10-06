@@ -414,6 +414,11 @@ const router =
         lazy: () => import("./pages/ServerSide/Maintenance/Maintenance.jsx"),
       },
       {
+        path: "announcements",
+        loader: requirePermission("ANNOUNCEMENTS"),
+        lazy: () => import("./pages/ServerSide/Announcements/Announcements.jsx"),
+      },
+      {
         path: "client-record",
         loader: requirePermission("C_P_RECORDS"),
         lazy: () =>

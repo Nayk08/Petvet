@@ -23,6 +23,10 @@ export default class MaintenanceService {
     return maintenanceModel.setServiceActive(payload);
   }
 
+  async setServiceImage(payload) {
+    return maintenanceModel.setServiceImage(payload);
+  }
+
   async getGroomingTiers() {
     return maintenanceModel.getGroomingTiers();
   }

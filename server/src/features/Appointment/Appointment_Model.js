@@ -76,6 +76,19 @@ function httpError(statusCode, message) {
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
+// The assigned staff member's active role(s), e.g. "Veterinarian" or
+// "Groomer" — shown on payment details. `staffIdSql` is the staff id column.
+export const staffRoleSql = (staffIdSql) => `(
+  SELECT string_agg(ul.user_level, ', ' ORDER BY ul.user_level)
+  FROM tbl_user_level_assignments ula
+  JOIN tbl_user_level ul ON ul.user_level_id = ula.user_level_id AND ul.is_deleted IS NOT TRUE
+  WHERE ula.users_id = ${staffIdSql} AND ula.is_active = true
+)`;
+
+// How long an unpaid ONLINE booking holds its slot before it's cancelled
+// (see expireUnpaidOnlineBookings). The portal's GCash step shows the deadline.
+export const UNPAID_HOLD_MINUTES = 10;
+
 // The price a booking is charged, as SQL. Grooming (fixed category id 1,
 // seeded by migrations/001) is priced by the pet's weight: the smallest tier
 // whose max_weight_kg covers it (NULL max = no upper limit). No weight on
@@ -221,7 +234,45 @@ export default class AppointmentModel {
   // 'Asia/Manila'` converts the current instant to the equivalent Manila
   // wall-clock naive timestamp first, so the comparison is correct
   // regardless of what timezone the DB session itself is set to.
+  // An online booking holds its slot only while the client pays: no GCash
+  // proof within UNPAID_HOLD_MINUTES → booking and bill are cancelled and the
+  // slot is released. Staff bookings (not created by "Client Portal") and
+  // bills with proof sent are never touched. Same lazy-on-read approach as
+  // autoCompletePastAppointments (no job scheduler).
+  async expireUnpaidOnlineBookings() {
+    await pool.query(
+      `WITH expired AS (
+         UPDATE tbl_appointments a
+         SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                      WHERE LOWER(TRIM(appointment_status_name)) = 'cancelled'),
+             is_deleted = true, deleted_by = 'System', date_deleted = NOW(),
+             updated_by = 'System', date_updated = NOW()
+         FROM tbl_payments p
+         WHERE p.appointment_id = a.appointment_id
+           AND p.created_by = 'Client Portal'
+           AND p.is_deleted = false
+           AND p.payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                      WHERE LOWER(TRIM(payment_status_name)) = 'pending')
+           AND p.date_created < NOW() - make_interval(mins => $1)
+           AND a.is_deleted IS NOT TRUE
+           AND a.appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                          WHERE LOWER(TRIM(appointment_status_name)) = 'pending')
+         RETURNING a.appointment_id
+       )
+       UPDATE tbl_payments
+       SET payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                WHERE LOWER(TRIM(payment_status_name)) = 'cancelled'),
+           is_deleted = true, deleted_by = 'System', date_deleted = NOW(),
+           updated_by = 'System', date_updated = NOW()
+       WHERE appointment_id IN (SELECT appointment_id FROM expired)
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE LOWER(TRIM(payment_status_name)) = 'pending')`,
+      [UNPAID_HOLD_MINUTES],
+    );
+  }
+
   async autoCompletePastAppointments() {
+    await this.expireUnpaidOnlineBookings();
     const client = await pool.connect();
     try {
       // Only a paid, checked-in visit ("In Queue") is assumed done once its
@@ -344,7 +395,8 @@ export default class AppointmentModel {
 
     try {
       const res = await client.query(
-        `SELECT * FROM v_appointments WHERE appointment_id = $1`,
+        `SELECT va.*, ${staffRoleSql("va.assigned_staff_id")} AS staff_role
+         FROM v_appointments va WHERE va.appointment_id = $1`,
         [appointment_id],
       );
 
@@ -381,6 +433,8 @@ export default class AppointmentModel {
     notes,
     created_by,
   }) {
+    // Free slots held by abandoned online bookings before checking overlap.
+    await this.expireUnpaidOnlineBookings();
     const client = await pool.connect();
     let queryError = null;
     try {
@@ -470,6 +524,8 @@ export default class AppointmentModel {
     notes,
     updated_by,
   }) {
+    // Free slots held by abandoned online bookings before checking overlap.
+    await this.expireUnpaidOnlineBookings();
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -841,6 +897,8 @@ export default class AppointmentModel {
     additional_fee_amount,
     created_by,
   }) {
+    // Free slots held by abandoned online bookings before checking overlap.
+    await this.expireUnpaidOnlineBookings();
     const client = await pool.connect();
     let queryError = null;
     try {

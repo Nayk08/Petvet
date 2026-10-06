@@ -23,7 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { fetchPaymentById } from "@/api/http";
+import { fetchPaymentById, fetchAppointmentById } from "@/api/http";
+import AppointmentPaymentDetails from "@/components/ui/AppointmentPaymentDetails.jsx";
 import { formatDate, formatDateTime } from "@/utils/COLUMNS";
 
 export function Component() {
@@ -40,6 +41,13 @@ export function Component() {
     queryKey: ["Payment", paymentId],
     queryFn: () => fetchPaymentById(paymentId),
     enabled: !!paymentId,
+  });
+
+  // Appointment bills: what was done, when, and by which vet/groomer.
+  const { data: appointment } = useQuery({
+    queryKey: ["appointment", payment?.appointment_id],
+    queryFn: ({ signal }) => fetchAppointmentById(payment.appointment_id, { signal }),
+    enabled: Boolean(payment?.appointment_id),
   });
 
   function closeModal() {
@@ -146,6 +154,15 @@ export function Component() {
                   </span>
                 </div>
               </div>
+
+              {appointment && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+                    Appointment Details
+                  </p>
+                  <AppointmentPaymentDetails appt={appointment} payment={payment} showClient />
+                </div>
+              )}
 
               {/* Grid Metadata */}
               <div className="grid grid-cols-2 gap-3">

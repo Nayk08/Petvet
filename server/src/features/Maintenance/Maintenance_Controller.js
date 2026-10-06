@@ -60,6 +60,22 @@ export default class MaintenanceController {
     }
   }
 
+  async setServiceImage(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No image uploaded" });
+      }
+      const service = await maintenanceService.setServiceImage({
+        service_id: req.params.service_id,
+        service_image: req.file.path,
+        updated_by: req.session.user.name,
+      });
+      return res.status(200).json(service);
+    } catch (error) {
+      return sendError(res, error, "Failed to upload the service picture.");
+    }
+  }
+
   async getGroomingTiers(req, res) {
     try {
       return res.status(200).json(await maintenanceService.getGroomingTiers());

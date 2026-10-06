@@ -40,58 +40,13 @@ export default class InventoryService {
     }
   }
 
-  async addProduct({
-    created_by,
-    product_image,
-    product_name,
-    product_quantity,
-    product_expiry_date,
-    product_price,
-    category_id,
-  }) {
-    try {
-      const newProduct = await inventoryModel.addProduct({
-        created_by,
-        product_image,
-        product_name,
-        product_quantity,
-        product_expiry_date,
-        product_price,
-        category_id,
-      });
-      return newProduct;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+  // The body was already narrowed by add/updateProductSchema (validateBody).
+  async addProduct(payload) {
+    return inventoryModel.addProduct(payload);
   }
 
-  async updateProduct({
-    updated_by,
-    product_image,
-    product_name,
-    product_quantity,
-    product_expiry_date,
-    product_price,
-    product_id,
-    category_id,
-  }) {
-    try {
-      const updateProduct = await inventoryModel.updateProduct({
-        updated_by,
-        product_image,
-        product_name,
-        product_quantity,
-        product_expiry_date,
-        product_price,
-        product_id,
-        category_id,
-      });
-      return updateProduct;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+  async updateProduct(payload) {
+    return inventoryModel.updateProduct(payload);
   }
 
   async getProductCategories() {

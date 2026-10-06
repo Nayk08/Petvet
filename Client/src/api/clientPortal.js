@@ -13,8 +13,12 @@ const baseUrl = `${rootBaseUrl}/client-portal`;
 async function handlePortalResponse(response, fallbackMessage) {
   if (response.status === 401) {
     // The cookie is missing/expired/invalid — cached portal data is now
-    // stale for a session that no longer exists server-side.
-    queryClient.removeQueries({ queryKey: ["clientPortal"] });
+    // stale for a session that no longer exists server-side. Cleared on the
+    // next tick, not now: removing a query that is still running (e.g. the
+    // route guard's "me" check, which is the request failing right here)
+    // cancels it, so the guard got a CancelledError instead of this 401 and
+    // showed the 500 page instead of redirecting to login.
+    setTimeout(() => queryClient.removeQueries({ queryKey: ["clientPortal"] }), 0);
     if (
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/login")
@@ -154,6 +158,24 @@ export async function fetchClinicSchedule({ start_date, end_date, signal } = {})
 // that helper bounces to /login on a 401, which would be wrong for a page
 // anonymous visitors land on directly.
 // Landing page: the clinic's active services (no sign-in needed).
+export async function fetchPublicAnnouncements({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/public/announcements`, { signal });
+  if (!response.ok) throw new Error("Failed to load announcements");
+  return response.json();
+}
+
+export async function fetchPublicClinicInfo({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/public/clinic-info`, { signal });
+  if (!response.ok) throw new Error("Failed to load clinic info");
+  return response.json();
+}
+
+export async function fetchPublicProducts({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/public/products`, { signal });
+  if (!response.ok) throw new Error("Failed to load products");
+  return response.json();
+}
+
 export async function fetchPublicServices({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/public/services`, { signal });
   if (!response.ok) throw new Error("Failed to load services");

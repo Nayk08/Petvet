@@ -185,6 +185,14 @@ export default class ClientPortalController {
 
   // Public (landing page): the active service catalog, display fields only —
   // no staff names, role settings or audit columns.
+  async getPublicProducts(req, res) {
+    try {
+      res.json(await clientPortalService.getPublicProducts());
+    } catch (error) {
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async getPublicServices(req, res) {
     try {
       const services = await clientPortalService.selectAppointmentServices();
@@ -198,6 +206,7 @@ export default class ClientPortalController {
           duration_minutes: s.duration_minutes,
           service_price: s.service_price,
           grooming_tiers: s.grooming_tiers,
+          service_image: s.service_image,
         })),
       );
     } catch (error) {

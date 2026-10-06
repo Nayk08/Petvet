@@ -35,6 +35,7 @@ import {
   X,
   Settings,
   Wrench,
+  Megaphone,
 } from "lucide-react";
 import ProfilePictureModal from "./ProfilePictureModal.jsx";
 
@@ -50,6 +51,7 @@ const MODULE_ICONS = {
   INVENTORY: Package,
   ANALYTICS: BarChart3,
   MAINTENANCE: Wrench,
+  ANNOUNCEMENTS: Megaphone,
 
   USER_MGMT: Users,
   USER_MGMT_USERS: User,

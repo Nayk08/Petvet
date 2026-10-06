@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button.jsx";
 import { Plus, Minus, ShoppingCart, Search } from "lucide-react";
 import { useCartStore } from "@/stores/useCartStore";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import ProductDetailsModal from "@/components/ui/ProductDetailsModal.jsx";
 
 export default function Cart() {
   const [page, setPage] = useState(1);
@@ -18,6 +19,7 @@ export default function Cart() {
 
   // Local quantity selections before hitting "Add to Cart"
   const [selectedQuantities, setSelectedQuantities] = useState({});
+  const [detailsFor, setDetailsFor] = useState(null); // product shown in the details sheet
   const cartItems = useCartStore((state) => state.cartItems);
   const addToCart = useCartStore((state) => state.addToCart);
   const navigate = useNavigate();
@@ -117,7 +119,7 @@ export default function Cart() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">
-            Items For Sale
+            Products
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Browse available products and add them to your cart.
@@ -242,9 +244,21 @@ export default function Cart() {
                   </div>
 
                   {/* Product Name */}
-                  <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-xs leading-snug line-clamp-2 min-h-[2rem] mb-2">
+                  <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-xs leading-snug line-clamp-2 min-h-[2rem] mb-1">
                     {product.product_name}
                   </h4>
+                  {(product.brand || product.dosage) && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-1">
+                      {[product.brand, product.dosage].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDetailsFor(product)}
+                    className="self-start text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline mb-1.5 cursor-pointer"
+                  >
+                    View details
+                  </button>
 
                   {/* Price Display — a range when this product's batches
                       (different expiry dates) don't all share one price;
@@ -336,6 +350,9 @@ export default function Cart() {
             onPageChange={setPage}
           />
         </>
+      )}
+      {detailsFor && (
+        <ProductDetailsModal product={detailsFor} onClose={() => setDetailsFor(null)} />
       )}
       <Outlet />
     </div>

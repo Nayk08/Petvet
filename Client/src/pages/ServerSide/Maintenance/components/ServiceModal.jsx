@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
-import { addMaintenanceService, updateMaintenanceService } from "@/api/http.js";
+import {
+  addMaintenanceService,
+  updateMaintenanceService,
+  uploadMaintenanceServiceImage,
+} from "@/api/http.js";
 
 const ROLE_OPTIONS = ["Veterinarian", "Groomer", "Staff", "Admin"];
 
@@ -47,11 +51,22 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
     );
   }
 
+  // Optional picture for the landing page card, uploaded after saving.
+  const [imageFile, setImageFile] = useState(null);
+
   const mutation = useMutation({
-    mutationFn: (payload) =>
-      isEditMode
-        ? updateMaintenanceService(service.appointment_services_id, payload)
-        : addMaintenanceService(payload),
+    mutationFn: async (payload) => {
+      const saved = isEditMode
+        ? await updateMaintenanceService(service.appointment_services_id, payload)
+        : await addMaintenanceService(payload);
+      if (imageFile) {
+        await uploadMaintenanceServiceImage(
+          saved?.appointment_services_id ?? service?.appointment_services_id,
+          imageFile,
+        );
+      }
+      return saved;
+    },
     onSuccess: () => {
       toast.success(isEditMode ? "Sub-service updated" : "Sub-service added");
       queryClient.invalidateQueries({ queryKey: ["maintenance-services"] });
@@ -81,7 +96,7 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-2xl transition-colors">
+      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md max-h-[92vh] overflow-y-auto shadow-2xl transition-colors">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-slate-950 dark:text-slate-100">
@@ -189,6 +204,27 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
               </p>
             </div>
             )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                Picture (shown on the landing page)
+              </label>
+              <div className="flex items-center gap-3">
+                {(imageFile || service?.service_image) && (
+                  <img
+                    src={imageFile ? URL.createObjectURL(imageFile) : service.service_image}
+                    alt="Service"
+                    className="h-12 w-12 rounded-md object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  className="text-xs text-slate-600 dark:text-slate-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:bg-slate-100 file:text-slate-700 dark:file:bg-slate-800 dark:file:text-slate-200"
+                />
+              </div>
+            </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block">

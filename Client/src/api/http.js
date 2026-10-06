@@ -8,7 +8,15 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 10,
-      retry: 1,
+      // One retry for server hiccups (5xx, timeouts) — never for 4xx (not
+      // logged in, forbidden, not found, bad input): those won't change on a
+      // retry, and a pending retry kept a failed 401 "in flight" long enough
+      // to be cancelled by the logout cache clear (the CancelledError page).
+      retry: (failureCount, error) => {
+        const status = Number(error?.code);
+        if (status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
     },
   },
 });
@@ -164,10 +172,15 @@ async function handleResponse(
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/login")
     ) {
-      queryClient.clear();
+      // Next tick: clearing now would cancel the very query failing here
+      // (e.g. a route guard's), turning a clean redirect into a
+      // CancelledError page. See also clientPortal.js:handlePortalResponse.
+      setTimeout(() => queryClient.clear(), 0);
       window.location.assign(loginUrlReturningHere());
     }
-    throw new Error("Session expired. Please log in again.");
+    const error = new Error("Session expired. Please log in again.");
+    error.code = 401;
+    throw error;
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -1461,6 +1474,61 @@ export async function fetchMaintenanceServiceCategories({ signal } = {}) {
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch service categories");
+}
+
+// ── Announcements (landing page) + clinic address (map) ──
+export async function fetchAnnouncements({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/announcements`, { signal, credentials: "include" });
+  return handleResponse(response, "Failed to fetch announcements");
+}
+
+// formData: title, caption, is_published, optional image / remove_image.
+async function sendAnnouncement(method, path, formData, fallbackMessage) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/announcements${path}`, {
+    method,
+    headers: { "x-csrf-token": csrfToken }, // browser sets the multipart boundary
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, fallbackMessage);
+}
+
+export const addAnnouncement = (formData) =>
+  sendAnnouncement("POST", "", formData, "Failed to add the announcement");
+export const updateAnnouncement = (id, formData) =>
+  sendAnnouncement("PUT", `/${id}`, formData, "Failed to update the announcement");
+export const deleteAnnouncement = (id) =>
+  sendAnnouncement("DELETE", `/${id}`, undefined, "Failed to delete the announcement");
+
+export async function fetchClinicAddress({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/clinic-address`, { signal, credentials: "include" });
+  return handleResponse(response, "Failed to fetch the clinic address");
+}
+
+export async function saveClinicAddress(clinic_address) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/clinic-address`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    body: JSON.stringify({ clinic_address }),
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to save the clinic address");
+}
+
+// Picture for a sub-service's landing page card (multipart).
+export async function uploadMaintenanceServiceImage(id, file) {
+  const csrfToken = await getCsrfToken();
+  const formData = new FormData();
+  formData.append("service_image", file);
+  const response = await fetchWithTimeout(`${baseUrl}/maintenance/services/${id}/image`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken }, // browser sets the multipart boundary
+    body: formData,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to upload the service picture");
 }
 
 // Grooming price tiers (Grooming is priced by pet weight).

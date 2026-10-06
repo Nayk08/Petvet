@@ -1,6 +1,7 @@
 import express from "express";
 import MaintenanceController from "./Maintenance_Controller.js";
 import hasPermission from "../../middleware/has-permission.js";
+import { uploadServiceImage } from "../../middleware/upload.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import {
   addServiceSchema,
@@ -54,6 +55,15 @@ router.patch(
   validateParams(serviceIdParamSchema),
   validateBody(setServiceActiveSchema),
   (req, res) => maintenanceController.setServiceActive(req, res),
+);
+
+// Picture for the landing page's service card (multipart, field "service_image").
+router.patch(
+  "/maintenance/services/:service_id/image",
+  hasPermission("MAINTENANCE", "can_edit"),
+  validateParams(serviceIdParamSchema),
+  uploadServiceImage.single("service_image"),
+  (req, res) => maintenanceController.setServiceImage(req, res),
 );
 
 // ── Grooming price tiers (Grooming category is priced by pet weight) ──

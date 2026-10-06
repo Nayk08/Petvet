@@ -27,6 +27,7 @@ import DashboardRoute from "./src/features/Dashboard/Dashboard_Route.js";
 import AnalyticsRoute from "./src/features/Analytics/Analytics_Route.js";
 import ClientPortalRoute from "./src/features/ClientPortal/ClientPortal_Route.js";
 import MaintenanceRoute from "./src/features/Maintenance/Maintenance_Route.js";
+import AnnouncementsRoute from "./src/features/Announcements/Announcements_Route.js";
 import MedicalRecordsRoute from "./src/features/MedicalRecords/MedicalRecords_Route.js";
 
 const app = express();
@@ -115,6 +116,7 @@ app.use("/api", isAuth, doubleCsrfProtection, DashboardRoute);
 app.use("/api", isAuth, doubleCsrfProtection, AnalyticsRoute);
 app.use("/api", isAuth, doubleCsrfProtection, MaintenanceRoute);
 app.use("/api", isAuth, doubleCsrfProtection, MedicalRecordsRoute);
+app.use("/api", isAuth, doubleCsrfProtection, AnnouncementsRoute);
 
 // --- 404 handler (unmatched routes) ---
 app.use((req, res) => {

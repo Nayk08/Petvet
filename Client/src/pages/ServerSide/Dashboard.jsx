@@ -40,6 +40,26 @@ const REVENUE_MODALS = {
 // Live date/time for the "Today's Live Queue" widget — makes it clear the
 // table below is scoped to appointments scheduled for THIS calendar date,
 // and ticks over automatically at midnight without needing a page refresh.
+// Big clock in the Dashboard header — always clinic (Manila) time.
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const opts = { timeZone: "Asia/Manila" };
+  return (
+    <div className="mb-1">
+      <p className="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+        {now.toLocaleTimeString("en-US", { ...opts, hour: "numeric", minute: "2-digit", second: "2-digit" })}
+      </p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {now.toLocaleDateString("en-US", { ...opts, weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+      </p>
+    </div>
+  );
+}
+
 function LiveClock() {
   const [now, setNow] = useState(() => new Date());
 
@@ -239,11 +259,17 @@ export function Component() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
             Welcome Back, {currentUserData?.user?.name ?? "User"}!
           </h1>
+          {currentUserData?.user?.role && (
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+              {currentUserData.user.role}
+            </p>
+          )}
           <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
             Here is what's happening at PetVet clinic today.
           </p>
         </div>
         <div className="text-right">
+          <HeaderClock />
           <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
             Clinic Status: Open
           </p>

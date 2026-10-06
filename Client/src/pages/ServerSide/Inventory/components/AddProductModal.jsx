@@ -155,7 +155,7 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-md shadow-xl rounded-xl overflow-hidden p-6 transition-colors duration-200">
+      <DialogContent className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:max-w-lg max-h-[92vh] overflow-y-auto shadow-xl rounded-xl p-6 transition-colors duration-200">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
             {isEditMode ? "Edit Product" : "Add New Product"}
@@ -232,6 +232,57 @@ export function Component() {
               />
             </div>
 
+            {/* Product details — mainly for medicines; all optional */}
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                ["brand", "Brand", "e.g. Bravecto"],
+                ["dosage", "Dosage / Strength", "e.g. 250 mg"],
+              ].map(([field, label, placeholder]) => (
+                <div key={field} className="space-y-1.5">
+                  <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                    {label}
+                  </label>
+                  <Input
+                    name={field}
+                    placeholder={placeholder}
+                    maxLength={100}
+                    defaultValue={data?.[field] ?? ""}
+                    className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-10 rounded-lg"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                Unit / Form
+              </label>
+              <Input
+                name="unit"
+                placeholder="e.g. tablet, 100 ml bottle, sack"
+                maxLength={50}
+                defaultValue={data?.unit ?? ""}
+                className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 h-10 rounded-lg"
+              />
+            </div>
+            {[
+              ["purpose", "Purpose / What it's for", "e.g. Treats fleas and ticks for 12 weeks", 1000],
+              ["description", "Description / Notes", "Directions, warnings, storage, etc.", 2000],
+            ].map(([field, label, placeholder, max]) => (
+              <div key={field} className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                  {label}
+                </label>
+                <textarea
+                  name={field}
+                  rows={2}
+                  maxLength={max}
+                  placeholder={placeholder}
+                  defaultValue={data?.[field] ?? ""}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+            ))}
+
             {/* Split Row for Quantity & Price */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -251,7 +302,7 @@ export function Component() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Price ($)
+                  Price (₱)
                 </label>
                 <Input
                   name="product_price"

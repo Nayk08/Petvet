@@ -116,6 +116,7 @@ export default class ClientPortalService {
   }
 
   async getMyAppointments({ client_id, page, limit, search, filters }) {
+    await appointmentService.expireUnpaidOnlineBookings();
     return clientPortalModel.getMyAppointments({
       client_id,
       page,
@@ -126,6 +127,7 @@ export default class ClientPortalService {
   }
 
   async getMyPayments({ client_id, page, limit }) {
+    await appointmentService.expireUnpaidOnlineBookings(); // no "Pay Now" on an expired hold
     return clientPortalModel.getMyPayments({ client_id, page, limit });
   }
 
@@ -231,11 +233,14 @@ export default class ClientPortalService {
     });
   }
 
+  // Both show which slots are taken — release abandoned online bookings first.
   async getClinicSchedule({ start_date, end_date }) {
+    await appointmentService.expireUnpaidOnlineBookings();
     return clientPortalModel.getClinicSchedule({ start_date, end_date });
   }
 
   async getStaffBookedSlots({ assigned_staff_id, appointment_date }) {
+    await appointmentService.expireUnpaidOnlineBookings();
     return clientPortalModel.getStaffBookedSlots({
       assigned_staff_id,
       appointment_date,
@@ -251,6 +256,10 @@ export default class ClientPortalService {
 
   async selectGender() {
     return clientRecordsService.selectGender();
+  }
+
+  async getPublicProducts() {
+    return clientPortalModel.getPublicProducts();
   }
 
   async selectAppointmentServices() {
@@ -359,7 +368,17 @@ export default class ClientPortalService {
     amount_paid,
     payment_proof_image,
   }) {
+    // Apply the 10-minute hold first, so a late proof is refused consistently.
+    await appointmentService.expireUnpaidOnlineBookings();
     const payment = await paymentService.getPaymentById(payment_id); // throws 404 if missing
+
+    if (payment.is_deleted && payment.deleted_by === "System") {
+      const err = new Error(
+        "This booking expired because no payment was submitted within 10 minutes, and the time slot was released. Please book again. If you already sent money by GCash, contact the clinic with your reference number.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
 
     if (!payment.appointment_id) {
       const err = new Error("Payment not found");

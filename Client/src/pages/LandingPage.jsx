@@ -23,15 +23,20 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarClock,
+  PawPrint,
 } from "lucide-react";
 import { Link, redirect } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
-import { fetchPublicClinicSchedule, fetchPublicServices } from "@/api/clientPortal.js";
+import {
+  fetchPublicClinicSchedule,
+  fetchPublicServices,
+  fetchPublicProducts,
+  fetchPublicAnnouncements,
+  fetchPublicClinicInfo,
+} from "@/api/clientPortal.js";
+import ClinicMap from "@/components/ui/ClinicMap.jsx";
+import ProductDetailsModal from "@/components/ui/ProductDetailsModal.jsx";
 
-import petvetA1 from "../assets/petVet/petvet-img.jpg";
-import petvetA2 from "../assets/petVet/petvet-img2.jpg";
-import petvetA3 from "../assets/petVet/petvet-img3.jpg";
-import petvetA4 from "../assets/petVet/petvet-img4.jpg";
 import petvetC1 from "../assets/petVet/petvet-customer1.jpg";
 import petvetC2 from "../assets/petVet/petvet-customer2.jpg";
 import petvetC3 from "../assets/petVet/petvet-customer3.jpg";
@@ -108,10 +113,22 @@ export default function LandingPage() {
               Services & Hours
             </a>
             <a
+              href="#products"
+              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Products
+            </a>
+            <a
               href="#calendar"
               className="hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
               Live Calendar
+            </a>
+            <a
+              href="#location"
+              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Location
             </a>
             <a
               href="#announcements"
@@ -259,6 +276,25 @@ export default function LandingPage() {
 
         <hr className="border-zinc-200 dark:border-zinc-800" />
 
+        {/* Products — photos and full details (brand, purpose, dosage, price) */}
+        <section
+          id="products"
+          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+        >
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
+              Our Products
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400 mt-2">
+              Pet food, medicines, vaccines and supplies available at the
+              clinic. Tap a product to see its full details.
+            </p>
+          </div>
+          <ProductsCatalog />
+        </section>
+
+        <hr className="border-zinc-200 dark:border-zinc-800" />
+
         {/* Clinic Policies & Hours Section */}
         <section
           id="hours"
@@ -346,6 +382,24 @@ export default function LandingPage() {
 
         <hr className="border-zinc-200 dark:border-zinc-800" />
 
+        {/* Location — map of the clinic address the admin set */}
+        <section
+          id="location"
+          className="container px-4 md:px-6 py-20 max-w-4xl mx-auto"
+        >
+          <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-8">
+            <div className="p-2 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 mb-3">
+              <MapPin className="h-6 w-6" />
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
+              Find Us
+            </h2>
+          </div>
+          <ClinicLocation />
+        </section>
+
+        <hr className="border-zinc-200 dark:border-zinc-800" />
+
         {/* Announcements Bulletin Section */}
         <section
           id="announcements"
@@ -364,44 +418,8 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <AnnouncementCard
-              img={petvetA1}
-              badge="Traffic Notice"
-              borderColor="border-t-amber-500"
-              badgeColor="text-amber-600 dark:text-amber-400"
-              title="Weekend Volumes"
-              description="We are experiencing heavy client volumes (30 to 40 daily pets) during weekend afternoons. Please utilize your client dashboard to reserve slots ahead."
-              onOpenImage={setActiveImage}
-            />
-            <AnnouncementCard
-              img={petvetA2}
-              badge="Medical Operations"
-              borderColor="border-t-red-500"
-              badgeColor="text-red-600 dark:text-red-400"
-              title="Wednesday Vets Off"
-              description="Reminder: Our veterinarians do not hold standard clinic hours on Wednesdays. Emergency treatments must be requested explicitly via our primary portal."
-              onOpenImage={setActiveImage}
-            />
-            <AnnouncementCard
-              img={petvetA3}
-              badge="Grooming Update"
-              borderColor="border-t-green-500"
-              badgeColor="text-green-600 dark:text-green-400"
-              title="Sunday Grooming Close"
-              description="Grooming service bays are fully closed on Sundays. Each groomer caps daily volume between 5 to 10 pets maximum from Mon-Sat."
-              onOpenImage={setActiveImage}
-            />
-            <AnnouncementCard
-              img={petvetA4}
-              badge="Inventory Restock"
-              borderColor="border-t-blue-500"
-              badgeColor="text-blue-600 dark:text-blue-400"
-              title="Supplies & Vitamins"
-              description="Fast-selling pet foods, shampoos, and vital medications are fully restocked. Our live tracking module ensures clean expiration date oversight."
-              onOpenImage={setActiveImage}
-            />
-          </div>
+          {/* Managed by the admin on the staff Announcements page. */}
+          <AnnouncementsList onOpenImage={setActiveImage} />
 
           {/* Email Newsletter Subscription Form */}
           <div className="mt-12 max-w-xl mx-auto bg-zinc-50 dark:bg-[#0e1121] rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 text-center flex flex-col items-center gap-4">
@@ -782,6 +800,19 @@ function ServicesList() {
                 key={s.appointment_services_id}
                 className="flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]"
               >
+                {/* Picture uploaded in Maintenance; a soft placeholder until then. */}
+                {s.service_image ? (
+                  <img
+                    src={s.service_image}
+                    alt={s.appointment_services}
+                    loading="lazy"
+                    className="w-full aspect-[16/10] object-cover rounded-lg"
+                  />
+                ) : (
+                  <div className="w-full aspect-[16/10] rounded-lg bg-green-500/10 flex items-center justify-center text-green-600 dark:text-green-400">
+                    <PawPrint className="h-10 w-10" />
+                  </div>
+                )}
                 <h4 className="font-semibold text-zinc-900 dark:text-white">
                   {s.appointment_services}
                 </h4>
@@ -815,6 +846,157 @@ function ServicesList() {
   );
 }
 
+// In-stock products with their photos; tap one for the full details
+// (brand, purpose, dosage, expiry, price).
+function ProductsCatalog() {
+  const [products, setProducts] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublicProducts({ signal: controller.signal })
+      .then(setProducts)
+      .catch((err) => {
+        if (err.name !== "AbortError") setFailed(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (failed) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        Couldn't load our products right now — please try again later.
+      </p>
+    );
+  }
+  if (!products) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">Loading products...</p>
+    );
+  }
+
+  const categoryOf = (p) => p.category_name ?? "Other";
+  const byCategory = [...new Set(products.map(categoryOf))].map(
+    (name) => [name, products.filter((p) => categoryOf(p) === name)],
+  );
+  // Category filter + name/brand search narrow what the box shows.
+  const term = search.trim().toLowerCase();
+  const visibleGroups = byCategory
+    .filter(([name]) => categoryFilter === "All" || name === categoryFilter)
+    .map(([name, items]) => [
+      name,
+      items.filter(
+        (p) =>
+          !term ||
+          p.product_name.toLowerCase().includes(term) ||
+          (p.brand ?? "").toLowerCase().includes(term),
+      ),
+    ])
+    .filter(([, items]) => items.length > 0);
+  const peso = (v) => `₱${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const chip = (active) =>
+    `px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+      active
+        ? "bg-green-600 text-white border-green-600"
+        : "bg-white dark:bg-[#0e1121] text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
+    }`;
+
+  return (
+    <div className="space-y-4">
+      {/* Filter: category buttons + search */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {[["All", products.length], ...byCategory.map(([name, items]) => [name, items.length])].map(
+            ([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={categoryFilter === name}
+                onClick={() => setCategoryFilter(name)}
+                className={chip(categoryFilter === name)}
+              >
+                {name} <span className="opacity-70">({count})</span>
+              </button>
+            ),
+          )}
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search products or brands..."
+          aria-label="Search products"
+          className="w-full sm:w-80 mx-auto rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0e1121] px-4 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-green-500/50"
+        />
+      </div>
+
+    {/* One scrollable box for the whole catalog; category headings stay
+        pinned at the top of the box while scrolling through that category. */}
+    <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#090b16] p-4 sm:p-6 space-y-8">
+      {visibleGroups.map(([category, items]) => (
+        <div key={category}>
+          <h3 className="sticky -top-4 sm:-top-6 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 bg-white/95 dark:bg-[#090b16]/95 backdrop-blur">
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+            {category}
+            <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({items.length})</span>
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {items.map((p) => (
+              <button
+                key={p.product_name}
+                type="button"
+                onClick={() => setSelected(p)}
+                className="text-left flex flex-col gap-1.5 p-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121] hover:border-green-500/60 transition-colors cursor-pointer"
+              >
+                {p.product_image ? (
+                  <img
+                    src={p.product_image}
+                    alt={p.product_name}
+                    loading="lazy"
+                    className="w-full aspect-square object-cover rounded-lg bg-white"
+                  />
+                ) : (
+                  <div className="w-full aspect-square rounded-lg bg-green-500/10 flex items-center justify-center text-green-600 dark:text-green-400">
+                    <PawPrint className="h-8 w-8" />
+                  </div>
+                )}
+                <span className="text-sm font-semibold text-zinc-900 dark:text-white line-clamp-2">
+                  {p.product_name}
+                </span>
+                {p.brand && (
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{p.brand}</span>
+                )}
+                <span className="mt-auto text-sm font-bold text-green-700 dark:text-green-400">
+                  {Number(p.min_price) === Number(p.max_price)
+                    ? peso(p.min_price)
+                    : `${peso(p.min_price)} – ${peso(p.max_price)}`}
+                </span>
+                <span className="text-[11px] text-green-700/80 dark:text-green-400/80">View details</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {visibleGroups.length === 0 && (
+        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 py-10">
+          No products match your filter.
+        </p>
+      )}
+    </div>
+      {selected && (
+        <ProductDetailsModal
+          product={selected}
+          showStock={false}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 function FeatureCard({ icon, title, description }) {
   return (
     <Card className="bg-zinc-50 dark:bg-[#0e1121] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white">
@@ -831,6 +1013,84 @@ function FeatureCard({ icon, title, description }) {
   );
 }
 
+// Published announcements (picture, title, caption) from the admin.
+const ANNOUNCEMENT_COLORS = [
+  "border-t-amber-500",
+  "border-t-red-500",
+  "border-t-green-500",
+  "border-t-blue-500",
+];
+
+function AnnouncementsList({ onOpenImage }) {
+  const [items, setItems] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublicAnnouncements({ signal: controller.signal })
+      .then(setItems)
+      .catch((err) => {
+        if (err.name !== "AbortError") setFailed(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (failed) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        Couldn't load announcements right now.
+      </p>
+    );
+  }
+  if (!items) {
+    return <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">Loading announcements...</p>;
+  }
+  if (items.length === 0) {
+    return (
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        No announcements right now — check back soon.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {items.map((a, i) => (
+        <AnnouncementCard
+          key={a.announcement_id}
+          img={a.image_url}
+          borderColor={ANNOUNCEMENT_COLORS[i % ANNOUNCEMENT_COLORS.length]}
+          title={a.title}
+          description={a.caption}
+          onOpenImage={onOpenImage}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Where the clinic is — the address is set by the admin (Announcements page).
+function ClinicLocation() {
+  const [address, setAddress] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublicClinicInfo({ signal: controller.signal })
+      .then((info) => setAddress(info.clinic_address))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  if (!address) return null;
+  return (
+    <>
+      <p className="text-center text-zinc-700 dark:text-zinc-300 mb-4 flex items-center justify-center gap-2">
+        <MapPin className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+        {address}
+      </p>
+      <ClinicMap address={address} />
+    </>
+  );
+}
+
 function AnnouncementCard({
   img,
   badge,
@@ -844,6 +1104,7 @@ function AnnouncementCard({
     <Card
       className={`bg-zinc-50 dark:bg-[#0e1121] overflow-hidden flex flex-col shadow-sm border-x-0 border-b-0 border-t-4 ${borderColor} border-zinc-200 dark:border-zinc-800`}
     >
+      {img && (
       <div
         className="aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900 relative group cursor-zoom-in"
         onClick={() => onOpenImage({ src: img, alt: title })}
@@ -857,12 +1118,15 @@ function AnnouncementCard({
           <Maximize2 className="h-4 w-4" /> View Full Image
         </div>
       </div>
+      )}
       <CardContent className="pt-4 flex-1 flex flex-col">
-        <span
-          className={`text-[10px] font-bold uppercase tracking-wider ${badgeColor} block mb-1`}
-        >
-          {badge}
-        </span>
+        {badge && (
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider ${badgeColor} block mb-1`}
+          >
+            {badge}
+          </span>
+        )}
         <h3 className="font-bold text-base mb-1 text-zinc-900 dark:text-white">
           {title}
         </h3>

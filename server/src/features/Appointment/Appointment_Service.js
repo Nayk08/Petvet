@@ -364,6 +364,10 @@ export default class AppointmentService {
     return appointmentModel.selectAppointmentServices();
   }
 
+  async expireUnpaidOnlineBookings() {
+    return appointmentModel.expireUnpaidOnlineBookings();
+  }
+
   async selectStaff() {
     return appointmentModel.selectStaff();
   }

@@ -27,8 +27,16 @@ const newStockExpiryDateSchema = productExpiryDateSchema.refine(
 // wrongly turn "" into 0 before that normalization ever runs.
 const categoryIdSchema = z.string().optional().or(z.literal(""));
 
+// Product details (mainly for medicines) — all optional, blank = not set.
+const optionalText = (max) => z.string().trim().max(max).optional().or(z.literal(""));
+
 export const addProductSchema = z.object({
   product_name: z.string().trim().min(1, "Product name is required").max(255),
+  brand: optionalText(100),
+  purpose: optionalText(1000),
+  dosage: optionalText(100),
+  unit: optionalText(50),
+  description: optionalText(2000),
   product_quantity: z.coerce
     .number({ error: "Quantity must be a valid number" })
     .int()

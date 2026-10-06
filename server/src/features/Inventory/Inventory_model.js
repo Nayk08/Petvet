@@ -15,7 +15,7 @@ const ALLOWED_SEARCH_COLUMNS = ["product_name", "product_id"];
 // grouping happens only here, in the list query: tbl_products, cart
 // checkout, and Analytics all keep working against individual batch rows
 // exactly as before.
-const GROUPED_PRODUCTS_QUERY = `
+export const GROUPED_PRODUCTS_QUERY = `
   SELECT
     p.product_name,
     SUM(p.product_quantity)::int AS product_quantity,
@@ -48,12 +48,23 @@ const GROUPED_PRODUCTS_QUERY = `
       FILTER (WHERE c.category_name IS NOT NULL))[1] AS category_name,
     MAX(p.product_id) AS product_id,
     MAX(p.date_created) AS date_created,
-    MAX(p.date_updated) AS date_updated
+    MAX(p.date_updated) AS date_updated,
+    -- product details from the newest batch that has them
+    (array_agg(p.brand ORDER BY p.date_created DESC) FILTER (WHERE p.brand IS NOT NULL))[1] AS brand,
+    (array_agg(p.purpose ORDER BY p.date_created DESC) FILTER (WHERE p.purpose IS NOT NULL))[1] AS purpose,
+    (array_agg(p.dosage ORDER BY p.date_created DESC) FILTER (WHERE p.dosage IS NOT NULL))[1] AS dosage,
+    (array_agg(p.unit ORDER BY p.date_created DESC) FILTER (WHERE p.unit IS NOT NULL))[1] AS unit,
+    (array_agg(p.description ORDER BY p.date_created DESC) FILTER (WHERE p.description IS NOT NULL))[1] AS description
   FROM tbl_products p
   LEFT JOIN tbl_product_categories c ON c.category_id = p.category_id
   WHERE p.is_deleted = false
   GROUP BY p.product_name
 `;
+
+// Product details (brand, purpose, dosage, unit, description) in column
+// order; blank → NULL.
+const DETAIL_FIELDS = ["brand", "purpose", "dosage", "unit", "description"];
+const productDetails = (src) => DETAIL_FIELDS.map((k) => src?.[k] || null);
 
 export default class InventoryModel {
   // `grouped` is opt-in: the admin Inventory list wants one row per product
@@ -193,7 +204,9 @@ export default class InventoryModel {
     product_expiry_date,
     product_price,
     category_id,
+    ...details
   }) {
+    const d = productDetails(details);
     // "" (a blank date input) is not valid input for a timestamp column —
     // only NULL represents "no expiry set". Normalized once here so both
     // the match query below and the INSERT agree on what "no expiry" means.
@@ -233,6 +246,7 @@ export default class InventoryModel {
                    product_image = COALESCE($3, product_image),
                    category_id = $4,
                    updated_by = $5,
+                   brand = $7, purpose = $8, dosage = $9, unit = $10, description = $11,
                    date_updated = NOW()
                WHERE product_id = $6
                RETURNING *`,
@@ -243,6 +257,7 @@ export default class InventoryModel {
                 categoryId,
                 created_by,
                 product_id,
+                ...d,
               ],
             );
             rows = res.rows;
@@ -254,8 +269,9 @@ export default class InventoryModel {
           product_quantity,
           product_expiry_date,
           product_price,
-          category_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          category_id,
+          brand, purpose, dosage, unit, description)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
               [
                 created_by,
                 product_image,
@@ -264,6 +280,7 @@ export default class InventoryModel {
                 expiryDate,
                 product_price,
                 categoryId,
+                ...d,
               ],
             );
             rows = res.rows;
@@ -296,6 +313,7 @@ export default class InventoryModel {
     product_price,
     product_id,
     category_id,
+    ...details
   }) {
     const client = await pool.connect();
     try {
@@ -308,6 +326,7 @@ export default class InventoryModel {
       product_expiry_date = $5,
       product_price = $6,
       category_id = $7,
+      brand = $9, purpose = $10, dosage = $11, unit = $12, description = $13,
       date_updated = NOW()
       WHERE product_id = $8 RETURNING *`,
         [
@@ -319,6 +338,7 @@ export default class InventoryModel {
           product_price,
           category_id || null,
           product_id,
+          ...productDetails(details),
         ],
       );
       return res.rows[0];
@@ -426,7 +446,8 @@ export default class InventoryModel {
       await client.query("BEGIN");
 
       const currentRes = await client.query(
-        `SELECT product_name, product_expiry_date, product_image, category_id
+        `SELECT product_name, product_expiry_date, product_image, category_id,
+                brand, purpose, dosage, unit, description
          FROM tbl_products
          WHERE product_id = $1 AND is_deleted = false
          FOR UPDATE`,
@@ -492,8 +513,9 @@ export default class InventoryModel {
         } else {
           const res = await client.query(
             `INSERT INTO tbl_products(created_by, product_image, product_name,
-              product_quantity, product_expiry_date, product_price, category_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+              product_quantity, product_expiry_date, product_price, category_id,
+              brand, purpose, dosage, unit, description)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
             [
               updated_by,
               current.product_image,
@@ -502,6 +524,7 @@ export default class InventoryModel {
               newExpiry,
               product_price,
               current.category_id,
+              ...productDetails(current), // a new batch keeps the product details
             ],
           );
           result = res.rows[0];

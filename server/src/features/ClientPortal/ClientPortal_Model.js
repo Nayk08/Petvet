@@ -1,7 +1,23 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
+import { staffRoleSql } from "../Appointment/Appointment_Model.js";
+import { GROUPED_PRODUCTS_QUERY } from "../Inventory/Inventory_model.js";
 
 export default class ClientPortalModel {
+  // Landing page catalog: products that can actually be bought (unexpired
+  // stock), one row per product, display fields only — no stock counts or
+  // audit names.
+  async getPublicProducts() {
+    const res = await pool.query(
+      `SELECT product_name, product_image, category_name, brand, purpose, dosage,
+              unit, description, min_price, max_price, product_expiry_date
+       FROM (${GROUPED_PRODUCTS_QUERY}) g
+       WHERE g.product_name IS NOT NULL AND g.sellable_quantity > 0
+       ORDER BY g.category_name NULLS LAST, g.product_name`,
+    );
+    return res.rows;
+  }
+
   async findClientByEmail(email) {
     const client = await pool.connect();
     try {
@@ -123,7 +139,9 @@ export default class ClientPortalModel {
         // The appointment's details travel with each bill, so the GCash pay
         // window can show what is being paid for.
         baseQuery: `SELECT p.*, va.pets_name, va.service_name, va.staff_name,
-                           va.appointment_date, va.start_time, va.end_time
+                           va.appointment_date, va.start_time, va.end_time,
+                           va.category_name, va.appointment_status_name,
+                           ${staffRoleSql("va.assigned_staff_id")} AS staff_role
                     FROM v_payments p
                     JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
                     JOIN v_appointments va ON va.appointment_id = p.appointment_id

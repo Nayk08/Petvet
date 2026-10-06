@@ -1,5 +1,6 @@
 import express from "express";
 import ClientPortalController from "./ClientPortal_Controller.js";
+import AnnouncementsController from "../Announcements/Announcements_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
 import authLimiter from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
@@ -14,6 +15,7 @@ import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
 const clientPortalController = new ClientPortalController();
+const announcementsController = new AnnouncementsController();
 
 // Public — no client session/token exists yet at this point. The request
 // body is a Google-signed ID token that can't be forged by a cross-site
@@ -49,6 +51,17 @@ router.post(
 // needs an auth gate.
 router.get("/public/clinic-schedule", (req, res) =>
   clientPortalController.getClinicSchedule(req, res),
+);
+// Landing page: published announcements and the clinic address for the map.
+router.get("/public/announcements", (req, res) =>
+  announcementsController.getPublished(req, res),
+);
+router.get("/public/clinic-info", (req, res) =>
+  announcementsController.getClinicAddress(req, res),
+);
+// Landing page product catalog — in-stock products, display fields only.
+router.get("/public/products", (req, res) =>
+  clientPortalController.getPublicProducts(req, res),
 );
 // Landing page service list — same catalog as booking, display fields only.
 router.get("/public/services", (req, res) =>

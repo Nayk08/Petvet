@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { Wallet, Receipt } from "lucide-react";
+import { Wallet, Receipt, Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import AppointmentPaymentDetails from "@/components/ui/AppointmentPaymentDetails.jsx";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { Pagination } from "@/components/ui/Pagination";
 import { PaymentTransactionModalColumns } from "@/utils/COLUMNS";
@@ -24,6 +32,7 @@ export function Component() {
   const { page, limit, setPage, setLimit } = usePagination({ defaultLimit: 10 });
   const [payingPaymentId, setPayingPaymentId] = useState(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState(null);
+  const [detailsRow, setDetailsRow] = useState(null); // payment shown in Details
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["clientPortal", "payments", page, limit],
@@ -99,9 +108,16 @@ export function Component() {
                           <span className="block text-xs font-medium text-teal-700 dark:text-teal-300">
                             Paid ₱{Number(p.gcash_amount ?? 0).toFixed(2)} · pay ₱
                             {(Number(p.total_amount) - Number(p.gcash_amount ?? 0)).toFixed(2)} at the clinic
+                            <span className="block text-amber-700 dark:text-amber-300">
+                              Reservation fee is non-refundable if you don't show up.
+                            </span>
                           </span>
                         )}
                       </span>
+                      <Button size="sm" variant="ghost" onClick={() => setDetailsRow(p)} className="gap-1">
+                        <Info size={14} />
+                        Details
+                      </Button>
                       {canPay && (
                         <Button size="sm" onClick={() => setPayingPaymentId(p.payment_id)} className="gap-1">
                           <Wallet size={14} />
@@ -146,6 +162,13 @@ export function Component() {
                   row.payment_status_name === "Pending" && Number(row.total_amount) > 0,
               },
               {
+                label: "Details",
+                icon: Info,
+                className:
+                  "text-slate-600 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+                onClick: (row) => setDetailsRow(row),
+              },
+              {
                 label: "View Receipt",
                 icon: Receipt,
                 className:
@@ -167,6 +190,44 @@ export function Component() {
         </>
       )}
 
+      {detailsRow && (
+        <Dialog open onOpenChange={(open) => !open && setDetailsRow(null)}>
+          <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Payment Details</DialogTitle>
+              <DialogDescription>
+                {detailsRow.control_number} · {detailsRow.payment_status_name}
+              </DialogDescription>
+            </DialogHeader>
+            <AppointmentPaymentDetails appt={detailsRow} payment={detailsRow} />
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+              {[
+                ["Total", `₱${Number(detailsRow.total_amount).toFixed(2)}`],
+                Number(detailsRow.gcash_amount) > 0 && ["Paid by GCash", `₱${Number(detailsRow.gcash_amount).toFixed(2)}`],
+                Number(detailsRow.cash_amount) > 0 && ["Paid in cash", `₱${Number(detailsRow.cash_amount).toFixed(2)}`],
+                detailsRow.payment_status_name === "Partially Paid" && [
+                  "Balance (pay at clinic)",
+                  `₱${(Number(detailsRow.total_amount) - Number(detailsRow.gcash_amount ?? 0)).toFixed(2)}`,
+                ],
+                detailsRow.gcash_reference_number && ["GCash reference", detailsRow.gcash_reference_number],
+              ]
+                .filter(Boolean)
+                .map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-4 px-3.5 py-2">
+                    <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+                  </div>
+                ))}
+            </div>
+            {detailsRow.amount_sent != null && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                The reservation fee is non-refundable if you don't show up.
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
       {payingPaymentId && (
         <PortalPaySubmitModal
           paymentId={payingPaymentId}
@@ -174,6 +235,11 @@ export function Component() {
             data?.rows?.find((r) => r.payment_id === payingPaymentId)?.total_amount
           }
           details={data?.rows?.find((r) => r.payment_id === payingPaymentId)}
+          // Only online bookings expire; a bill staff created doesn't.
+          createdAt={(() => {
+            const row = data?.rows?.find((r) => r.payment_id === payingPaymentId);
+            return row?.created_by === "Client Portal" ? row.date_created : undefined;
+          })()}
           onClose={() => setPayingPaymentId(null)}
         />
       )}

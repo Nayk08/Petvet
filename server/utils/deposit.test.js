@@ -8,15 +8,15 @@ test("minimum deposit is 50%, rounded up to the centavo", () => {
   assert.equal(minDeposit("0.01"), 0.01);
 });
 
-test("deposit must be between 50% and the full total", () => {
+test("only the 50% reservation fee or the full total is accepted", () => {
   assert.equal(depositError(500, 250), null);
-  assert.equal(depositError(500, 500), null);
+  assert.equal(depositError(500, "500.00"), null);
   assert.equal(depositError("333.33", "166.67"), null);
-  assert.match(depositError("333.33", "166.66"), /at least ₱166\.67/);
-  assert.match(depositError(500, 249.99), /at least ₱250\.00/);
-  assert.match(depositError(500, 500.01), /can't be more/);
-  assert.match(depositError(500, 0), /Enter the amount/);
-  assert.match(depositError(500, "abc"), /Enter the amount/);
+  assert.match(depositError("333.33", "166.66"), /₱166\.67 reservation fee/);
+  assert.match(depositError(500, 300), /either/); // in between: no longer allowed
+  assert.match(depositError(500, 500.01), /either/);
+  assert.match(depositError(500, 0), /Choose/);
+  assert.match(depositError(500, "abc"), /Choose/);
 });
 
 test("full vs partial, and the balance left", () => {

@@ -112,6 +112,18 @@ export default class MaintenanceModel {
     }
   }
 
+  // Picture shown on the landing page's service card (Cloudinary URL).
+  async setServiceImage({ service_id, service_image, updated_by }) {
+    const res = await pool.query(
+      `UPDATE tbl_appointment_services
+       SET service_image = $1, updated_by = $2, date_updated = NOW()
+       WHERE appointment_services_id = $3 RETURNING *`,
+      [service_image, updated_by, service_id],
+    );
+    if (!res.rows.length) throw httpError(404, "Sub-service not found");
+    return res.rows[0];
+  }
+
   // ── Grooming price tiers (price by pet weight, Grooming category only) ──
 
   async getGroomingTiers() {
