@@ -6,7 +6,6 @@ import {
   redirect,
 } from "react-router-dom";
 import { toast } from "sonner";
-import { Trash2, XCircle } from "lucide-react";
 
 import { queryClient, deletePet, fetchPetById } from "@/api/http.js";
 import {
@@ -18,6 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { runOptimistic, removeWhere } from "@/api/optimistic.js";
 
 export function Component() {
   const { state } = useNavigation();
@@ -79,33 +79,18 @@ export async function loader({ params }) {
   });
 }
 
-export async function action({ params }) {
-  try {
-    const petId = params.pets_id;
-    await deletePet(petId);
-    await queryClient.invalidateQueries({ queryKey: ["pet-records"] });
-
-    toast.error("Successfully Deleted", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg dark:border-destructive/30",
-      description: `This ${petId} is successfully deleted!`,
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 2000,
-      icon: <Trash2 className="h-5 w-5 text-destructive" />,
-    });
-
-    return redirect("..");
-  } catch (err) {
-    toast.error("Delete failed", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg dark:border-destructive/30",
-      description:
-        err.message || "Something went wrong while deleting this role.",
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 3000,
-      icon: <XCircle className="h-5 w-5 text-destructive" />,
-    });
-
-    return redirect("..");
-  }
+// Optimistic: the row disappears and the window closes at once; the
+// delete runs in the background and the row comes back if it fails.
+export function action({ params }) {
+  runOptimistic({
+    keys: [["pet-records"]],
+    update: removeWhere("pet_id", params.pets_id),
+    request: () => deletePet(params.pets_id),
+    onSuccess: () => toast.success("Pet deleted"),
+    onError: (err) =>
+      toast.error("Delete failed", {
+        description: err.message || "Something went wrong. The item was restored.",
+      }),
+  });
+  return redirect("..");
 }

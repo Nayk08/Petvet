@@ -5,6 +5,7 @@ import { useQuery, useIsFetching } from "@tanstack/react-query";
 import {
   fetchCurrentUser,
   fetchNavbar,
+  fetchAwaitingPaymentsCount,
   logoutUser,
   queryClient,
 } from "../../api/http";
@@ -109,6 +110,16 @@ export default function Sidebar({ onLogout }) {
   const user = data?.user || currentUser;
   const hasUserId = Boolean(user?.id);
   const modules = data?.modules || [];
+  // Red badge on Payments: client GCash proofs waiting to be verified.
+  const canSeePayments = modules.some((m) => m.module_code === "PAYMENTS");
+  const { data: awaitingData } = useQuery({
+    queryKey: ["awaiting-payments-count"],
+    queryFn: ({ signal }) => fetchAwaitingPaymentsCount({ signal }),
+    enabled: canSeePayments,
+    refetchInterval: 30_000, // new online payments show up within 30 s
+    staleTime: 0,
+  });
+  const awaitingCount = awaitingData?.count ?? 0;
   const userRole = user?.role || "No role";
   const userInitials = (user?.name || user?.email || "User")
     .split(/\s+|@/)
@@ -319,6 +330,15 @@ export default function Sidebar({ onLogout }) {
                   >
                     <IconComponent size={16} />
                     {module.module_name}
+                    {module.module_code === "PAYMENTS" && awaitingCount > 0 && (
+                      <span
+                        className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center"
+                        title={`${awaitingCount} online payment(s) to verify`}
+                        aria-label={`${awaitingCount} online payments to verify`}
+                      >
+                        {awaitingCount > 99 ? "99+" : awaitingCount}
+                      </span>
+                    )}
                   </NavLink>
                 );
               }

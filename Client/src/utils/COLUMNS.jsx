@@ -410,6 +410,50 @@ export const PaymentColumns = [
 // redundant clutter — drop the date-range filter column entirely and
 // strip the status column's filter (keeping the column itself, since it's
 // still useful to see at a glance).
+// Cash / Cashless lists: a Split payment counts only its cash (or GCash)
+// part there, so the amount shows that part, with the full bill under it —
+// otherwise a ₱2,000 cash + ₱450 GCash bill read as ₱2,450 in both lists.
+// Each row is one money-in event from the revenue ledger (v_revenue): a
+// reservation fee when it was verified, or a payment/balance when completed.
+// So the amount is what came in THAT time (by method on the Cash/Cashless
+// lists) and the date is when it came in — the bill's total shows under it.
+export const paymentTransactionColumnsFor = (method) => {
+  const amountKey =
+    method === "cash" ? "received_cash" : method === "gcash" ? "received_gcash" : "received_amount";
+  const peso = (v) => `₱${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  return PaymentTransactionModalColumns.map((col) => {
+    if (col.key === "date_created") {
+      return {
+        ...col,
+        render: (value, row) => (
+          <span className="text-slate-700 dark:text-slate-300">
+            {formatDate(row.received_at ?? value)}
+          </span>
+        ),
+      };
+    }
+    if (col.key !== "total_amount") return col;
+    return {
+      ...col,
+      label: method === "cash" ? "CASH AMOUNT" : method === "gcash" ? "GCASH AMOUNT" : "AMOUNT RECEIVED",
+      render: (value, row) => {
+        const received = row[amountKey] ?? value;
+        return (
+          <span className="font-semibold text-slate-900 dark:text-slate-100">
+            {peso(received)}
+            {(row.kind === "deposit" || Number(received) !== Number(value)) && (
+              <span className="block text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                {row.kind === "deposit" ? "Reservation fee · " : row.amount_sent != null ? "Balance · " : ""}
+                of {peso(value)} ({row.payment_method})
+              </span>
+            )}
+          </span>
+        );
+      },
+    };
+  });
+};
+
 export const PaymentTransactionModalColumns = PaymentColumns.filter(
   (col) => col.key !== "payment_date",
 ).map((col) =>
@@ -628,10 +672,10 @@ export const MaintenanceServiceColumns = [
     key: "service_price",
     label: "PRICE",
     render: (value, row) =>
-      // Grooming (fixed category id 1) is priced by the Grooming Tiers below.
-      row.category_id === 1 ? (
+      // A grooming sub-service with its own weight tiers is priced by them.
+      row.category_id === 1 && row.tier_count > 0 ? (
         <span className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">
-          By pet weight (tiers)
+          By pet weight ({row.tier_count} {row.tier_count === 1 ? "tier" : "tiers"})
         </span>
       ) : value != null ? (
         <span className="font-medium text-slate-900 dark:text-slate-100">

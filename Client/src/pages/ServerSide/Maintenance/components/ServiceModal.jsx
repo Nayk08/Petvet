@@ -1,3 +1,4 @@
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -67,18 +68,36 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
       }
       return saved;
     },
+    // Edit is optimistic: the row updates and the form closes at once
+    // (restored if the save fails). Adding waits — the server creates it.
+    onMutate: (payload) => {
+      if (!isEditMode) return {};
+      const undo = patchCachedRows(
+        [["maintenance-services"]],
+        patchWhere("appointment_services_id", service.appointment_services_id, {
+          ...payload,
+          service_price: payload.service_price === "" ? null : payload.service_price,
+          ...(imageFile && { service_image: URL.createObjectURL(imageFile) }),
+        }),
+      );
+      onClose();
+      return { undo };
+    },
     onSuccess: () => {
       toast.success(isEditMode ? "Sub-service updated" : "Sub-service added");
+      if (!isEditMode) onClose();
+    },
+    onError: (error, _payload, context) => {
+      context?.undo?.();
+      toast.error(isEditMode ? "Could not update service" : "Could not add service", {
+        description: error.message,
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["maintenance-services"] });
       // Booking dropdowns (staff + client portal) read the same catalog.
       queryClient.invalidateQueries({ queryKey: ["appointment-services"] });
       queryClient.invalidateQueries({ queryKey: ["portal-appointment-services"] });
-      onClose();
-    },
-    onError: (error) => {
-      toast.error(isEditMode ? "Could not update service" : "Could not add service", {
-        description: error.message,
-      });
     },
   });
 
@@ -88,7 +107,7 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
       appointment_services: form.appointment_services.trim(),
       category_id: Number(form.category_id),
       description: form.description.trim(),
-      service_price: isGrooming ? "" : String(form.service_price ?? ""),
+      service_price: String(form.service_price ?? ""),
       duration_minutes: Number(form.duration_minutes),
       allowed_roles: selectedRoles,
     });
@@ -178,12 +197,6 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
               />
             </div>
 
-            {isGrooming ? (
-              <p className="text-xs rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-3 py-2">
-                Grooming is priced by the pet's weight. Set the prices in the
-                Grooming Tiers table on the Grooming tab.
-              </p>
-            ) : (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 Price (₱)
@@ -199,11 +212,11 @@ export default function ServiceModal({ service, categories, defaultCategoryId, o
                 className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
               />
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Leave blank for a sub-service priced per case (e.g. surgery) —
-                staff enter the amount when the client pays.
+                {isGrooming
+                  ? "Flat price, used only while this sub-service has no weight tiers. Add tiers on the Grooming tab to price it by the pet's weight."
+                  : "Leave blank for a sub-service priced per case (e.g. surgery) — staff enter the amount when the client pays."}
               </p>
             </div>
-            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">

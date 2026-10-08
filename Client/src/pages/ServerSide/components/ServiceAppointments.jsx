@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CheckCircle2, Stethoscope } from "lucide-react";
 import {
   selectAppointmentStaff,
   fetchCurrentUser,
   completeAppointment,
-  invalidateAppointmentQueries,
 } from "@/api/http";
 import { AppointmentColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
@@ -15,6 +14,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 import AddConsultationModal from "./AddConsultationModal.jsx";
+import { optimisticMutation, patchWhere, APPOINTMENT_LIST_KEYS } from "@/api/optimistic.js";
 
 // Shared page for the per-service appointment queues (Consultation,
 // Grooming, Operation). Booking/rescheduling still only happens from the
@@ -25,7 +25,6 @@ const READ_ONLY_COLUMNS = AppointmentColumns.filter(
 );
 
 export default function ServiceAppointments({ name, queryKey, fetchAppointments, allowMedicalRecord = false }) {
-  const queryClient = useQueryClient();
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
@@ -103,18 +102,18 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
     gcTime: 1000 * 60 * 10,
   });
 
+  // Optimistic: shows Completed at once; undone if the server refuses (e.g.
+  // a deposit's balance isn't collected yet — its message explains).
   const completeMutation = useMutation({
     mutationFn: completeAppointment,
-    onSuccess: () => {
-      toast.success("Appointment marked completed");
-      invalidateAppointmentQueries();
-      queryClient.invalidateQueries({ queryKey: ["TodayQueue"] });
-    },
-    onError: (error) => {
-      toast.error("Could not complete appointment", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: APPOINTMENT_LIST_KEYS,
+      update: (row, id) =>
+        patchWhere("appointment_id", id, { appointment_status_name: "Completed" })(row),
+      onSuccess: () => toast.success("Appointment marked completed"),
+      onError: (error) =>
+        toast.error("Could not complete appointment", { description: error.message }),
+    }),
   });
 
   return (
@@ -139,10 +138,10 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
                 className:
                   "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
                 onClick: (row) => completeMutation.mutate(row.appointment_id),
-                show: (row) => row.appointment_status_name === "In Queue",
-                isLoading: (row) =>
-                  completeMutation.isPending &&
-                  completeMutation.variables === row.appointment_id,
+                // Only on your own appointments (the server enforces it too).
+                show: (row) =>
+                  row.appointment_status_name === "In Queue" &&
+                  String(row.assigned_staff_id) === String(currentUserData?.user?.id),
               },
               {
                 label: "Add Medical Record",

@@ -1,3 +1,4 @@
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -446,13 +447,39 @@ export async function action({ request, params }) {
   const formData = await request.formData();
   const isEditMode = Boolean(params.product_id);
 
+  // Edit is optimistic: the batch (and its Inventory row, when it is the
+  // only batch) shows the new values at once; the form stays open until
+  // saved and the rows are restored if the save fails.
+  let undo;
   try {
     if (isEditMode) {
+      const patch = {
+        product_name: formData.get("product_name"),
+        product_price: formData.get("product_price"),
+        product_quantity: Number(formData.get("product_quantity")),
+        brand: formData.get("brand") || null,
+        dosage: formData.get("dosage") || null,
+        unit: formData.get("unit") || null,
+      };
+      const undoBatches = patchCachedRows(
+        [["inventory-batches"]],
+        patchWhere("product_id", params.product_id, patch),
+      );
+      const undoList = patchCachedRows([["inventory"]], (row) =>
+        String(row?.product_id) === String(params.product_id) && row.batch_count === 1
+          ? { ...row, ...patch, min_price: patch.product_price, max_price: patch.product_price }
+          : row,
+      );
+      undo = () => {
+        undoBatches();
+        undoList();
+      };
       await updateProduct(params.product_id, formData);
     } else {
       await addProduct(formData);
     }
   } catch (error) {
+    undo?.();
     const errorMessage = error.message || "Failed to save product.";
 
     toast.error("Failed to save product", {

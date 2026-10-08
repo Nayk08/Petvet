@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input.jsx";
 import QueryState from "@/components/ui/QueryState";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ClinicMap from "@/components/ui/ClinicMap.jsx";
+import { optimisticMutation, removeWhere, patchWhere, patchCachedRows } from "@/api/optimistic.js";
 import { formatDateTime } from "@/utils/COLUMNS";
 import {
   fetchAnnouncements,
@@ -28,7 +29,6 @@ import {
 // Admin page: announcements shown on the landing page (picture, title,
 // caption) and the clinic address its map pins.
 export function Component() {
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(null); // {} = add, row = edit
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -37,14 +37,16 @@ export function Component() {
     queryFn: ({ signal }) => fetchAnnouncements({ signal }),
   });
 
+  // Optimistic: the card disappears at once (undone on failure).
   const deleteMutation = useMutation({
     mutationFn: deleteAnnouncement,
-    onSuccess: () => {
-      toast.success("Announcement deleted");
-      setConfirmDelete(null);
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
-    },
-    onError: (error) => toast.error("Could not delete", { description: error.message }),
+    ...optimisticMutation({
+      keys: [["announcements"]],
+      update: (row, id) => removeWhere("announcement_id", id)(row),
+      onMutate: () => setConfirmDelete(null),
+      onSuccess: () => toast.success("Announcement deleted"),
+      onError: (error) => toast.error("Could not delete", { description: error.message }),
+    }),
   });
 
   return (
@@ -181,12 +183,31 @@ function AnnouncementModal({ announcement, onClose }) {
         ? updateAnnouncement(announcement.announcement_id, fd)
         : addAnnouncement(fd);
     },
+    // Edit is optimistic: the card updates and the window closes at once
+    // (undone on failure). Adding waits — the server creates the record.
+    onMutate: () => {
+      if (!isEdit) return {};
+      const undo = patchCachedRows(
+        [["announcements"]],
+        patchWhere("announcement_id", announcement.announcement_id, {
+          title: title.trim(),
+          caption: caption.trim(),
+          is_published: isPublished,
+          image_url: preview ?? null,
+        }),
+      );
+      onClose();
+      return { undo };
+    },
     onSuccess: () => {
       toast.success(isEdit ? "Announcement updated" : "Announcement added");
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
-      onClose();
+      if (!isEdit) onClose();
     },
-    onError: (error) => toast.error("Could not save", { description: error.message }),
+    onError: (error, _vars, context) => {
+      context?.undo?.();
+      toast.error("Could not save", { description: error.message });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["announcements"] }),
   });
 
   return (
@@ -275,14 +296,21 @@ function ClinicLocationCard() {
   const [draft, setDraft] = useState(null); // null = not edited yet
   const address = draft ?? data?.clinic_address ?? "";
 
+  // Optimistic: the saved address (and map) show at once; undone on failure.
   const mutation = useMutation({
-    mutationFn: () => saveClinicAddress(address.trim()),
-    onSuccess: () => {
-      toast.success("Clinic location saved");
+    mutationFn: (clinic_address) => saveClinicAddress(clinic_address),
+    onMutate: (clinic_address) => {
+      const previous = queryClient.getQueryData(["clinic-address"]);
+      queryClient.setQueryData(["clinic-address"], { clinic_address });
       setDraft(null);
-      queryClient.invalidateQueries({ queryKey: ["clinic-address"] });
+      return { previous };
     },
-    onError: (error) => toast.error("Could not save", { description: error.message }),
+    onSuccess: () => toast.success("Clinic location saved"),
+    onError: (error, _vars, context) => {
+      queryClient.setQueryData(["clinic-address"], context?.previous);
+      toast.error("Could not save", { description: error.message });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["clinic-address"] }),
   });
 
   return (
@@ -298,7 +326,7 @@ function ClinicLocationCard() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          mutation.mutate();
+          mutation.mutate(address.trim());
         }}
         className="flex flex-col sm:flex-row gap-2"
       >

@@ -6,7 +6,6 @@ import {
   redirect,
 } from "react-router-dom";
 import { toast } from "sonner";
-import { Trash2, XCircle } from "lucide-react";
 
 import {
   deleteProduct,
@@ -22,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { runOptimistic, removeWhere } from "@/api/optimistic.js";
 
 export function Component() {
   const { state } = useNavigation();
@@ -84,34 +84,19 @@ export async function loader({ params }) {
   });
 }
 
-export async function action({ params }) {
-  try {
-    const productId = params.product_id;
-    await deleteProduct(productId);
-    await queryClient.invalidateQueries({ queryKey: ["inventory"] });
-    await queryClient.invalidateQueries({ queryKey: ["inventory-batches"] });
-
-    toast.error("Successfully Deleted", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
-      description: `This ${productId} is successfully deleted!`,
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 2000,
-      icon: <Trash2 className="h-5 w-5 text-destructive" />,
-    });
-
-    return redirect("..");
-  } catch (err) {
-    toast.error("Delete failed", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
-      description:
-        err.message || "Something went wrong while deleting this role.",
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 3000,
-      icon: <XCircle className="h-5 w-5 text-destructive" />,
-    });
-
-    return redirect("..");
-  }
+// Optimistic: the batch disappears and the window closes at once; the
+// delete runs in the background and it comes back if it fails.
+export function action({ params }) {
+  runOptimistic({
+    keys: [["inventory"], ["inventory-batches"]],
+    refresh: [["inventoryProducts"], ["inventory-archived"]],
+    update: removeWhere("product_id", params.product_id),
+    request: () => deleteProduct(params.product_id),
+    onSuccess: () => toast.success("Product deleted"),
+    onError: (err) =>
+      toast.error("Delete failed", {
+        description: err.message || "Something went wrong. The item was restored.",
+      }),
+  });
+  return redirect("..");
 }

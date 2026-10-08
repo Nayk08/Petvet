@@ -8,6 +8,13 @@
   color-scheme: dark;
 }
 
+/* Thin scrollbars with a soft thumb in both themes, instead of the thick
+   default ones (Chrome 121+, Edge, Firefox). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.45) transparent;
+}
+
 @theme {
   /* Define the core theme properties for v4 */
   --color-background: oklch(1 0 0);

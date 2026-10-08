@@ -9,6 +9,7 @@ import {
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { XCircle, CheckCircle2 } from "lucide-react";
+import { runOptimistic, patchWhere, APPOINTMENT_LIST_KEYS } from "@/api/optimistic.js";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +22,6 @@ import { Button } from "@/components/ui/button";
 import {
   fetchAppointmentById,
   cancelAppointment,
-  invalidateAppointmentQueries,
-  queryClient,
 } from "@/api/http";
 
 export function Component() {
@@ -120,20 +119,22 @@ export async function loader({ params, request }) {
   });
 }
 
-export async function action({ params }) {
-  try {
-    await cancelAppointment(params.appointment_id);
-    await invalidateAppointmentQueries();
-    // Cancelling also cancels the appointment's linked Pending payment (see
-    // Appointment_Model.js:deleteAppointment), so refresh both the
-    // Dashboard's widgets and the Payment module's own list too.
-    await queryClient.invalidateQueries({ queryKey: ["TodayAppointments"] });
-    await queryClient.invalidateQueries({ queryKey: ["Payments"] });
-    await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
-    await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
-    await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
+// Optimistic: shows Cancelled (and leaves the calendar) at once and the
+// window closes; the cancel runs in the background and is undone with an
+// error toast if the server refuses (e.g. the 2-hour rule). Cancelling also
+// cancels/flags the linked bill, so the payment lists refresh afterwards.
+export function action({ params }) {
+  runOptimistic({
+    keys: APPOINTMENT_LIST_KEYS,
+    refresh: [["Payments"], ["TodayPayments"], ["RevenueSummary"], ["TodayRevenueSummary"]],
+    update: patchWhere("appointment_id", params.appointment_id, {
+      appointment_status_name: "Cancelled",
+    }),
+    request: () => cancelAppointment(params.appointment_id),
+    onError: (error) =>
+      toast.error("Could not cancel the appointment", {
+        description: error.message || "Something went wrong. It was restored.",
+      }),
+  });
+  return { ok: true };
 }

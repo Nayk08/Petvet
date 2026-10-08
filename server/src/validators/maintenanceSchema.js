@@ -62,6 +62,11 @@ export const setServiceActiveSchema = z.object({
 // Grooming price tiers: a pet is priced by the first tier whose
 // max_weight_kg covers its weight; blank max = no upper limit (largest tier).
 export const addGroomingTierSchema = z.object({
+  // Which grooming sub-service these prices are for (each has its own tiers).
+  appointment_services_id: z.coerce
+    .number({ error: "Choose the grooming sub-service" })
+    .int()
+    .positive("Choose the grooming sub-service"),
   tier_name: z.string().trim().min(1, "Tier name is required").max(20),
   max_weight_kg: z
     .string()
@@ -77,7 +82,10 @@ export const addGroomingTierSchema = z.object({
   description: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
-export const updateGroomingTierSchema = addGroomingTierSchema.partial();
+// A tier stays with its sub-service; only its name / weight / price change.
+export const updateGroomingTierSchema = addGroomingTierSchema
+  .omit({ appointment_services_id: true })
+  .partial();
 
 export const tierIdParamSchema = z.object({
   tier_id: z.coerce.number({ error: "Invalid tier ID" }).int().positive("Invalid tier ID"),

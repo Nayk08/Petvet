@@ -24,6 +24,7 @@ import {
 } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import {
   queryClient,
   addPet,
@@ -412,13 +413,25 @@ export async function action({ request, params }) {
     formData.get("is_spayed_neutered") === "true" ? "true" : "false",
   );
 
+  // Edit is optimistic: the list row shows the new values at once; the form
+  // stays open until saved and the row is restored if the save fails.
+  let undo;
   try {
     if (isEditMode) {
+      undo = patchCachedRows(
+        [["pet-records"]],
+        patchWhere("pet_id", params.pets_id, {
+          pet_name: pets_name,
+          breed: formData.get("breed"),
+          weight_kg: formData.get("weight_kg") || null,
+        }),
+      );
       await editPet(params.pets_id, formData);
     } else {
       await addPet(client_id, formData);
     }
   } catch (error) {
+    undo?.();
     const errorMessage = error.message || "Failed to save pet.";
 
     toast.error("Failed to save pet", {

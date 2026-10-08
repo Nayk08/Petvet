@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   fetchClientRecords,
@@ -17,10 +17,10 @@ import ModuleTabs from "@/components/ui/ModuleTabs";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { optimisticMutation, removeWhere } from "@/api/optimistic.js";
 
 export function Component() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
@@ -77,32 +77,30 @@ export function Component() {
     staleTime: 1000 * 30,
   });
 
+  // Optimistic: the row leaves the Archived list at once (undone on failure).
   const restoreMutation = useMutation({
     mutationFn: restoreClient,
-    onSuccess: () => {
-      toast.success("Client restored");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["clients-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not restore client", { description: error.message });
-    },
+    ...optimisticMutation({
+      keys: [["clients-archived"]],
+      refresh: [["clients"]],
+      update: (row, id) => removeWhere("client_id", id)(row),
+      onSuccess: () => toast.success("Client restored"),
+      onError: (error) => toast.error("Could not restore client", { description: error.message }),
+    }),
   });
 
   const [confirmDeleteClient, setConfirmDeleteClient] = useState(null);
 
   const permanentDeleteMutation = useMutation({
     mutationFn: permanentlyDeleteClient,
-    onSuccess: () => {
-      toast.success("Client permanently deleted");
-      setConfirmDeleteClient(null);
-      queryClient.invalidateQueries({ queryKey: ["clients-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not permanently delete client", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: [["clients-archived"]],
+      update: (row, id) => removeWhere("client_id", id)(row),
+      onMutate: () => setConfirmDeleteClient(null),
+      onSuccess: () => toast.success("Client permanently deleted"),
+      onError: (error) =>
+        toast.error("Could not permanently delete client", { description: error.message }),
+    }),
   });
 
   return (

@@ -299,8 +299,10 @@ export default class AppointmentService {
   async completeAppointment(appointment_id, requestingUser) {
     const appointment = await this.getAppointmentById(appointment_id); // throws 404 if missing
 
-    const isAdmin = isAdminUser(requestingUser);
-    if (!isAdmin && String(appointment.assigned_staff_id) !== String(requestingUser.id)) {
+    // Only the assigned vet/groomer — no admin override: unattended visits
+    // close themselves when the slot ends (autoCompletePastAppointments /
+    // noShowUnpaidBalances), so nobody needs to complete someone else's.
+    if (String(appointment.assigned_staff_id) !== String(requestingUser.id)) {
       const err = new Error(
         "You can only complete an appointment that's assigned to you.",
       );

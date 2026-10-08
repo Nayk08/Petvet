@@ -1,3 +1,4 @@
+import { patchCachedRows } from "@/api/optimistic.js";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -236,6 +237,15 @@ export async function action({ request, params }) {
   const product_price = formData.get("product_price");
   const product_expiry_date = formData.get("product_expiry_date");
 
+  // Optimistic: the stock goes up in the lists at once (a new expiry may
+  // become its own batch — the refetch below settles the exact split).
+  // Restored if the save fails; the form stays open to show the error.
+  const add = (row) =>
+    String(row?.product_id) === String(params.product_id)
+      ? { ...row, product_quantity: Number(row.product_quantity) + Number(quantity) }
+      : row;
+  const undo = patchCachedRows([["inventory"], ["inventory-batches"]], add);
+
   let result;
   try {
     result = await addProductQuantity(params.product_id, {
@@ -244,6 +254,7 @@ export async function action({ request, params }) {
       product_expiry_date,
     });
   } catch (error) {
+    undo();
     const errorMessage = error.message || "Failed to add quantity.";
 
     toast.error("Failed to add quantity", {

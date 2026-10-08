@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchAppointments, markNoShow } from "@/api/http";
 import QueryState from "@/components/ui/QueryState";
 import { Button } from "@/components/ui/button";
 import { Plus, ChevronLeft, ChevronRight, Pencil, XCircle, UserX } from "lucide-react";
+import { optimisticMutation, patchWhere, APPOINTMENT_LIST_KEYS } from "@/api/optimistic.js";
 
 const SERVICE_DOT = {
   Grooming: "bg-indigo-500",
@@ -48,7 +49,6 @@ function isPastDay(date) {
 
 export function Component() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
@@ -59,17 +59,19 @@ export function Component() {
     gcTime: 1000 * 60 * 10,
   });
 
+  // Optimistic: the status shows No Show at once (undone on failure). The
+  // server may also forfeit a deposit / cancel the bill, so payments refresh.
   const noShowMutation = useMutation({
     mutationFn: markNoShow,
-    onSuccess: () => {
-      toast.success("Appointment marked as a no-show");
-      queryClient.invalidateQueries({ queryKey: ["appointments"] });
-    },
-    onError: (error) => {
-      toast.error("Could not mark as a no-show", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: APPOINTMENT_LIST_KEYS,
+      refresh: [["Payments"], ["TodayPayments"], ["RevenueSummary"], ["TodayRevenueSummary"]],
+      update: (row, id) =>
+        patchWhere("appointment_id", id, { appointment_status_name: "No Show" })(row),
+      onSuccess: () => toast.success("Appointment marked as a no-show"),
+      onError: (error) =>
+        toast.error("Could not mark as a no-show", { description: error.message }),
+    }),
   });
 
   const appointments = data?.rows ?? [];

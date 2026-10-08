@@ -448,18 +448,21 @@ export async function action({ params, request }) {
     cashReceived: formData.get("cash_received"),
     gcashReceived: formData.get("gcash_received"),
   });
-  // Collecting a balance: the GCash deposit counts too (the server records
-  // cash balance + GCash deposit, or GCash for the whole bill).
+  // Collecting a balance: only the balance is new revenue — the reservation
+  // fee was already counted when it was verified (v_revenue ledger).
   if (cachedPayment?.payment_status_name === "Partially Paid") {
     const deposit = Number(cachedPayment.gcash_amount ?? 0);
     const balance = Number(cachedPayment.total_amount ?? 0) - deposit;
     cashAmount = payment_method === "Cash" ? balance : 0;
-    gcashAmount = deposit + (payment_method === "GCash" ? balance : 0);
+    gcashAmount = payment_method === "GCash" ? balance : 0;
   }
   const rollbackRevenue = applyOptimisticRevenue({
     cashAmount,
     gcashAmount,
-    totalAmount: cachedPayment?.total_amount,
+    totalAmount:
+      cachedPayment?.payment_status_name === "Partially Paid"
+        ? cashAmount + gcashAmount // just the balance
+        : cachedPayment?.total_amount,
     isAppointment: Boolean(cachedPayment?.appointment_id),
   });
 

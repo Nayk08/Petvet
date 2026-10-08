@@ -275,6 +275,7 @@ export async function action({ params, request }) {
   // PaymentProcessModal.jsx does. Reject only changes the payment's own
   // status, but re-invalidating the same broad set is harmless.
   await queryClient.invalidateQueries({ queryKey: ["Payments"] });
+  await queryClient.invalidateQueries({ queryKey: ["awaiting-payments-count"] }); // sidebar badge
   await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
   await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
   await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });

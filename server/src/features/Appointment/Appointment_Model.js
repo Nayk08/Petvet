@@ -97,10 +97,16 @@ export const UNPAID_HOLD_MINUTES = 10;
 // sub-service's own fixed price.
 // `svc` is the tbl_appointment_services alias, `petIdSql` the pet id SQL.
 export const GROOMING_CATEGORY_ID = 1;
-const effectivePriceSql = (svc, petIdSql) => `CASE WHEN ${svc}.category_id = ${GROOMING_CATEGORY_ID} THEN (
+// Each grooming sub-service has its OWN tiers (migration 011); one with no
+// tiers is charged its flat service_price, like any other sub-service.
+const effectivePriceSql = (svc, petIdSql) => `CASE WHEN ${svc}.category_id = ${GROOMING_CATEGORY_ID}
+    AND EXISTS (SELECT 1 FROM tbl_grooming_price_tiers tx
+                WHERE tx.appointment_services_id = ${svc}.appointment_services_id)
+  THEN (
     SELECT t.price FROM tbl_grooming_price_tiers t
     JOIN tbl_pets gp ON gp.pets_id = ${petIdSql}
-    WHERE gp.weight_kg IS NOT NULL
+    WHERE t.appointment_services_id = ${svc}.appointment_services_id
+      AND gp.weight_kg IS NOT NULL
       AND (t.max_weight_kg IS NULL OR t.max_weight_kg >= gp.weight_kg)
     ORDER BY t.max_weight_kg ASC NULLS LAST LIMIT 1
   ) ELSE ${svc}.service_price END`;
@@ -271,8 +277,44 @@ export default class AppointmentModel {
     );
   }
 
+  // A visit with an online deposit whose balance still isn't paid when its
+  // slot ends is a no-show: the appointment becomes No Show and the deposit
+  // is forfeited — same result as staff marking it (Payment_Model.forfeitDeposit):
+  // the bill closes as Completed for the deposit, original_total keeps the bill.
+  async noShowUnpaidBalances() {
+    await pool.query(
+      `WITH no_show AS (
+         UPDATE tbl_appointments a
+         SET appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                      WHERE LOWER(TRIM(appointment_status_name)) = 'no show'),
+             updated_by = 'System', date_updated = NOW()
+         FROM tbl_payments p
+         JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+         WHERE p.appointment_id = a.appointment_id AND p.is_deleted = false
+           AND ps.payment_status_name = 'Partially Paid'
+           AND a.is_deleted IS NOT TRUE
+           AND a.end_time < (NOW() AT TIME ZONE 'Asia/Manila')
+           AND a.appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
+                                          WHERE LOWER(TRIM(appointment_status_name)) = 'in queue')
+         RETURNING a.appointment_id
+       )
+       UPDATE tbl_payments SET
+         original_total = total_amount,
+         total_amount = gcash_amount,
+         cash_amount = 0,
+         payment_method = 'GCash',
+         payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                              WHERE payment_status_name = 'Completed'),
+         updated_by = 'System', date_updated = NOW()
+       WHERE appointment_id IN (SELECT appointment_id FROM no_show) AND is_deleted = false
+         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE payment_status_name = 'Partially Paid')`,
+    );
+  }
+
   async autoCompletePastAppointments() {
     await this.expireUnpaidOnlineBookings();
+    await this.noShowUnpaidBalances();
     const client = await pool.connect();
     try {
       // Only a paid, checked-in visit ("In Queue") is assumed done once its
@@ -297,10 +339,8 @@ export default class AppointmentModel {
           AND a.is_deleted IS NOT TRUE
           AND a.end_time < (NOW() AT TIME ZONE 'Asia/Manila')
           AND LOWER(TRIM(s.appointment_status_name)) IN ('pending', 'in queue')
-          -- A visit with an online deposit and an uncollected balance stays
-          -- In Queue: staff either collect the balance and complete it, or
-          -- mark it No Show (which forfeits the deposit). Neither can be
-          -- guessed from the clock.
+          -- Never auto-complete a visit whose balance is unpaid —
+          -- noShowUnpaidBalances (run just before) makes those No Show.
           AND NOT EXISTS (
             SELECT 1 FROM tbl_payments pp
             JOIN tbl_payment_status pps ON pps.payment_status_id = pp.payment_status_id
@@ -800,7 +840,7 @@ export default class AppointmentModel {
 
   async getGroomingTiers() {
     const { rows } = await pool.query(
-      `SELECT tier_id, tier_name, max_weight_kg, price
+      `SELECT tier_id, tier_name, max_weight_kg, price, appointment_services_id
        FROM tbl_grooming_price_tiers ORDER BY max_weight_kg ASC NULLS LAST`,
     );
     return rows;
@@ -820,10 +860,15 @@ export default class AppointmentModel {
       );
       // Grooming rows carry the weight tiers so every booking screen can
       // show this pet's price before booking (the server still re-prices).
+      // Only grooming sub-services that HAVE tiers carry them; one without
+      // tiers is priced by its flat service_price (same as the server rule).
       const tiers = await this.getGroomingTiers();
-      return res.rows.map((s) =>
-        s.category_id === GROOMING_CATEGORY_ID ? { ...s, grooming_tiers: tiers } : s,
-      );
+      return res.rows.map((s) => {
+        const own = tiers.filter((t) => t.appointment_services_id === s.appointment_services_id);
+        return s.category_id === GROOMING_CATEGORY_ID && own.length
+          ? { ...s, grooming_tiers: own }
+          : s;
+      });
     } catch (error) {
       console.log(
         `Error on Model selectAppointmentServices function: ${error}`,

@@ -234,6 +234,10 @@ export default class PaymentService {
     return completed;
   }
 
+  async countAwaitingVerification() {
+    return paymentModel.countAwaitingVerification();
+  }
+
   async markRefunded(payment_id, updated_by) {
     const refunded = await paymentModel.markRefunded({ payment_id, updated_by });
     if (!refunded) {

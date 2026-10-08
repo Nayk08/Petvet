@@ -24,6 +24,12 @@ router.patch(
   (req, res) => paymentController.updateGcashQrCode(req, res),
 );
 
+// Sidebar badge: client online payments waiting for staff to verify.
+// Registered before /payments/:id so "awaiting-count" isn't read as an id.
+router.get("/payments/awaiting-count", hasPermission("PAYMENTS", "can_view"), (req, res) =>
+  paymentController.getAwaitingVerificationCount(req, res),
+);
+
 router.get("/payments/:id", hasPermission("PAYMENTS", "can_view"), (req, res) =>
   paymentController.getPaymentById(req, res),
 );

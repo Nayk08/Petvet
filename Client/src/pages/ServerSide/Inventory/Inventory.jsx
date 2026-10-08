@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import DynamicGrid from "../../../components/ui/DynamicGrid";
 import { getInventoryColumns, getArchivedInventoryColumns } from "@/utils/COLUMNS";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   fetchInventory,
   fetchProductCategories,
@@ -21,6 +21,7 @@ import { History, Layers, PackagePlus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ModuleTabs from "@/components/ui/ModuleTabs";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { optimisticMutation, removeWhere } from "@/api/optimistic.js";
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -40,7 +41,6 @@ export default function Inventory() {
       "text-slate-600 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
     onClick: (row) => setHistoryFor(row.product_name),
   };
-  const queryClient = useQueryClient();
 
   // Archive tab — soft-deleted products, viewed/paginated independently of
   // the active list above.
@@ -97,35 +97,30 @@ export default function Inventory() {
     staleTime: 1000 * 30,
   });
 
+  // Optimistic: the row leaves the Archived list at once (undone on failure).
   const restoreMutation = useMutation({
     mutationFn: restoreProduct,
-    onSuccess: () => {
-      toast.success("Product restored");
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["inventoryProducts"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not restore product", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: [["inventory-archived"]],
+      refresh: [["inventory"], ["inventoryProducts"]],
+      update: (row, id) => removeWhere("product_id", id)(row),
+      onSuccess: () => toast.success("Product restored"),
+      onError: (error) => toast.error("Could not restore product", { description: error.message }),
+    }),
   });
 
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
 
   const permanentDeleteMutation = useMutation({
     mutationFn: permanentlyDeleteProduct,
-    onSuccess: () => {
-      toast.success("Product permanently deleted");
-      setConfirmDeleteProduct(null);
-      queryClient.invalidateQueries({ queryKey: ["inventory-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not permanently delete product", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: [["inventory-archived"]],
+      update: (row, id) => removeWhere("product_id", id)(row),
+      onMutate: () => setConfirmDeleteProduct(null),
+      onSuccess: () => toast.success("Product permanently deleted"),
+      onError: (error) =>
+        toast.error("Could not permanently delete product", { description: error.message }),
+    }),
   });
 
   return (

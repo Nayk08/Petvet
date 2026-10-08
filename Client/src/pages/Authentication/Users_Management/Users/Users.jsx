@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { usersColumns, ArchivedUsersColumns } from "../../../../utils/COLUMNS.jsx";
 import DynamicGrid from "../../../../components/ui/DynamicGrid.jsx";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   fetchUsers,
   getCategoryUserLevel,
@@ -19,10 +19,10 @@ import ModuleTabs from "@/components/ui/ModuleTabs.jsx";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.jsx";
+import { optimisticMutation, removeWhere } from "@/api/optimistic.js";
 
 export function Component() {
   const navigate = useNavigate();
-  const rqClient = useQueryClient();
 
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
@@ -108,32 +108,30 @@ export function Component() {
     staleTime: 1000 * 30,
   });
 
+  // Optimistic: the row leaves the Archived list at once (undone on failure).
   const restoreMutation = useMutation({
     mutationFn: restoreUser,
-    onSuccess: () => {
-      toast.success("User restored");
-      rqClient.invalidateQueries({ queryKey: ["usersdata"] });
-      rqClient.invalidateQueries({ queryKey: ["users-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not restore user", { description: error.message });
-    },
+    ...optimisticMutation({
+      keys: [["users-archived"]],
+      refresh: [["usersdata"]],
+      update: (row, id) => removeWhere("users_id", id)(row),
+      onSuccess: () => toast.success("User restored"),
+      onError: (error) => toast.error("Could not restore user", { description: error.message }),
+    }),
   });
 
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
 
   const permanentDeleteMutation = useMutation({
     mutationFn: permanentlyDeleteUser,
-    onSuccess: () => {
-      toast.success("User permanently deleted");
-      setConfirmDeleteUser(null);
-      rqClient.invalidateQueries({ queryKey: ["users-archived"] });
-    },
-    onError: (error) => {
-      toast.error("Could not permanently delete user", {
-        description: error.message,
-      });
-    },
+    ...optimisticMutation({
+      keys: [["users-archived"]],
+      update: (row, id) => removeWhere("users_id", id)(row),
+      onMutate: () => setConfirmDeleteUser(null),
+      onSuccess: () => toast.success("User permanently deleted"),
+      onError: (error) =>
+        toast.error("Could not permanently delete user", { description: error.message }),
+    }),
   });
 
   return (

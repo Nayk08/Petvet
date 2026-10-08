@@ -99,7 +99,7 @@ export async function action({ request }) {
 
   try {
     await addNewUserLevel(userLevel, description);
-    await queryClient.invalidateQueries(["usersLeveldata"]);
+    await queryClient.invalidateQueries({ queryKey: ["usersLeveldata"] });
 
     toast.success("Role added", {
       className:

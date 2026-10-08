@@ -18,6 +18,7 @@ import {
   useNavigation,
   useActionData,
 } from "react-router-dom";
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import {
   queryClient,
   fetchClientById,
@@ -275,13 +276,26 @@ export async function action({ request, params }) {
   const formData = await request.formData();
   const isEditMode = Boolean(params.client_id);
 
+  // Edit is optimistic: the list row shows the new values at once; the form
+  // stays open until saved so a validation error (e.g. duplicate email) can
+  // still be shown, and the row is restored if the save fails.
+  let undo;
   try {
     if (isEditMode) {
+      undo = patchCachedRows(
+        [["clients"]],
+        patchWhere("client_id", params.client_id, {
+          name: formData.get("client_name"),
+          email: formData.get("client_email"),
+          mobile_no: formData.get("contact_no"),
+        }),
+      );
       await editClient(params.client_id, formData);
     } else {
       await addClient(formData);
     }
   } catch (error) {
+    undo?.();
     const errorMessage = error.message || "Failed to save client.";
 
     toast.error("Failed to save client", {

@@ -12,7 +12,7 @@ import {
 import {
   TodayQueueColumns,
   PaymentColumns,
-  PaymentTransactionModalColumns,
+  paymentTransactionColumnsFor,
 } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -131,6 +131,7 @@ export function Component() {
   const [revenueModalKey, setRevenueModalKey] = useState(null);
   const [revenueModalSearch, setRevenueModalSearch] = useState("");
   const [revenueModalFilters, setRevenueModalFilters] = useState({});
+  const [revenueModalPage, setRevenueModalPage] = useState(1); // 10 rows per page
   const activeRevenueModal = revenueModalKey
     ? REVENUE_MODALS[revenueModalKey]
     : null;
@@ -142,6 +143,7 @@ export function Component() {
     setRevenueModalKey(key);
     setRevenueModalSearch("");
     setRevenueModalFilters({});
+    setRevenueModalPage(1);
   }
 
   const {
@@ -156,13 +158,15 @@ export function Component() {
       activeRevenueModal?.method,
       debouncedRevenueModalSearch,
       revenueModalFilters,
+      revenueModalPage,
     ],
     queryFn: ({ signal }) =>
       fetchTodayRevenueTransactions({
         type: revenueModalFilters.payment_type || activeRevenueModal?.type,
         method: activeRevenueModal?.method,
         search: debouncedRevenueModalSearch,
-        limit: 1000,
+        page: revenueModalPage,
+        limit: 10,
         signal,
       }),
     enabled: Boolean(activeRevenueModal),
@@ -325,7 +329,7 @@ export function Component() {
         onOpenChange={(isOpen) => !isOpen && setRevenueModalKey(null)}
       >
         {activeRevenueModal && (
-          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>{activeRevenueModal.title}</DialogTitle>
             </DialogHeader>
@@ -339,14 +343,32 @@ export function Component() {
                   "Error loading transactions"}
               </p>
             ) : (
+              // Only the table scrolls; the title and page numbers stay put.
+              <div className="min-h-0 flex-1 overflow-y-auto">
               <DynamicGrid
                 data={revenueModalData?.rows ?? []}
-                columnsConfig={PaymentTransactionModalColumns}
+                columnsConfig={paymentTransactionColumnsFor(activeRevenueModal?.method)}
                 search={revenueModalSearch}
-                onSearchChange={setRevenueModalSearch}
+                onSearchChange={(value) => {
+                  setRevenueModalSearch(value);
+                  setRevenueModalPage(1);
+                }}
                 filters={revenueModalFilters}
-                onFiltersChange={setRevenueModalFilters}
+                onFiltersChange={(value) => {
+                  setRevenueModalFilters(value);
+                  setRevenueModalPage(1);
+                }}
                 bare
+              />
+              </div>
+            )}
+            {revenueModalData?.pagination && (
+              <Pagination
+                page={revenueModalPage}
+                totalPages={revenueModalData.pagination.totalPages ?? 1}
+                onPageChange={setRevenueModalPage}
+                total={revenueModalData.pagination.total}
+                limit={10}
               />
             )}
           </DialogContent>

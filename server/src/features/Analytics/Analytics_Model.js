@@ -9,15 +9,15 @@ export default class AnalyticsModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
+        // v_revenue: each payment on the day it was received (reservation
+        // fees on verification, the rest on completion) — same as the cards.
         `SELECT
-           date_created::date AS day,
-           COALESCE(SUM(total_amount) FILTER (WHERE appointment_id IS NULL), 0) AS sales,
-           COALESCE(SUM(total_amount) FILTER (WHERE appointment_id IS NOT NULL), 0) AS services
-         FROM v_payments
-         WHERE is_deleted = false
-           AND payment_status_name = 'Completed'
-           AND date_created::date BETWEEN $1 AND $2
-         GROUP BY date_created::date
+           received_at::date AS day,
+           COALESCE(SUM(amount) FILTER (WHERE appointment_id IS NULL), 0) AS sales,
+           COALESCE(SUM(amount) FILTER (WHERE appointment_id IS NOT NULL), 0) AS services
+         FROM v_revenue
+         WHERE received_at::date BETWEEN $1 AND $2
+         GROUP BY received_at::date
          ORDER BY day ASC`,
         [startDate, endDate],
       );

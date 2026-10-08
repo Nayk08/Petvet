@@ -6,7 +6,6 @@ import {
   redirect,
 } from "react-router-dom";
 import { toast } from "sonner";
-import { Trash2, XCircle } from "lucide-react";
 import {
   deleteUserLevel,
   queryClient,
@@ -22,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { runOptimistic, removeWhere } from "@/api/optimistic.js";
 
 export function Component() {
   const { state } = useNavigation();
@@ -85,34 +85,20 @@ export async function loader({ params }) {
   });
 }
 
-export async function action({ params }) {
-  try {
-    await deleteUserLevel(params.user_level_id);
-    await queryClient.invalidateQueries(["usersLeveldata"]);
-
-    toast.error("Successfully Deleted", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/30 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm",
-      description: "This role is successfully deleted!",
-      descriptionClassName:
-        "text-slate-500 dark:text-slate-400 text-sm font-normal mt-1",
-      duration: 2000,
-      icon: <Trash2 className="h-5 w-5 text-destructive shrink-0" />,
-    });
-
-    return redirect("..");
-  } catch (err) {
-    toast.error("Delete failed", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/30 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm",
-      description:
-        err.message || "Something went wrong while deleting this role.",
-      descriptionClassName:
-        "text-slate-500 dark:text-slate-400 text-sm font-normal mt-1",
-      duration: 3000,
-      icon: <XCircle className="h-5 w-5 text-destructive shrink-0" />,
-    });
-
-    return redirect("..");
-  }
+// Optimistic: the row disappears and the window closes at once; the
+// delete runs in the background and the row comes back if it fails.
+// (The old version called invalidateQueries(["usersLeveldata"]) — the v4
+// signature, which did nothing — so a deleted role stayed listed.)
+export function action({ params }) {
+  runOptimistic({
+    keys: [["usersLeveldata"]],
+    update: removeWhere("user_level_id", params.user_level_id),
+    request: () => deleteUserLevel(params.user_level_id),
+    onSuccess: () => toast.success("Role deleted"),
+    onError: (err) =>
+      toast.error("Delete failed", {
+        description: err.message || "Something went wrong. The item was restored.",
+      }),
+  });
+  return redirect("..");
 }

@@ -29,6 +29,43 @@ async function confirmPendingAppointment(client, appointment_id, updated_by) {
   );
 }
 
+// Revenue card totals from the v_revenue ledger (migration 010), filtered by
+// `whereSql` (e.g. one day). Same field names the cards always used.
+const revenueTotalsSql = (whereSql) => `
+  SELECT SUM(cash) AS total_cash,
+         SUM(gcash) AS total_gcash,
+         SUM(amount) FILTER (WHERE control_number LIKE 'INV%') AS total_invoice,
+         SUM(amount) FILTER (WHERE control_number LIKE 'APT%') AS total_appointment
+  FROM v_revenue WHERE ${whereSql}`;
+
+// Revenue transaction lists (cards' click-through): one row per money-in
+// event — the bill's fields plus what was received in that event and when.
+// `extraWhere` scopes it (e.g. today). Shared with Dashboard_Model.
+export function revenueTransactionsQuery({ type, method, search, extraWhere }) {
+  const values = [];
+  const conditions = [extraWhere ?? "TRUE"];
+  if (type === "INV" || type === "APT") {
+    values.push(`${type}%`);
+    conditions.push(`r.control_number LIKE $${values.length}`);
+  }
+  if (method === "cash") conditions.push("r.cash > 0");
+  else if (method === "gcash") conditions.push("r.gcash > 0");
+  if (search && search.trim()) {
+    values.push(`%${search.trim()}%`);
+    conditions.push(`r.control_number ILIKE $${values.length}`);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  return {
+    baseQuery: `SELECT p.*, r.kind, r.received_at, r.amount AS received_amount,
+                       r.cash AS received_cash, r.gcash AS received_gcash,
+                       p.payment_id || '-' || r.kind AS event_id
+                FROM v_revenue r JOIN v_payments p ON p.payment_id = r.payment_id
+                ${where} ORDER BY r.received_at DESC, r.payment_id DESC`,
+    countQuery: `SELECT COUNT(*) AS total FROM v_revenue r ${where}`,
+    values,
+  };
+}
+
 export default class PaymentModel {
   async getPayments({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
@@ -405,6 +442,7 @@ export default class PaymentModel {
            payment_method = 'GCash',
            gcash_amount = amount_sent,
            cash_amount = 0,
+           deposit_paid_at = NOW(), -- counts as revenue today (v_revenue)
            updated_by = $2, date_updated = NOW()
          WHERE payment_id = $1 AND is_deleted = false AND amount_sent > 0
            AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
@@ -553,37 +591,10 @@ export default class PaymentModel {
     const client = await pool.connect();
 
     try {
-      // Only Completed payments represent money actually collected — a
-      // Pending booking or cart order must not count as revenue just
-      // because a payment row exists for it.
-      const cashRes = await client.query(
-        `SELECT SUM(cash_amount) as total_cash, SUM(gcash_amount) as total_gcash
-       FROM tbl_payments
-       WHERE is_deleted = false
-         AND payment_status_id = (
-           SELECT payment_status_id FROM tbl_payment_status
-           WHERE LOWER(TRIM(payment_status_name)) = 'completed'
-         )`,
-      );
-
-      const invRes = await client.query(
-        `SELECT SUM(total_amount) as total_invoice FROM v_payments
-         WHERE control_number LIKE 'INV%' AND is_deleted = false
-           AND payment_status_name = 'Completed'`,
-      );
-
-      const aptRes = await client.query(
-        `SELECT SUM(total_amount) as total_appointment FROM v_payments
-         WHERE control_number LIKE 'APT%' AND is_deleted = false
-           AND payment_status_name = 'Completed'`,
-      );
-
-      return {
-        total_cash: cashRes.rows[0].total_cash,
-        total_gcash: cashRes.rows[0].total_gcash,
-        total_invoice: invRes.rows[0].total_invoice,
-        total_appointment: aptRes.rows[0].total_appointment,
-      };
+      // Money actually received (v_revenue: completed bills + verified
+      // reservation fees) — a Pending booking or cart order isn't revenue.
+      const { rows } = await client.query(revenueTotalsSql("TRUE"));
+      return rows[0];
     } catch (error) {
       console.log("Error on Model getRevenueSummary function");
       throw error;
@@ -605,31 +616,8 @@ export default class PaymentModel {
   } = {}) {
     const client = await pool.connect();
     try {
-      const values = [];
-      const conditions = ["is_deleted = false", "payment_status_name = 'Completed'"];
-
-      if (type === "INV" || type === "APT") {
-        values.push(`${type}%`);
-        conditions.push(`control_number LIKE $${values.length}`);
-      }
-
-      if (method === "cash") {
-        conditions.push("cash_amount > 0");
-      } else if (method === "gcash") {
-        conditions.push("gcash_amount > 0");
-      }
-
-      if (search && search.trim()) {
-        values.push(`%${search.trim()}%`);
-        conditions.push(`control_number ILIKE $${values.length}`);
-      }
-
-      const whereClause = `WHERE ${conditions.join(" AND ")}`;
-
       return await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY date_updated DESC NULLS LAST, date_created DESC`,
-        countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
-        values,
+        ...revenueTransactionsQuery({ type, method, search }),
         page,
         limit,
       });
@@ -659,29 +647,11 @@ export default class PaymentModel {
       // a payment that was created already-Completed in one step (e.g.
       // addAppointmentWithPayment) never gets a date_updated, so fall back
       // to date_created for that case.
-      const cashRes = await client.query(
-        `SELECT SUM(cash_amount) as total_cash, SUM(gcash_amount) as total_gcash
-       FROM tbl_payments
-       WHERE is_deleted = false
-         AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
-         AND payment_status_id = (
-           SELECT payment_status_id FROM tbl_payment_status
-           WHERE LOWER(TRIM(payment_status_name)) = 'completed'
-         )`,
-      );
-
-      const invRes = await client.query(
-        `SELECT SUM(total_amount) as total_invoice FROM v_payments
-         WHERE control_number LIKE 'INV%' AND is_deleted = false
-           AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
-           AND payment_status_name = 'Completed'`,
-      );
-
-      const aptRes = await client.query(
-        `SELECT SUM(total_amount) as total_appointment FROM v_payments
-         WHERE control_number LIKE 'APT%' AND is_deleted = false
-           AND DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE
-           AND payment_status_name = 'Completed'`,
+      // Each payment counts on the day it was received (v_revenue): a
+      // reservation fee on the day it was verified, a balance / full payment
+      // on the day it was completed.
+      const { rows: [totals] } = await client.query(
+        revenueTotalsSql("received_at::date = CURRENT_DATE"),
       );
 
       // Scheduled for today (appointment_date), not booked today
@@ -691,10 +661,7 @@ export default class PaymentModel {
       );
 
       return {
-        total_cash: cashRes.rows[0].total_cash,
-        total_gcash: cashRes.rows[0].total_gcash,
-        total_invoice: invRes.rows[0].total_invoice,
-        total_appointment: aptRes.rows[0].total_appointment,
+        ...totals,
         total_queue: todayqueueRes.rows[0].total_queue,
       };
     } catch (error) {
@@ -710,6 +677,15 @@ export default class PaymentModel {
   // someone is reusing proof of a single real transfer to claim a second
   // (or third...) payment. Excludes the payment's own row so resubmitting
   // the same proof for the same payment isn't blocked.
+  // GCash proofs from the client portal that staff still need to verify.
+  async countAwaitingVerification() {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM v_payments
+       WHERE is_deleted = false AND payment_status_name = 'Awaiting Verification'`,
+    );
+    return rows[0].count;
+  }
+
   async isGcashReferenceInUse({ gcash_reference_number, excludePaymentId }) {
     const client = await pool.connect();
     try {

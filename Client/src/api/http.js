@@ -1476,6 +1476,15 @@ export async function fetchMaintenanceServiceCategories({ signal } = {}) {
   return handleResponse(response, "Failed to fetch service categories");
 }
 
+// Sidebar badge: client GCash payments waiting for verification.
+export async function fetchAwaitingPaymentsCount({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/payments/awaiting-count`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch the payment count");
+}
+
 // ── Announcements (landing page) + clinic address (map) ──
 export async function fetchAnnouncements({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/announcements`, { signal, credentials: "include" });

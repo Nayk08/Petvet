@@ -1,5 +1,5 @@
 import DynamicGrid from "@/components/ui/DynamicGrid";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { FileDown, QrCode, ShieldCheck, Printer, Undo2 } from "lucide-react";
@@ -10,7 +10,7 @@ import {
   fetchRevenueTransactions,
   markPaymentRefunded,
 } from "@/api/http";
-import { PaymentColumns, PaymentTransactionModalColumns } from "@/utils/COLUMNS";
+import { PaymentColumns, paymentTransactionColumnsFor } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
 import { useState, useEffect } from "react";
 import { Pagination } from "@/components/ui/Pagination";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { generatePaymentsReport } from "@/utils/generatePaymentsReport.js";
 import ManageQrCodeModal from "./Components/ManageQrCodeModal.jsx";
+import { optimisticMutation, patchWhere } from "@/api/optimistic.js";
 
 // Which revenue card was clicked: the hero "Total Revenue" card shows
 // everything; the two row cards are keyed by payment method (Cash/
@@ -39,17 +40,18 @@ const REVENUE_MODALS = {
 
 export function Component() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [refundPayment, setRefundPayment] = useState(null);
+  // Optimistic: a refunded bill ends as Cancelled; shown at once.
   const refundMutation = useMutation({
     mutationFn: markPaymentRefunded,
-    onSuccess: () => {
-      toast.success("Payment marked refunded");
-      setRefundPayment(null);
-      queryClient.invalidateQueries({ queryKey: ["Payments"] });
-    },
-    onError: (error) =>
-      toast.error("Could not mark refunded", { description: error.message }),
+    ...optimisticMutation({
+      keys: [["Payments"], ["TodayPayments"]],
+      update: (row, id) =>
+        patchWhere("payment_id", id, { payment_status_name: "Cancelled" })(row),
+      onMutate: () => setRefundPayment(null),
+      onSuccess: () => toast.success("Payment marked refunded"),
+      onError: (error) => toast.error("Could not mark refunded", { description: error.message }),
+    }),
   });
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
@@ -124,6 +126,7 @@ export function Component() {
   const [revenueModalKey, setRevenueModalKey] = useState(null);
   const [revenueModalSearch, setRevenueModalSearch] = useState("");
   const [revenueModalFilters, setRevenueModalFilters] = useState({});
+  const [revenueModalPage, setRevenueModalPage] = useState(1); // 10 rows per page
   const activeRevenueModal = revenueModalKey
     ? REVENUE_MODALS[revenueModalKey]
     : null;
@@ -135,6 +138,7 @@ export function Component() {
     setRevenueModalKey(key);
     setRevenueModalSearch("");
     setRevenueModalFilters({});
+    setRevenueModalPage(1);
   }
 
   const {
@@ -149,13 +153,15 @@ export function Component() {
       activeRevenueModal?.method,
       debouncedRevenueModalSearch,
       revenueModalFilters,
+      revenueModalPage,
     ],
     queryFn: ({ signal }) =>
       fetchRevenueTransactions({
         type: revenueModalFilters.payment_type || activeRevenueModal?.type,
         method: activeRevenueModal?.method,
         search: debouncedRevenueModalSearch,
-        limit: 1000,
+        page: revenueModalPage,
+        limit: 10,
         signal,
       }),
     enabled: Boolean(activeRevenueModal),
@@ -219,7 +225,7 @@ export function Component() {
         onOpenChange={(isOpen) => !isOpen && setRevenueModalKey(null)}
       >
         {activeRevenueModal && (
-          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>{activeRevenueModal.title}</DialogTitle>
             </DialogHeader>
@@ -232,14 +238,32 @@ export function Component() {
                 {revenueModalError?.message ?? "Error loading transactions"}
               </p>
             ) : (
+              // Only the table scrolls; the title and page numbers stay put.
+              <div className="min-h-0 flex-1 overflow-y-auto">
               <DynamicGrid
                 data={revenueModalData?.rows ?? []}
-                columnsConfig={PaymentTransactionModalColumns}
+                columnsConfig={paymentTransactionColumnsFor(activeRevenueModal?.method)}
                 search={revenueModalSearch}
-                onSearchChange={setRevenueModalSearch}
+                onSearchChange={(value) => {
+                  setRevenueModalSearch(value);
+                  setRevenueModalPage(1);
+                }}
                 filters={revenueModalFilters}
-                onFiltersChange={setRevenueModalFilters}
+                onFiltersChange={(value) => {
+                  setRevenueModalFilters(value);
+                  setRevenueModalPage(1);
+                }}
                 bare
+              />
+              </div>
+            )}
+            {revenueModalData?.pagination && (
+              <Pagination
+                page={revenueModalPage}
+                totalPages={revenueModalData.pagination.totalPages ?? 1}
+                onPageChange={setRevenueModalPage}
+                total={revenueModalData.pagination.total}
+                limit={10}
               />
             )}
           </DialogContent>

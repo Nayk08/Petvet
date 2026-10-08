@@ -21,8 +21,8 @@ import { Button } from "@/components/ui/button";
 import {
   fetchUserById,
   deleteUser,
-  queryClient,
 } from "../../../../../api/http.js";
+import { runOptimistic, removeWhere } from "@/api/optimistic.js";
 
 // ---- Loader ----
 
@@ -118,12 +118,18 @@ export async function loader({ params, request }) {
 }
 
 // ---- Action ----
-export async function action({ params }) {
-  try {
-    await deleteUser(params.user_id);
-    await queryClient.invalidateQueries({ queryKey: ["usersdata"] });
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
+// Optimistic: the row disappears and the window closes at once; the
+// delete runs in the background and the row comes back if it fails.
+export function action({ params }) {
+  runOptimistic({
+    keys: [["usersdata"]],
+    refresh: [["users-archived"]],
+    update: removeWhere("users_id", params.user_id),
+    request: () => deleteUser(params.user_id),
+    onError: (err) =>
+      toast.error("Delete failed", {
+        description: err.message || "Something went wrong. The item was restored.",
+      }),
+  });
+  return { ok: true };
 }

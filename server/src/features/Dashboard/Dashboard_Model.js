@@ -1,7 +1,7 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
 import AppointmentModel from "../Appointment/Appointment_Model.js";
-import { REAL_PAYMENT_ACTIVITY_SQL } from "../Payment/Payment_Model.js";
+import { REAL_PAYMENT_ACTIVITY_SQL, revenueTransactionsQuery } from "../Payment/Payment_Model.js";
 
 const appointmentModel = new AppointmentModel();
 
@@ -172,35 +172,15 @@ export default class DashboardModel {
   } = {}) {
     const client = await pool.connect();
     try {
-      const values = [];
-      const conditions = [
-        "is_deleted = false",
-        "payment_status_name = 'Completed'",
-        "DATE(COALESCE(date_updated, date_created)) = CURRENT_DATE",
-      ];
-
-      if (type === "INV" || type === "APT") {
-        values.push(`${type}%`);
-        conditions.push(`control_number LIKE $${values.length}`);
-      }
-
-      if (method === "cash") {
-        conditions.push("cash_amount > 0");
-      } else if (method === "gcash") {
-        conditions.push("gcash_amount > 0");
-      }
-
-      if (search && search.trim()) {
-        values.push(`%${search.trim()}%`);
-        conditions.push(`control_number ILIKE $${values.length}`);
-      }
-
-      const whereClause = `WHERE ${conditions.join(" AND ")}`;
-
+      // Money received today (v_revenue): verified reservation fees and
+      // completed payments, each on the day it came in.
       return await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY date_updated DESC NULLS LAST, date_created DESC`,
-        countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
-        values,
+        ...revenueTransactionsQuery({
+          type,
+          method,
+          search,
+          extraWhere: "r.received_at::date = CURRENT_DATE",
+        }),
         page,
         limit,
       });

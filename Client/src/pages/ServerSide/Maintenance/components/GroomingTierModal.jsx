@@ -1,3 +1,4 @@
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,7 +18,8 @@ import {
 } from "@/api/http.js";
 
 // `tier` is null for "add", or the row being edited.
-export default function GroomingTierModal({ tier, onClose }) {
+// `service`: the grooming sub-service these prices belong to (new tiers).
+export default function GroomingTierModal({ tier, service, onClose }) {
   const isEditMode = Boolean(tier);
   const queryClient = useQueryClient();
 
@@ -37,20 +39,41 @@ export default function GroomingTierModal({ tier, onClose }) {
     mutationFn: (payload) =>
       isEditMode
         ? updateMaintenanceGroomingTier(tier.tier_id, payload)
-        : addMaintenanceGroomingTier(payload),
+        : addMaintenanceGroomingTier({
+            ...payload,
+            appointment_services_id: service.appointment_services_id,
+          }),
+    // Edit is optimistic: the row updates and the form closes at once
+    // (restored if the save fails). Adding waits — the server creates it.
+    onMutate: (payload) => {
+      if (!isEditMode) return {};
+      const undo = patchCachedRows(
+        [["maintenance-grooming-tiers"]],
+        patchWhere("tier_id", tier.tier_id, {
+          ...payload,
+          max_weight_kg: payload.max_weight_kg === "" ? null : payload.max_weight_kg,
+        }),
+      );
+      onClose();
+      return { undo };
+    },
     onSuccess: () => {
       toast.success(isEditMode ? "Grooming tier updated" : "Grooming tier added");
-      queryClient.invalidateQueries({ queryKey: ["maintenance-grooming-tiers"] });
-      // Booking screens get the tiers with the services list.
-      queryClient.invalidateQueries({ queryKey: ["appointment-services"] });
-      queryClient.invalidateQueries({ queryKey: ["portal-appointment-services"] });
-      onClose();
+      if (!isEditMode) onClose();
     },
-    onError: (error) => {
+    onError: (error, _payload, context) => {
+      context?.undo?.();
       toast.error(
         isEditMode ? "Could not update grooming tier" : "Could not add grooming tier",
         { description: error.message },
       );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance-grooming-tiers"] });
+      // Booking screens get the tiers with the services list.
+      queryClient.invalidateQueries({ queryKey: ["maintenance-services"] }); // tier_count
+      queryClient.invalidateQueries({ queryKey: ["appointment-services"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-appointment-services"] });
     },
   });
 
@@ -73,8 +96,8 @@ export default function GroomingTierModal({ tier, onClose }) {
               {isEditMode ? "Edit Grooming Tier" : "Add Grooming Tier"}
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
-              Grooming is priced by the pet's weight: the smallest tier that
-              covers it applies.
+              Price for <strong>{service?.appointment_services}</strong> by the
+              pet's weight: the smallest tier that covers it applies.
             </DialogDescription>
           </DialogHeader>
 

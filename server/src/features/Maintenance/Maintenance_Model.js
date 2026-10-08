@@ -29,7 +29,9 @@ export default class MaintenanceModel {
   // but Maintenance lists deleted ones too so they can be restored.
   async getServices() {
     const res = await pool.query(
-      `SELECT s.*, sc.category_name
+      `SELECT s.*, sc.category_name,
+              (SELECT COUNT(*)::int FROM tbl_grooming_price_tiers t
+               WHERE t.appointment_services_id = s.appointment_services_id) AS tier_count
        FROM tbl_appointment_services s
        JOIN tbl_service_categories sc ON sc.category_id = s.category_id
        ORDER BY sc.sort_order, s.appointment_services ASC`,
@@ -128,22 +130,29 @@ export default class MaintenanceModel {
 
   async getGroomingTiers() {
     const res = await pool.query(
-      `SELECT tier_id, tier_name, max_weight_kg, price, description
+      `SELECT tier_id, tier_name, max_weight_kg, price, description, appointment_services_id
        FROM tbl_grooming_price_tiers ORDER BY max_weight_kg ASC NULLS LAST`,
     );
     return res.rows;
   }
 
-  async addGroomingTier({ tier_name, max_weight_kg, price, description }) {
+  // A tier belongs to one GROOMING sub-service (checked here, not just by FK).
+  async addGroomingTier({ appointment_services_id, tier_name, max_weight_kg, price, description }) {
     try {
       const res = await pool.query(
-        `INSERT INTO tbl_grooming_price_tiers (tier_name, max_weight_kg, price, description)
-         VALUES ($1,$2,$3,$4) RETURNING *`,
-        [tier_name, max_weight_kg === "" ? null : max_weight_kg, price, description || null],
+        `INSERT INTO tbl_grooming_price_tiers
+           (appointment_services_id, tier_name, max_weight_kg, price, description)
+         SELECT $1, $2, $3, $4, $5 FROM tbl_appointment_services
+         WHERE appointment_services_id = $1 AND category_id = 1
+         RETURNING *`,
+        [appointment_services_id, tier_name, max_weight_kg === "" ? null : max_weight_kg, price, description || null],
       );
+      if (!res.rows.length) {
+        throw httpError(400, "Weight tiers can only be added to a grooming sub-service.");
+      }
       return res.rows[0];
     } catch (error) {
-      if (error.code === "23505") throw httpError(409, "A tier with this name already exists.");
+      if (error.code === "23505") throw httpError(409, "This sub-service already has a tier with this name.");
       throw error;
     }
   }
@@ -162,7 +171,7 @@ export default class MaintenanceModel {
       if (!res.rows.length) throw httpError(404, "Grooming tier not found");
       return res.rows[0];
     } catch (error) {
-      if (error.code === "23505") throw httpError(409, "A tier with this name already exists.");
+      if (error.code === "23505") throw httpError(409, "This sub-service already has a tier with this name.");
       throw error;
     }
   }

@@ -146,6 +146,14 @@ export default class PaymentController {
     }
   }
 
+  async getAwaitingVerificationCount(req, res) {
+    try {
+      res.json({ count: await paymentService.countAwaitingVerification() });
+    } catch (error) {
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async getGcashQrCode(req, res) {
     try {
       const settings = await paymentService.getGcashQrCode();

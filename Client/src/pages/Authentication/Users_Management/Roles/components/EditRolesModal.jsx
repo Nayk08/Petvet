@@ -1,3 +1,4 @@
+import { patchCachedRows, patchWhere } from "@/api/optimistic.js";
 import {
   useNavigate,
   useSubmit,
@@ -123,10 +124,17 @@ export async function action({ request, params }) {
   const formData = await request.formData();
   const { userLevel, description } = Object.fromEntries(formData);
 
+  // Optimistic: the list row shows the new name at once (restored if the
+  // save fails). Also fixes the old invalidateQueries(["…"]) calls — the v4
+  // signature, which never refreshed anything in TanStack Query v5.
+  const undo = patchCachedRows(
+    [["usersLeveldata"]],
+    patchWhere("user_level_id", params.user_level_id, { user_level: userLevel, description }),
+  );
   try {
     await updateUserLevel({ id: params.user_level_id, userLevel, description });
-    await queryClient.invalidateQueries(["usersLeveldata"]);
-    await queryClient.invalidateQueries(["userLevel", params.user_level_id]);
+    await queryClient.invalidateQueries({ queryKey: ["usersLeveldata"] });
+    await queryClient.invalidateQueries({ queryKey: ["userLevel", params.user_level_id] });
 
     toast.success("Role updated", {
       className:
@@ -142,6 +150,7 @@ export async function action({ request, params }) {
 
     return redirect("..");
   } catch (err) {
+    undo();
     toast.error("Update failed", {
       className:
         "bg-destructive/10 dark:bg-destructive/20 border border-destructive/30 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm",
