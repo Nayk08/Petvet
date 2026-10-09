@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentUser } from "@/api/auth";
 import { fetchNavbar } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
@@ -24,6 +24,17 @@ import {
 } from "lucide-react";
 import { Link, redirect } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
+import petvetVideo from "../assets/PetvetvVideo.mp4";
+import galleryOpening from "../assets/petVet/gallery/grand-opening.jpg";
+import galleryLine from "../assets/petVet/gallery/line-outside.jpg";
+import galleryShop from "../assets/petVet/gallery/shop-interior.jpg";
+import gallerySupplies from "../assets/petVet/gallery/pet-supplies.jpg";
+import galleryUltrasound from "../assets/petVet/gallery/ultrasound.jpg";
+import galleryLodging from "../assets/petVet/gallery/pet-lodging.jpg";
+import galleryClient from "../assets/petVet/gallery/happy-client.jpg";
+import galleryPharmacy from "../assets/petVet/gallery/pharmacy-counter.jpg";
+import galleryTeam from "../assets/petVet/gallery/our-team.jpg";
+import galleryStorefront from "../assets/petVet/gallery/storefront.jpg";
 import {
   fetchPublicClinicSchedule,
   fetchPublicServices,
@@ -58,7 +69,7 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen bg-white dark:bg-[#060814] text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-zinc-200 dark:border-zinc-800/50 bg-white/95 dark:bg-[#060814]/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-[#060814]/60">
-        <div className="container flex h-16 items-center justify-between px-4 md:px-6">
+        <div className="container max-w-6xl mx-auto flex h-16 items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2 font-bold text-red-500 text-xl">
             <img src={PetVetLogo} alt="PetVet Logo" className="h-6 w-6" />
             Pet<span className="text-green-500">Vet</span>
@@ -75,6 +86,12 @@ export default function LandingPage() {
               className="hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
               About Us
+            </a>
+            <a
+              href="#gallery"
+              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Gallery
             </a>
             <a
               href="#services"
@@ -173,7 +190,7 @@ export default function LandingPage() {
         {/* About Us Section */}
         <section
           id="about"
-          className="container px-4 md:px-6 py-20 bg-zinc-50/50 dark:bg-[#060814]"
+          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
@@ -186,7 +203,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <FeatureCard
               icon={<CalendarRange className="h-5 w-5" />}
               title="Smart Scheduling"
@@ -207,6 +224,42 @@ export default function LandingPage() {
               title="Centralized Health Profiles"
               description="Instant access to medical files, immunization dates, and pet allergies. Replaces physical folders for reliable patient care tracking."
             />
+          </div>
+        </section>
+
+        <hr className="border-zinc-200 dark:border-zinc-800" />
+
+        {/* Gallery — photos of the clinic in a swipeable carousel */}
+        <section id="gallery" className="container px-4 md:px-6 py-20 max-w-6xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
+              Inside PetCycle
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              Take a quick clinic tour, and meet our team and shop.
+            </p>
+          </div>
+          {/* Video and photos in one row (stacked on phones), same height. */}
+          <div className="flex flex-col lg:flex-row gap-4 items-center lg:items-start">
+            {/* Clinic tour: a vertical phone clip (360×640). Muted autoplay
+                loop (browsers only autoplay muted); controls let visitors
+                unmute or pause. */}
+            <div className="w-full max-w-[270px] shrink-0 rounded-2xl overflow-hidden border border-zinc-200 shadow-lg bg-black">
+              <video
+                src={petvetVideo}
+                className="w-full aspect-[9/16] object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+                preload="metadata"
+                aria-label="PetCycle clinic tour video"
+              />
+            </div>
+            <div className="w-full min-w-0 flex-1">
+              <ClinicGallery onOpenImage={setActiveImage} />
+            </div>
           </div>
         </section>
 
@@ -382,7 +435,7 @@ export default function LandingPage() {
         {/* Testimonial Section */}
         <section
           id="testimonials"
-          className="container px-4 md:px-6 py-20 bg-zinc-50/50 dark:bg-[#060814]"
+          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
@@ -451,7 +504,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#060814]">
-        <div className="container flex flex-col gap-4 sm:flex-row py-8 w-full shrink-0 items-center justify-between px-4 md:px-6 text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="container max-w-6xl mx-auto flex flex-col gap-4 sm:flex-row py-8 w-full shrink-0 items-center justify-between px-4 md:px-6 text-sm text-zinc-600 dark:text-zinc-400">
           <p>
             © 2026 PetVet Cycle Animal and Grooming Center. All rights reserved.
           </p>
@@ -675,9 +728,18 @@ function LiveCalendar() {
 
 // The clinic's live service catalog (managed in Maintenance), grouped by
 // category — so the landing page never shows a stale or hardcoded price.
+// Filter button style shared by the Services and Products catalogs.
+const filterChip = (active) =>
+  `px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+    active
+      ? "bg-green-600 text-white border-green-600"
+      : "bg-white dark:bg-[#0e1121] text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
+  }`;
+
 function ServicesList() {
   const [services, setServices] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [category, setCategory] = useState(null); // null = first category
 
   useEffect(() => {
     const controller = new AbortController();
@@ -709,14 +771,27 @@ function ServicesList() {
     (name) => [name, services.filter((s) => s.category_name === name)],
   );
 
+  // One category at a time (48+ sub-services made the page very long),
+  // in a scrollable box like the Products catalog.
+  const active = category ?? byCategory[0]?.[0];
+  const items = byCategory.find(([name]) => name === active)?.[1] ?? [];
+
   return (
-    <div className="space-y-10">
-      {byCategory.map(([category, items]) => (
-        <div key={category}>
-          <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            {category}
-          </h3>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 justify-center">
+        {byCategory.map(([name, list]) => (
+          <button
+            key={name}
+            type="button"
+            aria-pressed={active === name}
+            onClick={() => setCategory(name)}
+            className={filterChip(active === name)}
+          >
+            {name} <span className="opacity-70">({list.length})</span>
+          </button>
+        ))}
+      </div>
+      <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#090b16] p-4 sm:p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((s) => (
               <div
@@ -763,8 +838,7 @@ function ServicesList() {
               </div>
             ))}
           </div>
-        </div>
-      ))}
+      </div>
     </div>
   );
 }
@@ -820,12 +894,7 @@ function ProductsCatalog() {
     ])
     .filter(([, items]) => items.length > 0);
   const peso = (v) => `₱${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-  const chip = (active) =>
-    `px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
-      active
-        ? "bg-green-600 text-white border-green-600"
-        : "bg-white dark:bg-[#0e1121] text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
-    }`;
+  const chip = filterChip;
 
   return (
     <div className="space-y-4">
@@ -916,6 +985,115 @@ function ProductsCatalog() {
           onClose={() => setSelected(null)}
         />
       )}
+    </div>
+  );
+}
+
+const GALLERY = [
+  { src: galleryStorefront, alt: "PetCycle clinic entrance and services window" },
+  { src: galleryTeam, alt: "The PetCycle team" },
+  { src: galleryPharmacy, alt: "Pharmacy counter with pet medicines and shampoos" },
+  { src: galleryUltrasound, alt: "Ultrasound check at the clinic" },
+  { src: galleryLodging, alt: "Pets resting in the lodging area" },
+  { src: gallerySupplies, alt: "Pet food, treats and accessories for sale" },
+  { src: galleryShop, alt: "Inside the PetCycle shop" },
+  { src: galleryClient, alt: "A happy client with her pet treats" },
+  { src: galleryLine, alt: "Pet owners lining up outside the clinic" },
+  { src: galleryOpening, alt: "PetCycle grand opening" },
+];
+
+// Swipeable photo carousel: native scroll-snap does the sliding (touch, trackpad,
+// keyboard), the arrows/dots just scroll it, and it auto-advances until the
+// visitor interacts. Clicking a photo opens the page's lightbox.
+function ClinicGallery({ onOpenImage }) {
+  const trackRef = useRef(null);
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  const goTo = (i) => {
+    const track = trackRef.current;
+    const n = GALLERY.length;
+    const slide = track?.children[(i + n) % n];
+    if (slide) track.scrollTo({ left: slide.offsetLeft - track.offsetLeft, behavior: "smooth" });
+  };
+
+  // Keep the dots in sync with whatever slide is scrolled into view.
+  const onScroll = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const slideWidth = track.children[0]?.offsetWidth || 1;
+    setIndex(Math.round(track.scrollLeft / slideWidth));
+  };
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (paused || reduceMotion) return;
+    const timer = setInterval(() => goTo(index + 1), 4500);
+    return () => clearInterval(timer);
+  }, [index, paused]);
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={() => setPaused(true)}
+      onFocusCapture={() => setPaused(true)}
+    >
+      <div
+        ref={trackRef}
+        onScroll={onScroll}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2"
+        style={{ scrollbarWidth: "none" }}
+        aria-label="Clinic photos"
+      >
+        {GALLERY.map((photo) => (
+          <button
+            key={photo.alt}
+            type="button"
+            onClick={() => onOpenImage(photo)}
+            className="snap-start shrink-0 w-[85%] sm:w-[48%] aspect-[4/3] lg:aspect-auto lg:h-[478px] rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+            aria-label={`Open photo: ${photo.alt}`}
+          >
+            <img
+              src={photo.src}
+              alt={photo.alt}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+            />
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => goTo(index - 1)}
+        className="absolute left-2 top-[45%] -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
+        aria-label="Previous photo"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => goTo(index + 1)}
+        className="absolute right-2 top-[45%] -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
+        aria-label="Next photo"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+
+      <div className="mt-4 flex justify-center gap-2">
+        {GALLERY.map((photo, i) => (
+          <button
+            key={photo.alt}
+            type="button"
+            onClick={() => goTo(i)}
+            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-green-600" : "w-2 bg-zinc-300 hover:bg-zinc-400"}`}
+            aria-label={`Show photo ${i + 1}`}
+            aria-current={i === index}
+          />
+        ))}
+      </div>
     </div>
   );
 }
