@@ -8,7 +8,7 @@ import {
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { XCircle, CheckCircle2 } from "lucide-react";
+import { XCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 
 import {
   Dialog,
@@ -66,6 +66,7 @@ export function Component() {
   });
 
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!loaderUser) return;
@@ -234,20 +235,31 @@ export function Component() {
               Password
             </label>
 
-            <Input
-              name="password"
-              type="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder={
-                isEditMode
-                  ? "Leave blank to keep current password"
-                  : "Min. 8 characters"
-              }
-              required={!isEditMode}
-              minLength={formData.password || !isEditMode ? 8 : undefined}
-              className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
-            />
+            <div className="relative">
+              <Input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleChange}
+                placeholder={
+                  isEditMode
+                    ? "Leave blank to keep current password"
+                    : "Min. 8 characters"
+                }
+                required={!isEditMode}
+                minLength={formData.password || !isEditMode ? 8 : undefined}
+                className="pr-10 bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((show) => !show)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1.5">
