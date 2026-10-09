@@ -29,6 +29,8 @@ import {
   Scissors,
   ClipboardClock,
   Syringe,
+  Moon,
+  Sun,
   BarChart3,
   Menu,
   X,
@@ -66,8 +68,22 @@ export default function Sidebar({ onLogout }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    return localStorage.getItem("theme") || "light";
+  });
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
 
   // Close the mobile drawer on every navigation.
   useEffect(() => {
@@ -396,6 +412,18 @@ export default function Sidebar({ onLogout }) {
                   >
                     <User size={16} />
                     Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer text-left transition-all dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                  >
+                    {theme === "dark" ? (
+                      <Sun size={16} />
+                    ) : (
+                      <Moon size={16} />
+                    )}
+                    {theme === "dark" ? "Light mode" : "Dark mode"}
                   </button>
                   <button
                     type="button"

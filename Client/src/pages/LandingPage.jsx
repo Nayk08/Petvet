@@ -21,6 +21,8 @@ import {
   ChevronRight,
   CalendarClock,
   PawPrint,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Link, redirect } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
@@ -53,6 +55,15 @@ import { tierPriceRange } from "@/utils/groomingTier.js";
 
 export default function LandingPage() {
   const [activeImage, setActiveImage] = useState(null);
+
+  // Light by default; the visitor's choice is remembered (same "theme" key
+  // as the staff and client portal toggles).
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+  const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
 
   // Dismiss lightbox on 'Escape' key press
   useEffect(() => {
@@ -131,6 +142,20 @@ export default function LandingPage() {
             </a>
           </nav>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              className="border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4 text-amber-400" />
+              ) : (
+                <Moon className="h-4 w-4 text-zinc-700" />
+              )}
+            </Button>
+
             <Button
               variant="ghost"
               size="sm"
@@ -244,7 +269,7 @@ export default function LandingPage() {
             {/* Clinic tour: a vertical phone clip (360×640). Muted autoplay
                 loop (browsers only autoplay muted); controls let visitors
                 unmute or pause. */}
-            <div className="w-full max-w-[270px] shrink-0 rounded-2xl overflow-hidden border border-zinc-200 shadow-lg bg-black">
+            <div className="w-full max-w-[270px] shrink-0 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-lg bg-black">
               <video
                 src={petvetVideo}
                 className="w-full aspect-[9/16] object-cover"
@@ -1052,7 +1077,7 @@ function ClinicGallery({ onOpenImage }) {
             key={photo.alt}
             type="button"
             onClick={() => onOpenImage(photo)}
-            className="snap-start shrink-0 w-[85%] sm:w-[48%] aspect-[4/3] lg:aspect-auto lg:h-[478px] rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+            className="snap-start shrink-0 w-[85%] sm:w-[48%] aspect-[4/3] lg:aspect-auto lg:h-[478px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
             aria-label={`Open photo: ${photo.alt}`}
           >
             <img
@@ -1088,7 +1113,7 @@ function ClinicGallery({ onOpenImage }) {
             key={photo.alt}
             type="button"
             onClick={() => goTo(i)}
-            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-green-600" : "w-2 bg-zinc-300 hover:bg-zinc-400"}`}
+            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-green-600" : "w-2 bg-zinc-300 hover:bg-zinc-400 dark:bg-zinc-700 dark:hover:bg-zinc-500"}`}
             aria-label={`Show photo ${i + 1}`}
             aria-current={i === index}
           />

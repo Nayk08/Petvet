@@ -5,8 +5,8 @@ import App from "./App.jsx";
 
 
 
-// Light mode only (dark mode was removed): forget any old saved choice.
-localStorage.removeItem("theme");
+const savedTheme = localStorage.getItem("theme");
+document.documentElement.classList.toggle("dark", savedTheme === "dark");
 
 // Chrome's back-forward cache can restore an old snapshot of the page on
 // Back/Forward — e.g. a signed-in portal after the session ended, frozen on

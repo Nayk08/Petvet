@@ -1,10 +1,31 @@
 import Sidebar from "./Sidebar";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Layout() {
   const location = useLocation();
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    return localStorage.getItem("theme") || "light";
+  });
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(
+        document.documentElement.classList.contains("dark")
+          ? "dark"
+          : "light",
+      );
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Every "modal" in this app (add/edit/delete/process dialogs) is really a
   // route rendering a Radix Dialog with `open` hardcoded true, closed by
@@ -46,7 +67,7 @@ export default function Layout() {
       </main>
 
       <Toaster
-        theme="light"
+        theme={theme}
         position="top-right"
         toastOptions={{
           duration: 3000,

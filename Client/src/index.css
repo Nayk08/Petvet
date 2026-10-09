@@ -2,6 +2,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Native UI (scrollbars, date/time pickers, select popups) follows the app
+   theme — otherwise they stay bright white on the dark background. */
+.dark {
+  color-scheme: dark;
+}
+
 /* Thin scrollbars with a soft thumb in both themes, instead of the thick
    default ones (Chrome 121+, Edge, Firefox). */
 * {
@@ -176,4 +182,11 @@
   --gridline: #e1e0d9;
   --muted: #898781;
   --text-secondary: #52514e;
+}
+.dark .analytics-viz {
+  --slot-1: #4caf50;
+  --slot-2: #f5b52e;
+  --slot-3: #ef5350;
+  --gridline: #2c2c2a;
+  --text-secondary: #c3c2b7;
 }
