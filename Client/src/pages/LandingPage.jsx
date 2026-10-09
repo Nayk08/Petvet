@@ -77,13 +77,13 @@ export default function LandingPage() {
   }, [activeImage]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-[#060814] text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-zinc-200 dark:border-zinc-800/50 bg-white/95 dark:bg-[#060814]/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-[#060814]/60">
+      <header className="sticky top-0 z-50 w-full border-b border-zinc-200 dark:border-zinc-800/50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-950/60">
         <div className="container max-w-6xl mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <div className="flex items-center gap-2 font-bold text-red-500 text-xl">
+          <div className="flex items-center gap-2 font-bold text-red-600 dark:text-red-500 text-xl">
             <img src={PetVetLogo} alt="PetVet Logo" className="h-6 w-6" />
-            Pet<span className="text-green-500">Vet</span>
+            Pet<span className="text-green-600 dark:text-green-500">Vet</span>
           </div>
           <nav className="hidden md:flex gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-400">
             <a
@@ -180,8 +180,8 @@ export default function LandingPage() {
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl text-zinc-900 dark:text-white">
             Streamlined Care for Your Best Friends at{" "}
-            <span className="bg-gradient-to-r lg:bg-clip-text lg:text-transparent lg:from-green-500 lg:to-emerald-600">
-              <span className="text-red-500">Pet</span>Vet Center
+            <span className="bg-gradient-to-r lg:bg-clip-text lg:text-transparent lg:from-green-600 lg:to-green-700">
+              <span className="text-red-600 dark:text-red-500">Pet</span>Vet Center
             </span>
           </h1>
           <p className="text-xl text-zinc-600 dark:text-zinc-400 max-w-2xl">
@@ -344,7 +344,7 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]">
+            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900">
               <Clock className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0" />
               <div>
                 <h4 className="font-bold mb-1 text-zinc-900 dark:text-white">
@@ -359,7 +359,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]">
+            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900">
               <CalendarRange className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0" />
               <div>
                 <h4 className="font-bold mb-1 text-zinc-900 dark:text-white">
@@ -375,7 +375,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]">
+            <div className="flex gap-4 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900">
               <MapPin className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0" />
               <div>
                 <h4 className="font-bold mb-1 text-zinc-900 dark:text-white">
@@ -528,7 +528,7 @@ export default function LandingPage() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#060814]">
+      <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
         <div className="container max-w-6xl mx-auto flex flex-col gap-4 sm:flex-row py-8 w-full shrink-0 items-center justify-between px-4 md:px-6 text-sm text-zinc-600 dark:text-zinc-400">
           <p>
             © 2026 PetVet Cycle Animal and Grooming Center. All rights reserved.
@@ -702,7 +702,7 @@ function LiveCalendar() {
 
           {/* Selected day detail */}
           {selectedDate && (
-            <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0e1121] p-4">
+            <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-4">
               <h4 className="font-bold text-sm text-zinc-900 dark:text-white mb-2">
                 {new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
                   "en-US",
@@ -758,7 +758,7 @@ const filterChip = (active) =>
   `px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
     active
       ? "bg-green-600 text-white border-green-600"
-      : "bg-white dark:bg-[#0e1121] text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
+      : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
   }`;
 
 function ServicesList() {
@@ -816,12 +816,12 @@ function ServicesList() {
           </button>
         ))}
       </div>
-      <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#090b16] p-4 sm:p-6">
+      <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((s) => (
               <div
                 key={s.appointment_services_id}
-                className="flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121]"
+                className="flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900"
               >
                 {/* Picture uploaded in Maintenance; a soft placeholder until then. */}
                 {s.service_image ? (
@@ -946,16 +946,16 @@ function ProductsCatalog() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search products or brands..."
           aria-label="Search products"
-          className="w-full sm:w-80 mx-auto rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0e1121] px-4 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-green-500/50"
+          className="w-full sm:w-80 mx-auto rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-green-500/50"
         />
       </div>
 
     {/* One scrollable box for the whole catalog; category headings stay
         pinned at the top of the box while scrolling through that category. */}
-    <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#090b16] p-4 sm:p-6 space-y-8">
+    <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6 space-y-8">
       {visibleGroups.map(([category, items]) => (
         <div key={category}>
-          <h3 className="sticky -top-4 sm:-top-6 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 bg-white/95 dark:bg-[#090b16]/95 backdrop-blur">
+          <h3 className="sticky -top-4 sm:-top-6 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 bg-white/95 dark:bg-zinc-950/95 backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-green-500" />
             {category}
             <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({items.length})</span>
@@ -966,7 +966,7 @@ function ProductsCatalog() {
                 key={p.product_name}
                 type="button"
                 onClick={() => setSelected(p)}
-                className="text-left flex flex-col gap-1.5 p-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-[#0e1121] hover:border-green-500/60 transition-colors cursor-pointer"
+                className="text-left flex flex-col gap-1.5 p-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:border-green-500/60 transition-colors cursor-pointer"
               >
                 {p.product_image ? (
                   <img
@@ -1125,7 +1125,7 @@ function ClinicGallery({ onOpenImage }) {
 
 function FeatureCard({ icon, title, description }) {
   return (
-    <Card className="bg-zinc-50 dark:bg-[#0e1121] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white">
+    <Card className="bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white">
       <CardContent className="pt-6 flex flex-col gap-2">
         <div className="p-2 w-10 h-10 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center mb-2">
           {icon}
@@ -1144,7 +1144,7 @@ const ANNOUNCEMENT_COLORS = [
   "border-t-amber-500",
   "border-t-red-500",
   "border-t-green-500",
-  "border-t-blue-500",
+  "border-t-green-700",
 ];
 
 function AnnouncementsList({ onOpenImage }) {
@@ -1228,7 +1228,7 @@ function AnnouncementCard({
 }) {
   return (
     <Card
-      className={`bg-zinc-50 dark:bg-[#0e1121] overflow-hidden flex flex-col shadow-sm border-x-0 border-b-0 border-t-4 ${borderColor} border-zinc-200 dark:border-zinc-800`}
+      className={`bg-zinc-50 dark:bg-zinc-900 overflow-hidden flex flex-col shadow-sm border-x-0 border-b-0 border-t-4 ${borderColor} border-zinc-200 dark:border-zinc-800`}
     >
       {img && (
       <div
@@ -1266,7 +1266,7 @@ function AnnouncementCard({
 
 function TestimonialCard({ img, quote, author }) {
   return (
-    <Card className="bg-zinc-50 dark:bg-[#0e1121] border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col justify-between text-zinc-900 dark:text-white">
+    <Card className="bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col justify-between text-zinc-900 dark:text-white">
       <div className="aspect-[4/3] bg-zinc-100 dark:bg-zinc-900 w-full overflow-hidden">
         <img src={img} alt={author} className="w-full h-full object-cover" />
       </div>
