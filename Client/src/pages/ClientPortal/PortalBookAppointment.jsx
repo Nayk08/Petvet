@@ -30,6 +30,8 @@ import {
   buildServiceSlots,
   overlapsBooked,
   toBookedRanges,
+  dayClosedReason,
+  staffOnDuty,
 } from "@/utils/serviceSlots";
 
 function formatDateString(d) {
@@ -107,13 +109,19 @@ export function Component() {
   // Set via the Maintenance module (tbl_appointment_services.allowed_roles)
   // — not a hardcoded map.
   const allowedStaffRoles = selectedService?.allowed_roles ?? [];
-  const filteredStaff = (staff ?? []).filter((s) =>
+  const roleStaff = (staff ?? []).filter((s) =>
     allowedStaffRoles.includes(s.user_level?.trim()),
   );
+  const filteredStaff = staffOnDuty(roleStaff, selectedDate);
 
   const isToday = selectedDate === todayDateString();
+  const closedReason = dayClosedReason(selectedDate, selectedService?.category_id);
   // Start times follow the sub-service's duration (30 min: 9:00, 9:30, …).
-  const availableSlots = buildServiceSlots(selectedService?.duration_minutes).filter((slot) => {
+  const availableSlots = buildServiceSlots(
+    selectedService?.duration_minutes,
+    selectedService?.category_id,
+  ).filter((slot) => {
+    if (closedReason) return false;
     if (!isToday) return true;
     return new Date(`${selectedDate}T${slot.value}:00`).getTime() > Date.now();
   });
@@ -127,6 +135,7 @@ export function Component() {
         signal,
       }),
     enabled: Boolean(selectedStaffId && selectedDate),
+    staleTime: 0, // live availability: other clients/staff book and cancel too
   });
 
   // Durations differ, so a start time is taken if it OVERLAPS any booking.
@@ -384,7 +393,7 @@ export function Component() {
                 {!selectedServiceId
                   ? "Select a service first"
                   : filteredStaff.length === 0
-                    ? "No staff available"
+                    ? "No staff available on this date"
                     : "Select staff"}
               </option>
               {filteredStaff.map((s) => (
@@ -409,6 +418,10 @@ export function Component() {
               onChange={(e) => {
                 setSelectedDate(e.target.value);
                 setSelectedSlot("");
+                // e.g. a vet picked, then the date moved to a Wednesday
+                if (!staffOnDuty(roleStaff, e.target.value).some((s) => String(s.users_id) === selectedStaffId)) {
+                  setSelectedStaffId("");
+                }
               }}
               className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
             />
@@ -427,7 +440,7 @@ export function Component() {
               <option value="">
                 {availableSlots.length === 0
                   ? selectedServiceId
-                    ? "No times left today"
+                    ? (closedReason ?? "No times left today")
                     : "Select a service first"
                   : "Select a start time"}
               </option>

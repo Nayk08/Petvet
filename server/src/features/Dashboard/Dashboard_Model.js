@@ -1,7 +1,18 @@
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
 import AppointmentModel from "../Appointment/Appointment_Model.js";
-import { REAL_PAYMENT_ACTIVITY_SQL, revenueTransactionsQuery } from "../Payment/Payment_Model.js";
+import {
+  REAL_PAYMENT_ACTIVITY_SQL,
+  revenueTransactionsQuery,
+  paymentStatusCounts,
+} from "../Payment/Payment_Model.js";
+
+// Today's Sales: created today — or an online deposit whose visit is today,
+// since that's when its balance is collected (the bill itself is older).
+const TODAY_PAYMENTS_SQL = `(date_created::date = CURRENT_DATE
+  OR (payment_status_name = 'Partially Paid'
+      AND appointment_id IN (SELECT appointment_id FROM tbl_appointments
+                             WHERE appointment_date = CURRENT_DATE)))`;
 
 const appointmentModel = new AppointmentModel();
 
@@ -95,15 +106,7 @@ export default class DashboardModel {
     const client = await pool.connect();
     try {
       const values = [];
-      const conditions = [
-        // Created today — or an online deposit whose visit is today, since
-        // that's when its balance is collected (the bill itself is older).
-        `(date_created::date = CURRENT_DATE
-          OR (payment_status_name = 'Partially Paid'
-              AND appointment_id IN (SELECT appointment_id FROM tbl_appointments
-                                     WHERE appointment_date = CURRENT_DATE)))`,
-        REAL_PAYMENT_ACTIVITY_SQL,
-      ];
+      const conditions = [TODAY_PAYMENTS_SQL, REAL_PAYMENT_ACTIVITY_SQL];
 
       for (const [key, value] of Object.entries(filters)) {
         if (key === "payment_type") {
@@ -137,13 +140,17 @@ export default class DashboardModel {
 
       const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
-      return await paginateQuery(client, {
+      const result = await paginateQuery(client, {
         baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY payment_id DESC`,
         countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
         values,
         page,
         limit,
       });
+      return {
+        ...result,
+        status_counts: await paymentStatusCounts(`${TODAY_PAYMENTS_SQL} AND ${REAL_PAYMENT_ACTIVITY_SQL}`),
+      };
     } catch (error) {
       console.log("Error on Model getTodayPayments function");
       throw error;

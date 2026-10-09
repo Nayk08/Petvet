@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Container from "@/components/ui/Container";
 import DynamicGrid from "@/components/ui/DynamicGrid";
+import PaymentStatusChips from "@/components/ui/PaymentStatusChips.jsx";
 import { Pagination } from "@/components/ui/Pagination";
 import {
   Dialog,
@@ -131,7 +132,8 @@ export function Component() {
   const [revenueModalKey, setRevenueModalKey] = useState(null);
   const [revenueModalSearch, setRevenueModalSearch] = useState("");
   const [revenueModalFilters, setRevenueModalFilters] = useState({});
-  const [revenueModalPage, setRevenueModalPage] = useState(1); // 10 rows per page
+  const [revenueModalPage, setRevenueModalPage] = useState(1);
+  const [revenueModalLimit, setRevenueModalLimit] = useState(10); // 10 / 50 / "all"
   const activeRevenueModal = revenueModalKey
     ? REVENUE_MODALS[revenueModalKey]
     : null;
@@ -159,6 +161,7 @@ export function Component() {
       debouncedRevenueModalSearch,
       revenueModalFilters,
       revenueModalPage,
+      revenueModalLimit,
     ],
     queryFn: ({ signal }) =>
       fetchTodayRevenueTransactions({
@@ -166,7 +169,7 @@ export function Component() {
         method: activeRevenueModal?.method,
         search: debouncedRevenueModalSearch,
         page: revenueModalPage,
-        limit: 10,
+        limit: revenueModalLimit,
         signal,
       }),
     enabled: Boolean(activeRevenueModal),
@@ -253,6 +256,7 @@ export function Component() {
         filters: salesFilters,
         signal,
       }),
+    placeholderData: keepPreviousData, // status chips/table stay put while filtering
   });
 
   return (
@@ -358,6 +362,12 @@ export function Component() {
                   setRevenueModalFilters(value);
                   setRevenueModalPage(1);
                 }}
+                limit={revenueModalLimit}
+                limitOptions={[10, 50, "all"]}
+                onLimitChange={(value) => {
+                  setRevenueModalLimit(value);
+                  setRevenueModalPage(1);
+                }}
                 bare
               />
               </div>
@@ -365,10 +375,12 @@ export function Component() {
             {revenueModalData?.pagination && (
               <Pagination
                 page={revenueModalPage}
-                totalPages={revenueModalData.pagination.totalPages ?? 1}
+                totalPages={
+                  revenueModalLimit === "all" ? 1 : (revenueModalData.pagination.totalPages ?? 1)
+                }
                 onPageChange={setRevenueModalPage}
                 total={revenueModalData.pagination.total}
-                limit={10}
+                limit={revenueModalLimit === "all" ? revenueModalData.pagination.total : revenueModalLimit}
               />
             )}
           </DialogContent>
@@ -421,6 +433,11 @@ export function Component() {
       )}
 
       {/* Today's Sales */}
+      <PaymentStatusChips
+        counts={todaySales?.status_counts}
+        filters={salesFilters}
+        onFiltersChange={setSalesFilters}
+      />
       <DynamicGrid
         data={todaySales?.rows ?? []}
         columnsConfig={PaymentColumns}

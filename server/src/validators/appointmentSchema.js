@@ -7,6 +7,21 @@ import { manilaInstant } from "../../utils/manilaTime.js";
 // by CLINIC_CLOSE_MINUTE and lands on that sub-service's slot grid.
 export const CLINIC_OPEN_MINUTE = 9 * 60; // 9:00 AM
 export const CLINIC_CLOSE_MINUTE = 18 * 60; // 6:00 PM
+export const CONSULTATION_CUTOFF_MINUTE = 17 * 60; // 5:00 PM
+
+// Clinic schedule rules (shown on the landing page; mirrored in the client's
+// utils/serviceSlots.js). Returns why the booking isn't allowed, or null.
+// dateStr is "YYYY-MM-DD"; categories are the fixed seed ids (1 Grooming,
+// 2 Consultation); endMinute is when the service ends.
+export function clinicRuleError({ dateStr, categoryId, endMinute, isVet }) {
+  const weekday = new Date(`${dateStr}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+  if (Number(categoryId) === 1 && weekday === 0) return "Grooming is unavailable on Sundays.";
+  if (isVet && weekday === 3) return "Veterinarians do not hold clinic hours on Wednesdays.";
+  if (Number(categoryId) === 2 && endMinute > CONSULTATION_CUTOFF_MINUTE) {
+    return "Consultations must finish by the 5:00 PM daily cutoff.";
+  }
+  return null;
+}
 
 // start_time travels as a bare "HH:mm" or "HH:mm:ss" wall-clock
 // strings, never a coercible date (see Appointment_Model.js's

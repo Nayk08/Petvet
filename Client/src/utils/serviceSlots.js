@@ -4,6 +4,22 @@
 // the service must end by 6:00 PM. The server re-checks all of this.
 export const CLINIC_OPEN_MINUTE = 9 * 60;
 export const CLINIC_CLOSE_MINUTE = 18 * 60;
+const CONSULTATION_CUTOFF_MINUTE = 17 * 60;
+
+// Clinic schedule rules — mirror of the server's clinicRuleError
+// (validators/appointmentSchema.js). Category ids are fixed seeds:
+// 1 Grooming, 2 Consultation. dateStr is "YYYY-MM-DD".
+const weekday = (dateStr) => new Date(`${dateStr}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+export const isVetDayOff = (dateStr) => Boolean(dateStr) && weekday(dateStr) === 3; // Wednesday
+export function dayClosedReason(dateStr, categoryId) {
+  if (dateStr && Number(categoryId) === 1 && weekday(dateStr) === 0) {
+    return "Grooming is unavailable on Sundays";
+  }
+  return null;
+}
+// Staff who can work that day (no veterinarians on Wednesdays).
+export const staffOnDuty = (staff, dateStr) =>
+  isVetDayOff(dateStr) ? staff.filter((s) => s.user_level?.trim() !== "Veterinarian") : staff;
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -31,13 +47,15 @@ export function timeToMinutes(value) {
 
 // Every start time for a sub-service of `durationMinutes`:
 // 30 min -> 9:00-9:30, 9:30-10:00, …, 5:30-6:00 PM.
-export function buildServiceSlots(durationMinutes) {
+// Consultations stop at the 5:00 PM cutoff instead.
+export function buildServiceSlots(durationMinutes, categoryId) {
   const duration = Number(durationMinutes);
   if (!duration || duration <= 0) return [];
+  const close = Number(categoryId) === 2 ? CONSULTATION_CUTOFF_MINUTE : CLINIC_CLOSE_MINUTE;
   const slots = [];
   for (
     let start = CLINIC_OPEN_MINUTE;
-    start + duration <= CLINIC_CLOSE_MINUTE;
+    start + duration <= close;
     start += duration
   ) {
     slots.push({

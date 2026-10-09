@@ -42,6 +42,8 @@ import {
   overlapsBooked,
   timeToMinutes,
   toBookedRanges,
+  dayClosedReason,
+  staffOnDuty,
 } from "@/utils/serviceSlots";
 
 function formatDateString(d) {
@@ -186,7 +188,7 @@ export function Component() {
   // — not a hardcoded map, so a newly added service just works once an
   // admin configures who can perform it.
   const allowedStaffRoles = selectedService?.allowed_roles ?? [];
-  const filteredStaff = (staff ?? []).filter((s) =>
+  const roleStaff = (staff ?? []).filter((s) =>
     allowedStaffRoles.includes(s.user_level?.trim()),
   );
 
@@ -196,6 +198,15 @@ export function Component() {
       fetchAppointmentById(params.appointment_id, { signal }),
     enabled: isEditMode,
   });
+
+  // No vets on Wednesdays — but an edit keeps the appointment's own staff.
+  const onDuty = (dateStr) =>
+    roleStaff.filter(
+      (s) =>
+        staffOnDuty([s], dateStr).length > 0 ||
+        (isEditMode && String(s.users_id) === String(appointmentData?.assigned_staff_id)),
+    );
+  const filteredStaff = onDuty(selectedDate);
 
   // Slot values are the start time, "HH:mm" (see extractTimeOfDay above).
   const [selectedSlot, setSelectedSlot] = useState(
@@ -231,7 +242,11 @@ export function Component() {
 
   // Start times come from the selected sub-service's duration: a 30-min
   // Half Bath offers 9:00-9:30, 9:30-10:00, …; a 60-min service 9:00-10:00, …
-  const serviceSlots = buildServiceSlots(selectedService?.duration_minutes);
+  const serviceSlots = buildServiceSlots(
+    selectedService?.duration_minutes,
+    selectedService?.category_id,
+  );
+  const closedReason = dayClosedReason(selectedDate, selectedService?.category_id);
 
   // Editing without changing service/time keeps the appointment's stored
   // times (the server does the same), even if the duration has since been
@@ -257,6 +272,7 @@ export function Component() {
 
   const isToday = selectedDate === todayDateString();
   const availableSlots = serviceSlots.filter((slot) => {
+    if (closedReason) return false;
     if (!isToday) return true;
     // Client-side convenience only; the server re-validates in Manila time.
     const slotStart = new Date(`${selectedDate}T${slot.value}:00`);
@@ -278,6 +294,7 @@ export function Component() {
         signal,
       }).then((r) => r.rows ?? []),
     enabled: Boolean(selectedStaffId && selectedDate),
+    staleTime: 0, // live availability: bookings/cancellations happen elsewhere too
   });
 
   const bookedRanges = toBookedRanges(
@@ -604,7 +621,7 @@ export function Component() {
                     {!selectedServiceId
                       ? "Select a sub-service first"
                       : filteredStaff.length === 0
-                        ? "No staff available"
+                        ? "No staff available on this date"
                         : "Select staff"}
                   </option>
                   {filteredStaff.map((s) => (
@@ -627,6 +644,9 @@ export function Component() {
                   onChange={(e) => {
                     setSelectedDate(e.target.value);
                     setSelectedSlot(""); // previously-picked slot may no longer be valid
+                    if (!onDuty(e.target.value).some((s) => String(s.users_id) === selectedStaffId)) {
+                      setSelectedStaffId(""); // e.g. a vet, and the date moved to a Wednesday
+                    }
                   }}
                   className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
                 />
@@ -651,7 +671,7 @@ export function Component() {
                     {availableSlots.length === 0
                       ? !selectedServiceId
                         ? "Select a sub-service first"
-                        : "No times left today"
+                        : (closedReason ?? "No times left today")
                       : "Select a start time"}
                   </option>
                   {availableSlots.map((slot) => {
@@ -814,6 +834,13 @@ export async function action({ request, params }) {
   await queryClient.invalidateQueries({
     queryKey: ["appointment", params.appointment_id],
   });
+  // The edit re-prices the appointment's still-Pending bill (new service or
+  // pet), so payment lists, the payment detail and revenue must refetch too.
+  await Promise.all(
+    [["Payments"], ["Payment"], ["TodayPayments"], ["TodayRevenueSummary"]].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
 
   toast.success("Appointment updated", {
     className:

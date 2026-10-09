@@ -3,7 +3,6 @@ import { getCurrentUser } from "@/api/auth";
 import { fetchNavbar } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowRight,
@@ -18,8 +17,6 @@ import {
   Megaphone,
   X,
   Maximize2,
-  Sun,
-  Moon,
   ChevronLeft,
   ChevronRight,
   CalendarClock,
@@ -45,27 +42,6 @@ import { tierPriceRange } from "@/utils/groomingTier.js";
 
 export default function LandingPage() {
   const [activeImage, setActiveImage] = useState(null);
-  const [email, setEmail] = useState("");
-
-  // Initialize theme from localStorage or default to dark
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("theme") || "dark";
-  });
-
-  // Sync theme class to standard HTML document tag & save preference
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  };
 
   // Dismiss lightbox on 'Escape' key press
   useEffect(() => {
@@ -77,12 +53,6 @@ export default function LandingPage() {
     }
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeImage]);
-
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-    if (!email) return;
-    setEmail("");
-  };
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-[#060814] text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
@@ -144,21 +114,6 @@ export default function LandingPage() {
             </a>
           </nav>
           <div className="flex items-center gap-3">
-            {/* Darkmode Toggle Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleTheme}
-              className="border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              aria-label="Toggle Theme"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-4 w-4 text-amber-400" />
-              ) : (
-                <Moon className="h-4 w-4 text-zinc-700" />
-              )}
-            </Button>
-
             <Button
               variant="ghost"
               size="sm"
@@ -420,38 +375,6 @@ export default function LandingPage() {
 
           {/* Managed by the admin on the staff Announcements page. */}
           <AnnouncementsList onOpenImage={setActiveImage} />
-
-          {/* Email Newsletter Subscription Form */}
-          <div className="mt-12 max-w-xl mx-auto bg-zinc-50 dark:bg-[#0e1121] rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 text-center flex flex-col items-center gap-4">
-            <div>
-              <h4 className="font-bold text-base text-zinc-900 dark:text-white">
-                Want live bulletins on your phone?
-              </h4>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
-                Get immediate emails regarding holiday schedule alerts and
-                emergency updates.
-              </p>
-            </div>
-            <form
-              onSubmit={handleSubscribe}
-              className="flex w-full max-w-sm items-center space-x-2"
-            >
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Your email address"
-                required
-                className="h-10 bg-white dark:bg-[#060814] border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-zinc-400 dark:focus-visible:ring-zinc-700"
-              />
-              <Button
-                type="submit"
-                className="h-10 bg-green-600 hover:bg-green-700 text-white shrink-0"
-              >
-                Subscribe
-              </Button>
-            </form>
-          </div>
         </section>
 
         <hr className="border-zinc-200 dark:border-zinc-800" />

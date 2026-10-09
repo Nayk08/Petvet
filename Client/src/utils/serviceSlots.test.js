@@ -1,7 +1,24 @@
 // Run: node --test src/utils/   (node's built-in runner, no dependencies)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildServiceSlots, overlapsBooked, toBookedRanges } from "./serviceSlots.js";
+import {
+  buildServiceSlots,
+  overlapsBooked,
+  toBookedRanges,
+  dayClosedReason,
+  staffOnDuty,
+} from "./serviceSlots.js";
+
+test("clinic rules: consultation cutoff, no grooming Sunday, no vets Wednesday", () => {
+  assert.equal(buildServiceSlots(30, 2).at(-1).label, "4:30 PM - 5:00 PM");
+  assert.equal(buildServiceSlots(30, 1).at(-1).label, "5:30 PM - 6:00 PM");
+  assert.ok(dayClosedReason("2026-10-11", 1)); // Sunday, grooming
+  assert.equal(dayClosedReason("2026-10-11", 2), null); // Sunday, consultation ok
+  const staff = [{ user_level: "Veterinarian" }, { user_level: "Groomer" }];
+  assert.equal(staffOnDuty(staff, "2026-10-14").length, 1); // Wednesday
+  assert.equal(staffOnDuty(staff, "2026-10-18").length, 2); // Sunday: vets work
+  assert.equal(staffOnDuty(staff, "2026-10-13").length, 2); // Tuesday
+});
 
 test("slots step by the sub-service's duration and end by 6:00 PM", () => {
   const halfBath = buildServiceSlots(30);

@@ -13,6 +13,20 @@ const ALLOWED_FILTER_COLUMNS = ["payment_status_name"];
 export const REAL_PAYMENT_ACTIVITY_SQL = `NOT (payment_status_name = 'Cancelled' AND payment_method IS NULL)
   AND NOT (payment_status_name = 'Pending' AND created_by = 'Client Portal')`;
 
+// How many payments are in each status (every status, even at 0) within
+// `scopeSql` — powers the status chips above the payment lists.
+export async function paymentStatusCounts(scopeSql) {
+  const { rows } = await pool.query(
+    `SELECT s.payment_status_name, COUNT(p.payment_status_name)::int AS count
+     FROM tbl_payment_status s
+     LEFT JOIN (SELECT payment_status_name FROM v_payments WHERE ${scopeSql}) p
+       USING (payment_status_name)
+     GROUP BY s.payment_status_name, s.payment_status_id
+     ORDER BY s.payment_status_id`,
+  );
+  return rows;
+}
+
 // Paid (fully, or a verified deposit) → its Pending appointment goes In Queue.
 // Runs inside the caller's transaction.
 async function confirmPendingAppointment(client, appointment_id, updated_by) {
@@ -125,13 +139,14 @@ export default class PaymentModel {
         ? `WHERE ${conditions.join(" AND ")}`
         : "";
 
-      return await paginateQuery(client, {
+      const result = await paginateQuery(client, {
         baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY payment_id DESC`,
         countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
         values,
         page,
         limit,
       });
+      return { ...result, status_counts: await paymentStatusCounts(REAL_PAYMENT_ACTIVITY_SQL) };
     } catch (error) {
       console.log("Error on Model getPayments function");
       throw error;

@@ -3,6 +3,7 @@ import { paginateQuery } from "../../../utils/paginateQuery.js";
 import { resolvePaymentSplit } from "../../../utils/validatePaymentMethod.js";
 import {
   parseTimeString,
+  clinicRuleError,
   CLINIC_OPEN_MINUTE,
   CLINIC_CLOSE_MINUTE,
 } from "../../validators/appointmentSchema.js";
@@ -134,15 +135,17 @@ async function resolveSlot(
     start_time,
     exclude_appointment_id = null,
     skipGridCheck = false,
+    checkRules = !skipGridCheck,
     keep_end_time_full = null,
   },
 ) {
   // service_price here is the price THIS pet is charged (see effectivePriceSql).
   const { rows } = await client.query(
-    `SELECT s.appointment_services, s.duration_minutes,
-            ${effectivePriceSql("s", "$2")} AS service_price
+    `SELECT s.appointment_services, s.duration_minutes, s.category_id, s.allowed_roles,
+            ${effectivePriceSql("s", "$2")} AS service_price,
+            ${staffRoleSql("$3::int")} AS staff_roles
      FROM tbl_appointment_services s WHERE s.appointment_services_id = $1`,
-    [appointment_services_id, pets_id],
+    [appointment_services_id, pets_id, assigned_staff_id],
   );
   if (!rows.length) throw httpError(404, "Selected service not found");
   const service = rows[0];
@@ -165,6 +168,20 @@ async function resolveSlot(
         `${service.appointment_services} takes ${duration} minutes and would end after 6:00 PM.`,
       );
     }
+  }
+  if (checkRules) {
+    // The role(s) this staff member works this service as — a Groomer who is
+    // also a Veterinarian can still groom on a vet's day off.
+    const actingRoles = (service.staff_roles ?? "")
+      .split(", ")
+      .filter((r) => (service.allowed_roles ?? []).includes(r));
+    const ruleError = clinicRuleError({
+      dateStr: toTimestampString(appointment_date, "00:00").slice(0, 10),
+      categoryId: service.category_id,
+      endMinute,
+      isVet: actingRoles.length > 0 && actingRoles.every((r) => r === "Veterinarian"),
+    });
+    if (ruleError) throw httpError(400, ruleError);
   }
 
   const start_time_full = toTimestampString(appointment_date, `${pad2(start.hour)}:${pad2(start.minute)}`);
@@ -414,8 +431,17 @@ export default class AppointmentModel {
         ? `WHERE ${conditions.join(" AND ")}`
         : "";
 
+      // Service queues (Consultation / Grooming / Operation pages) are first
+      // come, first served: open visits first, earliest slot then earliest
+      // booking at the top; finished ones after, newest first.
+      const orderBy = filters.category_name
+        ? `(appointment_status_name IN ('Pending', 'In Queue')) DESC,
+           CASE WHEN appointment_status_name IN ('Pending', 'In Queue') THEN start_time END ASC,
+           start_time DESC, appointment_id ASC`
+        : "appointment_id DESC";
+
       return await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_appointments ${whereClause} ORDER BY appointment_id DESC`,
+        baseQuery: `SELECT * FROM v_appointments ${whereClause} ORDER BY ${orderBy}`,
         countQuery: `SELECT COUNT(*) AS total FROM v_appointments ${whereClause}`,
         values,
         page,
@@ -577,7 +603,7 @@ export default class AppointmentModel {
       // (a later duration change in Maintenance must not move an existing
       // appointment). Otherwise re-derive it from the current duration.
       const { rows: currentRows } = await client.query(
-        `SELECT appointment_services_id, start_time, end_time
+        `SELECT appointment_services_id, assigned_staff_id, start_time, end_time
          FROM tbl_appointments WHERE appointment_id = $1`,
         [appointment_id],
       );
@@ -596,6 +622,8 @@ export default class AppointmentModel {
         start_time,
         exclude_appointment_id: appointment_id,
         skipGridCheck: slotUnchanged,
+        // A new staff member on the same slot still has to be working that day.
+        checkRules: !slotUnchanged || String(current.assigned_staff_id) !== String(assigned_staff_id),
         keep_end_time_full: slotUnchanged ? current.end_time : null,
       });
 
@@ -638,17 +666,15 @@ export default class AppointmentModel {
 
       // A different sub-service means a different price. Re-price the
       // still-unpaid charge, or the Payment module would bill the old amount.
-      // (Sub-services priced by hand at payment time have no price to apply.)
-      const price = service.service_price;
-      if (price != null) {
-        await client.query(
-          `UPDATE tbl_payments SET total_amount = $1, updated_by = $2, date_updated = NOW()
-           WHERE appointment_id = $3 AND is_deleted IS NOT TRUE
-             AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
-                                      WHERE LOWER(TRIM(payment_status_name)) = 'pending')`,
-          [price, updated_by, appointment_id],
-        );
-      }
+      // A sub-service priced by hand goes back to 0, same as a new booking
+      // of it: staff enter the real amount when the client pays.
+      await client.query(
+        `UPDATE tbl_payments SET total_amount = $1, updated_by = $2, date_updated = NOW()
+         WHERE appointment_id = $3 AND is_deleted IS NOT TRUE
+           AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                    WHERE LOWER(TRIM(payment_status_name)) = 'pending')`,
+        [service.service_price ?? 0, updated_by, appointment_id],
+      );
 
       await client.query("COMMIT");
       return res.rows[0];
