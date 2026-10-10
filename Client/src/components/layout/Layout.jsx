@@ -61,7 +61,7 @@ export default function Layout() {
       {/* Main content viewport container — offset for the mobile top bar
           below md, and for the sidebar's own width at md and up */}
       <main className="pt-14 md:pt-0 md:pl-64 w-full">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8">
           <Outlet />
         </div>
       </main>

@@ -51,7 +51,7 @@ function HeaderClock() {
   const opts = { timeZone: "Asia/Manila" };
   return (
     <div className="mb-1">
-      <p className="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+      <p className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
         {now.toLocaleTimeString("en-US", { ...opts, hour: "numeric", minute: "2-digit", second: "2-digit" })}
       </p>
       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -260,11 +260,11 @@ export function Component() {
   });
 
   return (
-    <div className="w-full space-y-8 py-8">
+    <div className="w-full space-y-6 sm:space-y-8 py-4 sm:py-8">
       {/* Header section */}
-      <div className="flex justify-between items-center border-b border-slate-200 pb-6 dark:border-slate-800">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center border-b border-slate-200 pb-4 sm:pb-6 dark:border-slate-800">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
             Welcome Back, {currentUserData?.user?.name ?? "User"}!
           </h1>
           {currentUserData?.user?.role && (
@@ -276,7 +276,7 @@ export function Component() {
             Here is what's happening at PetVet clinic today.
           </p>
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           <HeaderClock />
           <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
             Clinic Status: Open
@@ -310,7 +310,7 @@ export function Component() {
           className="lg:w-1/4"
           onClick={() => openRevenueModal("all")}
         />
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+        <div className="flex-1 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-4">
           <Container
             title="Cash"
             value={revenueDisplay(cashRevenue)}

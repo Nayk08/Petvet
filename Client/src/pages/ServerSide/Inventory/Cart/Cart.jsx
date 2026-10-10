@@ -228,7 +228,7 @@ export default function Cart() {
       : `${peso(product.min_price)}+`;
 
   return (
-    <div className="w-full text-slate-800 dark:text-slate-100">
+    <div className={`w-full text-slate-800 dark:text-slate-100 ${cartItems.length ? "pb-24 lg:pb-0" : ""}`}>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
         {/* ── Products ── */}
         <section className="min-w-0 space-y-4">
@@ -301,16 +301,16 @@ export default function Cart() {
           ) : (
             <>
               {view === "grid" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-4">
                   {data.rows.map((product) => {
                     const left = Math.max(0, sellable(product) - inCart(product.product_name));
                     const soldOut = left === 0;
                     return (
                       <article
                         key={product.product_name}
-                        className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3 shadow-sm"
+                        className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 sm:p-3 flex flex-col gap-2 sm:gap-3 shadow-sm min-w-0"
                       >
-                        <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
+                        <div className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
                           <img
                             src={product.product_image ?? petVet}
                             alt=""
@@ -337,13 +337,15 @@ export default function Cart() {
                           </button>
                         </div>
                         <div className="space-y-1.5 min-w-0">
-                          <h3 className="font-bold text-slate-900 dark:text-white leading-snug line-clamp-2">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug line-clamp-2">
                             {product.product_name}
                           </h3>
-                          <AttributeChips product={product} />
+                          <div className="hidden sm:block">
+                            <AttributeChips product={product} />
+                          </div>
                         </div>
                         <div className="mt-auto flex items-center justify-between gap-2">
-                          <span className="text-lg font-bold text-slate-900 dark:text-white">
+                          <span className="text-sm sm:text-lg font-bold text-slate-900 dark:text-white">
                             {priceLabel(product)}
                           </span>
                           <div className="flex items-center gap-1">
@@ -351,7 +353,7 @@ export default function Cart() {
                               type="button"
                               onClick={() => addOne(product)}
                               disabled={soldOut}
-                              className="h-8 px-3.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="hidden sm:inline-flex items-center h-8 px-3.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Add to Cart
                             </button>
@@ -428,7 +430,7 @@ export default function Cart() {
         </section>
 
         {/* ── Order details ── */}
-        <aside className="lg:sticky lg:top-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4 flex flex-col gap-4 lg:max-h-[calc(100vh-2rem)]">
+        <aside id="pos-order" className="scroll-mt-20 lg:sticky lg:top-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4 flex flex-col gap-4 lg:max-h-[calc(100vh-2rem)]">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Order Details</h2>
             <span className="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -668,6 +670,24 @@ export default function Cart() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Phones: the order panel is below the products — keep the order in reach. */}
+      {cartItems.length > 0 && (
+        <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
+          <div className="min-w-0">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {itemCount} {itemCount === 1 ? "item" : "items"}
+            </p>
+            <p className="text-lg font-bold tabular-nums">{peso(subtotal)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => document.getElementById("pos-order")?.scrollIntoView({ behavior: "smooth" })}
+            className="h-11 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+          >
+            View order &amp; pay
+          </button>
+        </div>
+      )}
       <Outlet />
     </div>
   );

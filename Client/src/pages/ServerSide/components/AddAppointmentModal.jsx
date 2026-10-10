@@ -531,7 +531,7 @@ export function Component() {
               </section>
             )}
             {/* Client / Pet */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5" ref={clientComboboxRef}>
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Client
@@ -696,7 +696,7 @@ export function Component() {
                 </select>
               </div>
 
-              <div className="space-y-1.5 col-span-2">
+              <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Sub-service
                 </label>
@@ -734,7 +734,7 @@ export function Component() {
             </div>
 
             {/* Staff / Date */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Staff

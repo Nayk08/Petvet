@@ -20,7 +20,7 @@ import {
   AlertCircle,
   Lock,
   Mail,
-  HeartPulse,
+  ArrowRight,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -137,8 +137,7 @@ export default function AuthForm() {
 
   if (otp) {
     return (
-      <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
+      <Card className="w-full border-0 shadow-none bg-transparent dark:bg-transparent py-0 gap-0">
         <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
           <div className="flex justify-center mb-2">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
@@ -222,8 +221,7 @@ export default function AuthForm() {
 
   if (registration) {
     return (
-      <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
+      <Card className="w-full border-0 shadow-none bg-transparent dark:bg-transparent py-0 gap-0">
         <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Complete Registration
@@ -304,27 +302,18 @@ export default function AuthForm() {
   }
 
   return (
-    <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden transition-all duration-300">
-      {/* Brand Top Accent Line (PetVet Green) */}
-      <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
+    <Card className="w-full border-0 shadow-none bg-transparent dark:bg-transparent py-0 gap-0">
 
-      <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
-        <div className="flex justify-center mb-2">
-          {/* Accent Icon Container */}
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shadow-inner ring-4 ring-emerald-500/5">
-            <HeartPulse className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-        </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          PetVet Portal Sign In
+      <CardHeader className="space-y-1.5 px-0 pt-0 pb-6">
+        <CardTitle className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Login
         </CardTitle>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[280px] mx-auto">
-          Access your digital medical files, updates, and upcoming grooming
-          slots.
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Please sign in with your credentials.
         </p>
       </CardHeader>
 
-      <CardContent className="pt-2">
+      <CardContent className="px-0">
         <Form method="post" className="space-y-4">
           {/* Email Input */}
           <div className="space-y-1.5">
@@ -335,13 +324,13 @@ export default function AuthForm() {
               Email Address
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 id="email"
                 name="email"
                 type="email"
                 placeholder="name@example.com"
-                className="pl-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
+                className="h-12 rounded-xl pl-11 bg-white dark:bg-zinc-950/50 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
               />
             </div>
           </div>
@@ -355,19 +344,19 @@ export default function AuthForm() {
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 required
-                className="pl-9 pr-9 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
+                className="h-12 rounded-xl pl-11 pr-11 bg-white dark:bg-zinc-950/50 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-emerald-500 transition-all duration-200"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((show) => !show)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 bg-transparent border-none cursor-pointer transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 bg-transparent border-none cursor-pointer transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 tabIndex={-1}
               >
@@ -394,16 +383,20 @@ export default function AuthForm() {
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-md shadow-emerald-600/10 h-10 transition-all duration-200 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full mt-2 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold shadow-md shadow-emerald-600/20 transition-all duration-200 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {isSubmitting ? "Signing in..." : "Sign In"}
+            {isSubmitting ? "Signing in..." : (
+              <>
+                Sign In <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </Button>
         </Form>
 
         <div className="flex items-center gap-3 my-5">
           <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
           <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Client? Sign in with Google
+            Client? Continue with Google
           </span>
           <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
         </div>
@@ -442,7 +435,7 @@ export default function AuthForm() {
       </CardContent>
 
       {/* Footer */}
-      <CardFooter className="justify-center border-t border-zinc-100 dark:border-zinc-800/80 pt-4 pb-6 bg-zinc-50/50 dark:bg-zinc-900/40">
+      <CardFooter className="justify-center px-0 pt-5 pb-0">
         <p className="text-xs text-zinc-400 dark:text-zinc-500">
           Staff accounts are created by an administrator.
         </p>

@@ -260,6 +260,10 @@ function LineChart({ data, series, formatValue = (v) => v }) {
   );
 }
 
+// "Full Grooming" -> "Full Gro…" when only `max` characters fit.
+const fitLabel = (text, max) =>
+  text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
+
 // Vertical bar chart for a small set of categories.
 function BarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }) {
   const width = 320;
@@ -332,7 +336,11 @@ function BarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }
                 fontSize="10"
                 fill="var(--muted)"
               >
-                {d[labelKey]}
+                {/* Long names (e.g. "Full Grooming") ran into each other:
+                    cut to fit the bar's slot (~5.5 units per character at
+                    font-size 10); the full name stays in the tooltip. */}
+                <title>{d[labelKey]}</title>
+                {fitLabel(String(d[labelKey] ?? ""), Math.floor(bandW / 5.5))}
               </text>
             </g>
           );

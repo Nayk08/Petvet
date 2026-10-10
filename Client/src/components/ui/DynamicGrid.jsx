@@ -194,6 +194,60 @@ export default function DynamicGrid({
     return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800";
   };
 
+  // One cell value — shared by the table (tablet/desktop) and the phone cards.
+  const renderCell = (col, row) =>
+    col.render ? (
+      col.render(row[col.key], row)
+    ) : col.key === "id" || col.key === "product_id" ? (
+      <span className="font-mono text-xs text-slate-500 font-semibold dark:text-slate-400">
+        {row[col.key]}
+      </span>
+    ) : col.key === "name" || col.key === "product_name" || col.key === "patient" ? (
+      <span className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors dark:text-slate-100 dark:group-hover:text-indigo-300">
+        {row[col.key]}
+      </span>
+    ) : col.key === "status" || col.key === "expired" ? (
+      <span
+        className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full tracking-wide inline-flex items-center justify-center border ${getStatusBadgeStyle(
+          row[col.key],
+        )}`}
+      >
+        {row[col.key]}
+      </span>
+    ) : col.key === "service" || col.key === "type" ? (
+      <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
+        {row[col.key]}
+      </span>
+    ) : row[col.key] !== undefined && row[col.key] !== null ? (
+      <span className="text-slate-700 dark:text-slate-300">{String(row[col.key])}</span>
+    ) : (
+      <span className="text-slate-400 dark:text-slate-600">—</span>
+    );
+
+  // A row's action buttons. icon/label/className can be a fixed value or a
+  // (row) => value function, for actions whose appearance depends on that
+  // row's own state (e.g. an Activate/Deactivate toggle).
+  const renderActions = (row, rowActions) =>
+    rowActions.map((action, i) => {
+      const Icon = typeof action.icon === "function" ? action.icon(row) : action.icon;
+      const label = typeof action.label === "function" ? action.label(row) : action.label;
+      const className =
+        typeof action.className === "function" ? action.className(row) : action.className;
+      const loading = action.isLoading?.(row);
+      return (
+        <button
+          key={i}
+          type="button"
+          disabled={loading}
+          onClick={() => action.onClick(row)}
+          className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+        >
+          {Icon && <Icon size={13} />}
+          {loading ? "Processing..." : label}
+        </button>
+      );
+    });
+
   const totalColumnsCount =
     visibleColumns.length + (resolvedActions.length > 0 ? 1 : 0);
 
@@ -202,14 +256,14 @@ export default function DynamicGrid({
       className={
         bare
           ? "w-full text-slate-800 dark:text-slate-100"
-          : "bg-white border border-slate-200 rounded-xl p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100"
+          : "bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100"
       }
     >
       {/* Header Bar */}
       {!bare && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-slate-100 gap-4 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 sm:pb-6 border-b border-slate-100 gap-3 sm:gap-4 dark:border-slate-800">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-wide dark:text-white">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-wide dark:text-white">
               {title}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
@@ -370,7 +424,7 @@ export default function DynamicGrid({
               </button>
             )}
 
-        <div className="flex items-center gap-3 ml-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto max-w-full justify-end">
           {extraActions}
           {onLimitChange && (
             <div className="shrink-0">
@@ -436,8 +490,51 @@ export default function DynamicGrid({
         </div>
       </div>
 
-      {/* Main Table Layout */}
-      <div className="overflow-x-auto mt-4 relative z-0">
+      {/* Phones: one card per row (label: value), actions at the bottom —
+          a squeezed table only showed 3-4 columns behind a sideways scroll. */}
+      <ul className="sm:hidden mt-4 space-y-3">
+        {data.length > 0 ? (
+          data.map((row, index) => {
+            const rowActions = resolvedActions.filter((action) => checkActionVisible(action, row));
+            const [first, ...rest] = visibleColumns;
+            return (
+              <li
+                key={row.id || index}
+                className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2 text-sm"
+              >
+                {first && (
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      {first.label}
+                    </span>
+                    <span className="text-right min-w-0">{renderCell(first, row)}</span>
+                  </div>
+                )}
+                <dl className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {rest.map((col) => (
+                    <div key={col.key} className="flex items-start justify-between gap-3 py-1.5">
+                      <dt className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{col.label}</dt>
+                      <dd className="text-right min-w-0 break-words">{renderCell(col, row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {rowActions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {renderActions(row, rowActions)}
+                  </div>
+                )}
+              </li>
+            );
+          })
+        ) : (
+          <li className="text-center py-10 text-sm text-slate-400 dark:text-slate-500 italic">
+            No matching records found.
+          </li>
+        )}
+      </ul>
+
+      {/* Main Table Layout (tablet and up) */}
+      <div className="hidden sm:block overflow-x-auto mt-4 relative z-0">
         <div className="w-full">
           <Table className="w-full text-left border-collapse">
             <TableHeader>
@@ -476,37 +573,7 @@ export default function DynamicGrid({
                         <TableCell className="py-3.5 px-4">
                           <div className="flex items-center justify-center gap-1.5">
                             {rowActions.length > 0 ? (
-                              rowActions.map((action, i) => {
-                                // icon/label/className can be a fixed value or
-                                // a (row) => value function, for actions whose
-                                // appearance depends on that row's own state
-                                // (e.g. an Activate/Deactivate toggle).
-                                const Icon =
-                                  typeof action.icon === "function"
-                                    ? action.icon(row)
-                                    : action.icon;
-                                const label =
-                                  typeof action.label === "function"
-                                    ? action.label(row)
-                                    : action.label;
-                                const className =
-                                  typeof action.className === "function"
-                                    ? action.className(row)
-                                    : action.className;
-                                const loading = action.isLoading?.(row);
-                                return (
-                                  <button
-                                    key={i}
-                                    type="button"
-                                    disabled={loading}
-                                    onClick={() => action.onClick(row)}
-                                    className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-                                  >
-                                    {Icon && <Icon size={13} />}
-                                    {loading ? "Processing..." : label}
-                                  </button>
-                                );
-                              })
+                              renderActions(row, rowActions)
                             ) : (
                               <span className="text-xs text-slate-400 dark:text-slate-600">
                                 —
@@ -523,40 +590,7 @@ export default function DynamicGrid({
                             col.align === "right" ? "text-right" : ""
                           }`}
                         >
-                          {col.render ? (
-                            col.render(row[col.key], row)
-                          ) : col.key === "id" || col.key === "product_id" ? (
-                            <span className="font-mono text-xs text-slate-500 font-semibold dark:text-slate-400">
-                              {row[col.key]}
-                            </span>
-                          ) : col.key === "name" ||
-                            col.key === "product_name" ||
-                            col.key === "patient" ? (
-                            <span className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors dark:text-slate-100 dark:group-hover:text-indigo-300">
-                              {row[col.key]}
-                            </span>
-                          ) : col.key === "status" || col.key === "expired" ? (
-                            <span
-                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full tracking-wide inline-flex items-center justify-center border ${getStatusBadgeStyle(
-                                row[col.key],
-                              )}`}
-                            >
-                              {row[col.key]}
-                            </span>
-                          ) : col.key === "service" || col.key === "type" ? (
-                            <span className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-                              {row[col.key]}
-                            </span>
-                          ) : row[col.key] !== undefined &&
-                            row[col.key] !== null ? (
-                            <span className="text-slate-700 dark:text-slate-300">
-                              {String(row[col.key])}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 dark:text-slate-600">
-                              —
-                            </span>
-                          )}
+                          {renderCell(col, row)}
                         </TableCell>
                       ))}
                     </TableRow>

@@ -234,7 +234,7 @@ export function Component() {
             </div>
 
             {/* Product details — mainly for medicines; all optional */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 ["brand", "Brand", "e.g. Bravecto"],
                 ["dosage", "Dosage / Strength", "e.g. 250 mg"],
@@ -285,7 +285,7 @@ export function Component() {
             ))}
 
             {/* Split Row for Quantity & Price */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Quantity

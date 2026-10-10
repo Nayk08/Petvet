@@ -47,7 +47,7 @@ export default function Container({
             }
           : undefined
       }
-      className={`bg-white border border-slate-200 rounded-xl p-4 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 ${isClickable ? "cursor-pointer" : ""} ${className}`}
+      className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 ${isClickable ? "cursor-pointer" : ""} ${className}`}
     >
       {isHero ? (
         <div className="flex flex-col">
@@ -96,10 +96,10 @@ export default function Container({
       ) : (
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
               {title}
             </p>
-            <p className="text-xl font-extrabold text-slate-900 mt-1 tracking-tight dark:text-white">
+            <p className="text-base sm:text-xl font-extrabold text-slate-900 mt-1 tracking-tight dark:text-white break-words">
               {value}
             </p>
           </div>
