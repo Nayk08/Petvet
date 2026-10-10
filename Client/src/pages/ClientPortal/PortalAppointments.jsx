@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Receipt } from "lucide-react";
+import PortalReceiptModal from "./components/PortalReceiptModal.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { fetchMyAppointments, fetchClinicSchedule } from "@/api/clientPortal.js";
 
@@ -20,7 +21,21 @@ const STATUS_BADGE = {
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
   Cancelled:
     "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+  "No Show":
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
 };
+
+// Still ahead: not finished/cancelled and the visit hasn't ended yet.
+const isUpcoming = (appt) =>
+  ["Pending", "In Queue"].includes(appt.appointment_status_name) &&
+  new Date(appt.end_time) >= new Date();
+
+const LIST_FILTERS = ["All", "Upcoming", "Past"];
+
+// A receipt exists once money was received: paid in full, or the online
+// reservation fee verified (its receipt shows the balance still due).
+const hasReceipt = (appt) =>
+  Boolean(appt.payment_id) && ["Completed", "Partially Paid"].includes(appt.payment_status_name);
 
 function formatTime(value) {
   return value
@@ -50,6 +65,7 @@ export function Component() {
   const navigate = useNavigate();
   const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [receiptPaymentId, setReceiptPaymentId] = useState(null);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["clientPortal", "appointments", "calendar"],
@@ -117,6 +133,27 @@ export function Component() {
     return map;
   }, [clinicSchedule]);
 
+  // Every booking, cancelled ones included: upcoming soonest first, then past
+  // newest first.
+  const [listFilter, setListFilter] = useState("All");
+  const upcoming = appointments
+    .filter(isUpcoming)
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  const past = appointments
+    .filter((a) => !isUpcoming(a))
+    .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  const listCounts = { All: appointments.length, Upcoming: upcoming.length, Past: past.length };
+  const listRows =
+    listFilter === "Upcoming" ? upcoming : listFilter === "Past" ? past : [...upcoming, ...past];
+
+  // Clicking a booking in the list shows its day on the calendar.
+  function showOnCalendar(appt) {
+    const day = new Date(appt.start_time);
+    setSelectedDate(day);
+    setCurrentMonthDate(new Date(day.getFullYear(), day.getMonth(), 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const handlePrevMonth = () => setCurrentMonthDate(new Date(year, month - 1, 1));
   const handleNextMonth = () => setCurrentMonthDate(new Date(year, month + 1, 1));
 
@@ -137,7 +174,7 @@ export function Component() {
             My Appointments
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Click a day to view your appointments.
+            Click a day on the calendar, or see every booking in the list below.
           </p>
         </div>
         <Button
@@ -301,6 +338,16 @@ export function Component() {
                             {appt.staff_name ? ` · ${appt.staff_name}` : ""}
                           </p>
                         </div>
+                        {hasReceipt(appt) && (
+                          <button
+                            type="button"
+                            onClick={() => setReceiptPaymentId(appt.payment_id)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                          >
+                            <Receipt size={13} />
+                            Receipt
+                          </button>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -348,6 +395,103 @@ export function Component() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* All bookings as a list */}
+      {!isPending && !isError && (
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 shadow-sm space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-bold text-slate-950 dark:text-white">
+              All My Appointments
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {LIST_FILTERS.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed={listFilter === name}
+                  onClick={() => setListFilter(name)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                    listFilter === name
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400"
+                  }`}
+                >
+                  {name} <span className="opacity-70">({listCounts[name]})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {listRows.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 italic py-6 text-center">
+              {listFilter === "Upcoming"
+                ? "No upcoming appointments. Use Book Appointment to schedule one."
+                : "No appointments yet."}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[32rem] overflow-y-auto -mx-2">
+              {listRows.map((appt) => (
+                <li key={appt.appointment_id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => showOnCalendar(appt)}
+                    title="Show this day on the calendar"
+                    className="min-w-0 flex-1 text-left px-2 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                  >
+                    <div className="sm:w-44 shrink-0">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {new Date(appt.start_time).toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {formatTime(appt.start_time)} - {formatTime(appt.end_time)}
+                      </p>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-950 dark:text-white flex items-center gap-1.5">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            SERVICE_DOT[appt.category_name] || "bg-slate-400"
+                          }`}
+                        />
+                        {appt.pets_name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {appt.service_name}
+                        {appt.staff_name ? ` · ${appt.staff_name}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`self-start sm:self-center text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide border ${
+                        STATUS_BADGE[appt.appointment_status_name] || STATUS_BADGE.Pending
+                      }`}
+                    >
+                      {appt.appointment_status_name}
+                    </span>
+                  </button>
+                  {hasReceipt(appt) && (
+                    <button
+                      type="button"
+                      onClick={() => setReceiptPaymentId(appt.payment_id)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                    >
+                      <Receipt size={13} />
+                      Receipt
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      {receiptPaymentId && (
+        <PortalReceiptModal paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />
       )}
     </div>
   );

@@ -135,6 +135,82 @@ export default class AppointmentService {
     });
   }
 
+  // Several appointments as one booking (all-or-nothing). Each item gets the
+  // same staff-role check as a single booking; the model checks slots/rules.
+  async addAppointmentGroup({ client_id, items, created_by }) {
+    const pendingStatusId = await appointmentModel.getAppointmentStatusId("Pending");
+    if (!pendingStatusId) {
+      const err = new Error("'Pending' appointment status not configured");
+      err.statusCode = 500;
+      throw err;
+    }
+    for (const [index, item] of items.entries()) {
+      try {
+        await assertStaffMatchesService(item.appointment_services_id, item.assigned_staff_id);
+      } catch (error) {
+        if (error.statusCode) error.message = `Item ${index + 1}: ${error.message}`;
+        throw error;
+      }
+    }
+    return appointmentModel.addAppointmentGroup({
+      client_id,
+      items,
+      appointment_status_id: pendingStatusId,
+      created_by,
+    });
+  }
+
+  // What this pet is charged for this sub-service (null = priced at the clinic).
+  async getEffectivePrice(appointment_services_id, pets_id) {
+    return appointmentModel.getEffectivePrice(appointment_services_id, pets_id);
+  }
+
+  async getBookingGroup(booking_group) {
+    const rows = await appointmentModel.getBookingGroup(booking_group);
+    if (!rows.length) {
+      const err = new Error("Booking not found");
+      err.statusCode = 404;
+      throw err;
+    }
+    return rows;
+  }
+
+  // One counter payment (Cash / GCash / Split) for every unpaid item of a
+  // multi-item booking.
+  async completeGroupPayment({
+    booking_group,
+    amounts,
+    payment_method,
+    gcash_reference_number,
+    cash_received,
+    gcash_received,
+    updated_by,
+  }) {
+    validatePaymentMethod({ payment_method, gcash_reference_number });
+    if (
+      gcash_reference_number &&
+      (await paymentModel.isGcashReferenceInUse({
+        gcash_reference_number,
+        excludeGroup: booking_group,
+      }))
+    ) {
+      const err = new Error(
+        "This GCash reference number has already been used for another payment.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    return appointmentModel.completeGroupPayment({
+      booking_group,
+      amounts,
+      payment_method,
+      gcash_reference_number,
+      cash_received,
+      gcash_received,
+      updated_by,
+    });
+  }
+
   async editAppointment({
     appointment_id,
     pets_id,

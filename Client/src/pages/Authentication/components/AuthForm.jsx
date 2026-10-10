@@ -27,7 +27,13 @@ import {
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { queryClient, fetchNavbar, safeRedirectPath } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
-import { loginWithGoogle, registerWithGoogle, fetchMyProfile } from "@/api/clientPortal.js";
+import {
+  loginWithGoogle,
+  registerWithGoogle,
+  verifyClientOtp,
+  resendClientOtp,
+  fetchMyProfile,
+} from "@/api/clientPortal.js";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL;
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -65,7 +71,8 @@ export default function AuthForm() {
         });
         return;
       }
-      navigate("/portal");
+      // Known client: a sign-in code was emailed — ask for it next.
+      setOtp({ otp_token: result.otp_token, email: result.email, code: "" });
     } catch (err) {
       setGoogleError(err.message || "Sign-in failed. Please try again.");
     } finally {
@@ -82,8 +89,9 @@ export default function AuthForm() {
     setGoogleError(null);
     setIsGoogleSubmitting(true);
     try {
-      await registerWithGoogle(registration);
-      navigate("/portal");
+      const result = await registerWithGoogle(registration);
+      setRegistration(null);
+      setOtp({ otp_token: result.otp_token, email: result.email, code: "" });
     } catch (err) {
       setGoogleError(err.message);
       // An expired token can't be retried — back to the Google button.
@@ -91,6 +99,125 @@ export default function AuthForm() {
     } finally {
       setIsGoogleSubmitting(false);
     }
+  }
+
+  // Set after Google (and registration): the emailed 6-digit sign-in code
+  // must be entered before the portal opens.
+  const [otp, setOtp] = useState(null); // { otp_token, email, code }
+  const [otpNotice, setOtpNotice] = useState(null);
+
+  async function handleVerifyOtp(e) {
+    e.preventDefault();
+    setGoogleError(null);
+    setIsGoogleSubmitting(true);
+    try {
+      await verifyClientOtp(otp);
+      navigate("/portal");
+    } catch (err) {
+      setGoogleError(err.message);
+      // Expired: the only way forward is signing in with Google again.
+      if (err.code === 401) setOtp(null);
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    setGoogleError(null);
+    setOtpNotice(null);
+    try {
+      const result = await resendClientOtp(otp.otp_token);
+      setOtp({ otp_token: result.otp_token, email: result.email, code: "" });
+      setOtpNotice(`We sent a new code to ${result.email}.`);
+    } catch (err) {
+      setGoogleError(err.message);
+      if (err.code === 401) setOtp(null);
+    }
+  }
+
+  if (otp) {
+    return (
+      <Card className="w-full max-w-md bg-white/80 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-80" />
+        <CardHeader className="space-y-1.5 text-center pt-8 pb-4">
+          <div className="flex justify-center mb-2">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
+              <Mail className="h-5 w-5" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Check your email
+          </CardTitle>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[300px] mx-auto">
+            We sent a 6-digit sign-in code to <strong>{otp.email}</strong>. It
+            expires in 10 minutes.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="otp_code" className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Sign-in code
+              </label>
+              <Input
+                id="otp_code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+                maxLength={6}
+                pattern="\d{6}"
+                title="Enter the 6-digit code from your email"
+                placeholder="000000"
+                value={otp.code}
+                onChange={(e) =>
+                  setOtp((o) => ({ ...o, code: e.target.value.replace(/\D/g, "").slice(0, 6) }))
+                }
+                className="text-center text-2xl tracking-[0.5em] font-semibold h-12 bg-zinc-50/50 dark:bg-zinc-950/50 focus-visible:ring-emerald-500"
+              />
+            </div>
+
+            {otpNotice && !googleError && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400">{otpNotice}</p>
+            )}
+            {googleError && (
+              <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <p className="font-medium leading-tight">{googleError}</p>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={isGoogleSubmitting || otp.code.length !== 6}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-10 disabled:opacity-60"
+            >
+              {isGoogleSubmitting ? "Verifying..." : "Verify & Sign In"}
+            </Button>
+            <div className="flex items-center justify-between text-sm">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                className="text-emerald-700 dark:text-emerald-400 font-medium hover:underline bg-transparent border-none cursor-pointer"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtp(null);
+                  setOtpNotice(null);
+                  setGoogleError(null);
+                }}
+                className="text-zinc-500 hover:underline bg-transparent border-none cursor-pointer"
+              >
+                Use a different account
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (registration) {

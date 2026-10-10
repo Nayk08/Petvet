@@ -701,7 +701,20 @@ export default class PaymentModel {
     return rows[0].count;
   }
 
-  async isGcashReferenceInUse({ gcash_reference_number, excludePaymentId }) {
+  // Every live bill of one multi-item booking (see migrations/015).
+  async getGroupPayments(booking_group) {
+    const { rows } = await pool.query(
+      `SELECT * FROM v_payments
+       WHERE booking_group = $1 AND is_deleted IS NOT TRUE
+       ORDER BY payment_id`,
+      [booking_group],
+    );
+    return rows;
+  }
+
+  // excludeGroup: the bills of one multi-item booking share a single GCash
+  // payment, so its reference may already be on the group's other bills.
+  async isGcashReferenceInUse({ gcash_reference_number, excludePaymentId, excludeGroup }) {
     const client = await pool.connect();
     try {
       const res = await client.query(
@@ -710,9 +723,10 @@ export default class PaymentModel {
          WHERE (p.gcash_reference_number = $1 OR p.balance_gcash_reference = $1)
            AND p.is_deleted IS NOT TRUE
            AND p.payment_id IS DISTINCT FROM $2
+           AND ($3::uuid IS NULL OR p.booking_group IS DISTINCT FROM $3::uuid)
            AND ps.payment_status_name IN ('Completed', 'Awaiting Verification', 'Partially Paid')
          LIMIT 1`,
-        [gcash_reference_number, excludePaymentId ?? null],
+        [gcash_reference_number, excludePaymentId ?? null, excludeGroup ?? null],
       );
       return res.rows.length > 0;
     } catch (error) {

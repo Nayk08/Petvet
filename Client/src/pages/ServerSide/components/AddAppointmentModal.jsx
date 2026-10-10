@@ -19,12 +19,13 @@ import {
   useActionData,
 } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Plus, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   queryClient,
   invalidateAppointmentQueries,
   addAppointment,
+  addAppointmentGroup,
   editAppointment,
   fetchAppointmentById,
   fetchAppointments,
@@ -151,7 +152,13 @@ export function Component() {
     setClientSearch(client.name);
     setIsClientDropdownOpen(false);
     setSelectedPetId(""); // previously-picked pet belonged to a different client
+    setCart([]); // a booking is for one client
   }
+
+  // New bookings only: several pets / services / times booked together and
+  // paid once (confirm-group-payment). Items wait here until "Book".
+  const [cart, setCart] = useState([]);
+  const formRef = useRef(null);
 
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -297,14 +304,24 @@ export function Component() {
     staleTime: 0, // live availability: bookings/cancellations happen elsewhere too
   });
 
-  const bookedRanges = toBookedRanges(
-    (staffAppointmentsForDate ?? []).filter(
-      (appt) =>
-        !appt.is_deleted &&
-        appt.appointment_status_name !== "Cancelled" &&
-        String(appt.appointment_id) !== String(params.appointment_id ?? ""),
+  const bookedRanges = [
+    ...toBookedRanges(
+      (staffAppointmentsForDate ?? []).filter(
+        (appt) =>
+          !appt.is_deleted &&
+          appt.appointment_status_name !== "Cancelled" &&
+          String(appt.appointment_id) !== String(params.appointment_id ?? ""),
+      ),
     ),
-  );
+    // Items already in this booking list for the same staff or pet.
+    ...cart
+      .filter(
+        (c) =>
+          c.appointment_date === selectedDate &&
+          (c.assigned_staff_id === selectedStaffId || c.pets_id === selectedPetId),
+      )
+      .map((c) => ({ start: c.startMinute, end: c.endMinute })),
+  ];
 
   const { data: pets, isPending: isPetsPending } = useQuery({
     queryKey: ["pets-for-client", selectedClientId],
@@ -326,11 +343,80 @@ export function Component() {
   const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
   const [bookingError, setBookingError] = useState(null);
 
+  const isFormComplete = Boolean(
+    selectedClientId && selectedPetId && selectedServiceId && selectedStaffId && selectedDate && selectedSlot,
+  );
+
+  // The form's current choices as a booking-list item (with what to show).
+  function currentItem() {
+    const payload = buildAppointmentPayload(new FormData(formRef.current));
+    const slot = availableSlots.find((s) => s.value === selectedSlot);
+    return {
+      ...payload,
+      startMinute: slot?.startMinute,
+      endMinute: slot?.endMinute,
+      pets_name: selectedPet?.pet_name,
+      service_name: selectedServiceName,
+      staff_name: filteredStaff.find((s) => String(s.users_id) === selectedStaffId)?.user_name,
+      slot_label: slot?.label,
+      price: petPrice.price, // null = priced when paying
+    };
+  }
+
+  function addToCart() {
+    setBookingError(null);
+    if (!isFormComplete) {
+      setBookingError("Choose a client, pet, sub-service, staff, date and start time first.");
+      return;
+    }
+    setCart((c) => [...c, currentItem()]);
+    // Keep client, pet and date (the usual next item), clear the rest.
+    setSelectedServiceId("");
+    setSelectedStaffId("");
+    setSelectedSlot("");
+  }
+
+  async function bookCart() {
+    const items = isFormComplete ? [...cart, currentItem()] : cart;
+    setBookingError(null);
+    setIsBookingSubmitting(true);
+    try {
+      const result = await addAppointmentGroup({
+        client_id: selectedClientId,
+        items: items.map(({ pets_id, appointment_services_id, assigned_staff_id, appointment_date, start_time, notes }) => ({
+          pets_id,
+          appointment_services_id,
+          assigned_staff_id,
+          appointment_date,
+          start_time,
+          notes: notes ?? "",
+        })),
+      });
+      await invalidateAppointmentQueries();
+      await Promise.all(
+        [["TodayAppointments"], ["TodayPayments"], ["TodayRevenueSummary"], ["Payments"]].map(
+          (queryKey) => queryClient.invalidateQueries({ queryKey }),
+        ),
+      );
+      navigate(`../confirm-group-payment${location.search}`, {
+        state: { bookingGroup: result.booking_group, clientName: clientSearch },
+      });
+    } catch (error) {
+      setBookingError(error.message || "Failed to book appointments.");
+    } finally {
+      setIsBookingSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
     if (isEditMode) {
       submit(event.currentTarget, { method: "PUT" });
+      return;
+    }
+    if (cart.length) {
+      await bookCart();
       return;
     }
 
@@ -403,7 +489,47 @@ export function Component() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+            {/* Items waiting to be booked together (one payment). */}
+            {!isEditMode && cart.length > 0 && (
+              <section className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                  Booking for {clientSearch} · {cart.length}{" "}
+                  {cart.length === 1 ? "appointment" : "appointments"}
+                </p>
+                <ul className="divide-y divide-indigo-100 dark:divide-indigo-900/60">
+                  {cart.map((c, i) => (
+                    <li key={i} className="flex items-start justify-between gap-2 py-1.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 dark:text-slate-100">
+                          {c.pets_name} · {c.service_name}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {formatDate(c.appointment_date)}, {c.slot_label}
+                          {c.staff_name ? ` · ${c.staff_name}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {c.price != null ? `₱${Number(c.price).toFixed(2)}` : "Price at payment"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCart((list) => list.filter((_, j) => j !== i))}
+                          aria-label={`Remove ${c.pets_name} · ${c.service_name}`}
+                          className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Add more below, or press Book to book everything and collect one payment.
+                </p>
+              </section>
+            )}
             {/* Client / Pet */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5" ref={clientComboboxRef}>
@@ -426,6 +552,7 @@ export function Component() {
                       setClientSearch(e.target.value);
                       setSelectedClientId("");
                       setSelectedPetId("");
+                      setCart([]);
                       setIsClientDropdownOpen(true);
                     }}
                     onFocus={() => setIsClientDropdownOpen(true)}
@@ -470,7 +597,7 @@ export function Component() {
                 </label>
                 <select
                   name="pets_id"
-                  required
+                  required={!cart.length}
                   disabled={!selectedClientId}
                   value={selectedPetId}
                   onChange={(e) => setSelectedPetId(e.target.value)}
@@ -549,7 +676,7 @@ export function Component() {
                 </label>
                 <select
                   name="category_id"
-                  required
+                  required={!cart.length}
                   value={selectedCategoryId}
                   onChange={(e) => {
                     setSelectedCategoryId(e.target.value);
@@ -575,7 +702,7 @@ export function Component() {
                 </label>
                 <select
                   name="appointment_services_id"
-                  required
+                  required={!cart.length}
                   disabled={!selectedCategoryId}
                   value={selectedServiceId}
                   onChange={(e) => {
@@ -597,6 +724,12 @@ export function Component() {
                     </option>
                   ))}
                 </select>
+                {/* What the picked sub-service is (set in Maintenance). */}
+                {selectedService?.description && (
+                  <p className="text-xs rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-slate-700 dark:text-slate-300 px-3 py-2">
+                    {selectedService.description}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -608,7 +741,7 @@ export function Component() {
                 </label>
                 <select
                   name="assigned_staff_id"
-                  required
+                  required={!cart.length}
                   disabled={!selectedServiceId}
                   value={selectedStaffId}
                   onChange={(e) => {
@@ -638,7 +771,7 @@ export function Component() {
                 <Input
                   name="appointment_date"
                   type="date"
-                  required
+                  required={!cart.length}
                   min={earliestBookableDateString()}
                   value={selectedDate}
                   onChange={(e) => {
@@ -662,7 +795,7 @@ export function Component() {
                 </label>
                 <select
                   name="time_slot"
-                  required
+                  required={!cart.length}
                   value={selectedSlot}
                   onChange={(e) => setSelectedSlot(e.target.value)}
                   className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
@@ -752,6 +885,20 @@ export function Component() {
                 </Button>
               )}
 
+              {!isEditMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addToCart}
+                  disabled={isBookingSubmitting}
+                  title="Book another pet, service or time together with this one"
+                  className="flex items-center gap-1.5 h-10 rounded-lg"
+                >
+                  <Plus size={15} />
+                  Add to booking
+                </Button>
+              )}
+
               <Button
                 type="submit"
                 disabled={state === "submitting" || isBookingSubmitting}
@@ -764,6 +911,8 @@ export function Component() {
                   </div>
                 ) : isEditMode ? (
                   "Save changes"
+                ) : cart.length ? (
+                  `Book ${cart.length + (isFormComplete ? 1 : 0)} appointments`
                 ) : (
                   "Book appointment"
                 )}

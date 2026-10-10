@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { formatDate } from "@/utils/COLUMNS";
@@ -12,6 +12,8 @@ import {
   fetchStaffBookedSlots,
   bookMyAppointment,
   cancelMyUnpaidAppointment,
+  bookMyAppointmentGroup,
+  cancelMyUnpaidGroup,
 } from "@/api/clientPortal.js";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
@@ -138,8 +140,22 @@ export function Component() {
     staleTime: 0, // live availability: other clients/staff book and cancel too
   });
 
-  // Durations differ, so a start time is taken if it OVERLAPS any booking.
-  const bookedRanges = toBookedRanges(bookedSlotRows);
+  // Several pets / services / times booked together (one payment). Items
+  // wait here until "Book"; the form below fills the next one.
+  const [cart, setCart] = useState([]);
+
+  // Durations differ, so a start time is taken if it OVERLAPS any booking —
+  // including ones already in this booking list for the same staff or pet.
+  const bookedRanges = [
+    ...toBookedRanges(bookedSlotRows),
+    ...cart
+      .filter(
+        (c) =>
+          c.appointment_date === selectedDate &&
+          (c.assigned_staff_id === selectedStaffId || c.pets_id === selectedPetId),
+      )
+      .map((c) => ({ start: c.startMinute, end: c.endMinute })),
+  ];
 
   const selectedPet = pets?.find((p) => String(p.pet_id) === selectedPetId);
   // Grooming is priced by this pet's weight tier.
@@ -151,6 +167,83 @@ export function Component() {
         ? "price depends on your pet's weight"
         : "price set at the clinic";
 
+  // The form's current choices as a booking-list item (with what to show).
+  function currentItem() {
+    const slot = availableSlots.find((s) => s.value === selectedSlot);
+    return {
+      pets_id: selectedPetId,
+      appointment_services_id: selectedServiceId,
+      assigned_staff_id: selectedStaffId,
+      appointment_date: selectedDate,
+      start_time: `${selectedSlot}:00`,
+      notes,
+      startMinute: slot?.startMinute,
+      endMinute: slot?.endMinute,
+      pets_name: selectedPet?.pet_name,
+      service_name: selectedService?.appointment_services,
+      staff_name: filteredStaff.find((s) => String(s.users_id) === selectedStaffId)?.user_name,
+      slot_label: slot?.label,
+      price: petPrice.price,
+    };
+  }
+  const isFormComplete = Boolean(
+    selectedPetId && selectedServiceId && selectedStaffId && selectedDate && selectedSlot,
+  );
+  // Only fixed-price items can be paid online together.
+  const isUnpriced = Boolean(selectedService) && petPrice.price == null;
+
+  function addToCart() {
+    setBookingError(null);
+    if (!isFormComplete) {
+      setBookingError("Choose a pet, service, staff, date and start time first.");
+      return;
+    }
+    if (isUnpriced) {
+      setBookingError(
+        `${selectedService.appointment_services} is priced at the clinic, so it can't be paid online with other appointments. Book it on its own.`,
+      );
+      return;
+    }
+    setCart((c) => [...c, currentItem()]);
+    // Keep the pet and date (the usual next item), clear the rest.
+    setSelectedServiceId("");
+    setSelectedStaffId("");
+    setSelectedSlot("");
+    setNotes("");
+  }
+
+  async function bookCart(items) {
+    const result = await bookMyAppointmentGroup(
+      items.map(({ pets_id, appointment_services_id, assigned_staff_id, appointment_date, start_time, notes }) => ({
+        pets_id,
+        appointment_services_id,
+        assigned_staff_id,
+        appointment_date,
+        start_time,
+        notes,
+      })),
+    );
+    await queryClient.invalidateQueries({ queryKey: ["clientPortal", "appointments"] });
+    setCart([]);
+    setBooking({
+      group: {
+        bookingGroup: result.booking_group,
+        reservationFee: result.reservation_fee,
+        items: result.items.map(({ appointment: a, payment: p }) => ({
+          pets_name: a.pets_name,
+          service_name: a.service_name,
+          staff_name: a.staff_name,
+          appointment_date: a.appointment_date,
+          start_time: a.start_time,
+          end_time: a.end_time,
+          total_amount: p.total_amount,
+        })),
+      },
+      amount: result.total_amount,
+      createdAt: result.items[0]?.appointment.date_created,
+    });
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     // Bare "HH:mm:ss" start time only — the server computes the end time
@@ -158,6 +251,25 @@ export function Component() {
     const start_time = `${selectedSlot}:00`;
 
     setBookingError(null);
+    if (cart.length) {
+      // A filled-in form is the last item of the booking.
+      if (isFormComplete && isUnpriced) {
+        setBookingError(
+          `${selectedService.appointment_services} is priced at the clinic, so it can't be paid online with other appointments. Book it on its own.`,
+        );
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        await bookCart(isFormComplete ? [...cart, currentItem()] : cart);
+      } catch (error) {
+        setBookingError(error.message || "Failed to book appointments.");
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await bookMyAppointment({
@@ -218,7 +330,8 @@ export function Component() {
   async function cancelUnpaidBooking() {
     setIsCancelling(true);
     try {
-      await cancelMyUnpaidAppointment(booking.appointmentId);
+      if (booking.group) await cancelMyUnpaidGroup(booking.group.bookingGroup);
+      else await cancelMyUnpaidAppointment(booking.appointmentId);
       await queryClient.invalidateQueries({ queryKey: ["clientPortal"] });
       toast.success("Booking cancelled", {
         description: "The time slot has been released.",
@@ -263,6 +376,57 @@ export function Component() {
         </p>
       </div>
 
+      {/* Items waiting to be booked together (one GCash payment). */}
+      {cart.length > 0 && (
+        <section className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              Your booking ({cart.length} {cart.length === 1 ? "appointment" : "appointments"})
+            </h2>
+            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-400">
+              ₱{cart.reduce((sum, c) => sum + Number(c.price ?? 0), 0).toFixed(2)}
+            </span>
+          </div>
+          <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+            {cart.map((c, i) => (
+              <li key={i} className="flex items-start justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900 dark:text-slate-100">
+                    {c.pets_name} · {c.service_name}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {new Date(`${c.appointment_date}T00:00:00`).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    , {c.slot_label}
+                    {c.staff_name ? ` · ${c.staff_name}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    ₱{Number(c.price).toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCart((list) => list.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${c.pets_name} · ${c.service_name}`}
+                    className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Add more below, or press Book to book everything together. You'll pay
+            once by GCash: the 50% reservation fee for all, or the full amount.
+          </p>
+        </section>
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6"
@@ -272,7 +436,7 @@ export function Component() {
             Pet
           </label>
           <select
-            required
+            required={!cart.length}
             value={selectedPetId}
             onChange={(e) => setSelectedPetId(e.target.value)}
             className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2 text-slate-900 dark:text-slate-100"
@@ -325,7 +489,7 @@ export function Component() {
               Category
             </label>
             <select
-              required
+              required={!cart.length}
               value={selectedCategoryId}
               onChange={(e) => {
                 setSelectedCategoryId(e.target.value);
@@ -349,7 +513,7 @@ export function Component() {
               Service
             </label>
             <select
-              required
+              required={!cart.length}
               disabled={!selectedCategoryId}
               value={selectedServiceId}
               onChange={(e) => {
@@ -374,13 +538,23 @@ export function Component() {
           </div>
         </div>
 
+        {/* What the picked sub-service is (set in Maintenance). */}
+        {selectedService?.description && (
+          <p className="text-sm rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-slate-700 dark:text-slate-300 px-3 py-2">
+            <span className="font-semibold text-slate-900 dark:text-white">
+              {selectedService.appointment_services}:
+            </span>{" "}
+            {selectedService.description}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
               Staff
             </label>
             <select
-              required
+              required={!cart.length}
               disabled={!selectedServiceId}
               value={selectedStaffId}
               onChange={(e) => {
@@ -412,7 +586,7 @@ export function Component() {
             </label>
             <Input
               type="date"
-              required
+              required={!cart.length}
               min={earliestBookableDateString()}
               value={selectedDate}
               onChange={(e) => {
@@ -432,7 +606,7 @@ export function Component() {
               Start Time
             </label>
             <select
-              required
+              required={!cart.length}
               value={selectedSlot}
               onChange={(e) => setSelectedSlot(e.target.value)}
               className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2 text-slate-900 dark:text-slate-100"
@@ -490,8 +664,23 @@ export function Component() {
           >
             Cancel
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addToCart}
+            disabled={isSubmitting}
+            title="Book another pet, service or time together with this one"
+            className="flex items-center gap-1.5"
+          >
+            <Plus size={16} />
+            Add to booking
+          </Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Booking..." : "Book appointment"}
+            {isSubmitting
+              ? "Booking..."
+              : cart.length
+                ? `Book ${cart.length + (isFormComplete ? 1 : 0)} appointments`
+                : "Book appointment"}
           </Button>
         </div>
       </form>
@@ -504,6 +693,7 @@ export function Component() {
           onClose={closeAfterPayment}
           closeLabel="Cancel booking"
           createdAt={booking.createdAt}
+          group={booking.group}
         />
       )}
 

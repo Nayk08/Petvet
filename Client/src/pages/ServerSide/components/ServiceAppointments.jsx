@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Stethoscope } from "lucide-react";
+import { CheckCircle2, Stethoscope, Wallet } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   selectAppointmentStaff,
   fetchCurrentUser,
@@ -25,6 +26,7 @@ const READ_ONLY_COLUMNS = AppointmentColumns.filter(
 );
 
 export default function ServiceAppointments({ name, queryKey, fetchAppointments, allowMedicalRecord = false }) {
+  const navigate = useNavigate();
   const { page, limit, setPage, setLimit } = usePagination({
     defaultLimit: 10,
   });
@@ -138,10 +140,29 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
                 className:
                   "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
                 onClick: (row) => completeMutation.mutate(row.appointment_id),
-                // Only on your own appointments (the server enforces it too).
+                // Only on your own appointments (the server enforces it too),
+                // and only once the bill is fully paid.
                 show: (row) =>
                   row.appointment_status_name === "In Queue" &&
+                  row.payment_status_name !== "Partially Paid" &&
                   String(row.assigned_staff_id) === String(currentUserData?.user?.id),
+              },
+              {
+                // Reservation fee paid online, balance still owed: it must be
+                // collected before the visit can be completed (else it becomes
+                // a No Show when the slot ends). Opens Process Payment.
+                label: (row) =>
+                  `Collect ₱${Number(row?.balance_due ?? 0).toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} balance`,
+                icon: Wallet,
+                className:
+                  "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/50",
+                onClick: (row) => navigate(`/payments/process-payment/${row.payment_id}`),
+                show: (row) =>
+                  row.appointment_status_name === "In Queue" &&
+                  row.payment_status_name === "Partially Paid",
               },
               {
                 label: "Add Medical Record",

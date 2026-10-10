@@ -27,6 +27,14 @@ export const clientPortalRegisterSchema = addClientSchema
   .pick({ client_name: true, contact_no: true })
   .extend({ registration_token: z.string().min(1, "Registration expired") });
 
+// Sign-in OTP (see ClientPortal_Service.js): the emailed 6-digit code.
+const otpTokenSchema = z.string().min(1, "Your sign-in code expired. Please sign in again.");
+export const clientPortalVerifyOtpSchema = z.object({
+  otp_token: otpTokenSchema,
+  code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from your email"),
+});
+export const clientPortalResendOtpSchema = z.object({ otp_token: otpTokenSchema });
+
 export const editClientBodySchema = addClientSchema
   .partial()
   .refine((data) => Object.keys(data).length > 0, {

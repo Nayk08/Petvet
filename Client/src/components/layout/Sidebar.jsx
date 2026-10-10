@@ -235,8 +235,8 @@ export default function Sidebar({ onLogout }) {
             alt="PetVet logo"
             className="h-8 w-8 object-contain"
           />
-          <p className="text-red-500 font-extrabold text-lg tracking-tight">
-            Pet<span className="text-emerald-600 font-semibold">Vet</span>
+          <p className="text-red-600 dark:text-red-500 font-extrabold text-lg tracking-tight">
+            Pet<span className="text-emerald-600 dark:text-emerald-500">Vet</span>
           </p>
         </Link>
         {showNav && (
@@ -278,8 +278,8 @@ export default function Sidebar({ onLogout }) {
                 className="h-full w-full object-contain"
               />
             </div>
-            <p className="text-red-500 font-extrabold text-xl tracking-tight">
-              Pet<span className="text-emerald-600 font-semibold">Vet</span>
+            <p className="text-red-600 dark:text-red-500 font-extrabold text-xl tracking-tight">
+              Pet<span className="text-emerald-600 dark:text-emerald-500">Vet</span>
             </p>
           </Link>
           <button

@@ -110,7 +110,17 @@ export default class ClientPortalModel {
       const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
       return await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_appointments ${whereClause} ORDER BY appointment_date DESC, start_time DESC`,
+        // Plus the visit's bill, so My Appointments can open its receipt.
+        baseQuery: `SELECT v_appointments.*, bill.payment_id, bill.payment_status_name
+          FROM v_appointments
+          LEFT JOIN LATERAL (
+            SELECT p.payment_id, ps.payment_status_name
+            FROM tbl_payments p
+            JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+            WHERE p.appointment_id = v_appointments.appointment_id AND p.is_deleted IS NOT TRUE
+            ORDER BY p.payment_id DESC LIMIT 1
+          ) bill ON true
+          ${whereClause} ORDER BY appointment_date DESC, start_time DESC`,
         countQuery: `SELECT COUNT(*) AS total FROM v_appointments ${whereClause}`,
         values,
         page,

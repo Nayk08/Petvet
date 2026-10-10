@@ -63,6 +63,28 @@ export async function registerWithGoogle({ registration_token, client_name, cont
   return handlePortalResponse(response, "Failed to complete registration");
 }
 
+// After Google: the 6-digit code emailed to the client. Sets the session cookie.
+export async function verifyClientOtp({ otp_token, code }) {
+  const response = await fetchWithTimeout(`${baseUrl}/auth/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ otp_token, code }),
+  });
+  return handlePortalResponse(response, "Could not verify your code");
+}
+
+// Emails a new code; returns a new otp_token to verify it with.
+export async function resendClientOtp(otp_token) {
+  const response = await fetchWithTimeout(`${baseUrl}/auth/otp/resend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ otp_token }),
+  });
+  return handlePortalResponse(response, "Could not send a new code");
+}
+
 export async function logoutClient() {
   const csrfToken = await getCsrfToken();
   const response = await fetchWithTimeout(`${baseUrl}/logout`, {
@@ -127,6 +149,41 @@ export async function bookMyAppointment(payload) {
     body: JSON.stringify(payload),
   });
   return handlePortalResponse(response, "Failed to book appointment");
+}
+
+// Several pets / services / times in one booking (all-or-nothing).
+// Returns { booking_group, items, total_amount, reservation_fee, unpriced }.
+export async function bookMyAppointmentGroup(items) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify({ items }),
+  });
+  return handlePortalResponse(response, "Failed to book appointments");
+}
+
+// One GCash proof for every item of a group booking.
+export async function submitGroupPaymentProof(bookingGroup, formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/booking-groups/${bookingGroup}/proof`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: formData,
+  });
+  return handlePortalResponse(response, "Failed to submit payment proof");
+}
+
+export async function cancelMyUnpaidGroup(bookingGroup) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/booking-groups/${bookingGroup}/cancel`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+  });
+  return handlePortalResponse(response, "Failed to cancel the booking");
 }
 
 export async function fetchStaffBookedSlots({

@@ -3,7 +3,7 @@ import {
   validatePaymentMethod,
   resolvePaymentSplit,
 } from "../../../utils/validatePaymentMethod.js";
-import { isFullAmount, balanceDue } from "../../../utils/deposit.js";
+import { isFullAmount, balanceDue, groupDepositShares } from "../../../utils/deposit.js";
 
 const paymentModel = new PaymentModel();
 
@@ -125,6 +125,7 @@ export default class PaymentService {
       (await paymentModel.isGcashReferenceInUse({
         gcash_reference_number,
         excludePaymentId: payment_id,
+        excludeGroup: payment.booking_group,
       }))
     ) {
       const err = new Error(
@@ -377,6 +378,73 @@ export default class PaymentService {
     });
   }
 
+  // One GCash payment for a whole multi-item booking: the same reference and
+  // screenshot go on every unpaid bill in the group, each recording its own
+  // share (its 50% reservation fee, or its full price).
+  async submitGroupOnlinePaymentProof({
+    booking_group,
+    gcash_reference_number,
+    payment_proof_image,
+    amount_sent,
+  }) {
+    const bills = (await paymentModel.getGroupPayments(booking_group)).filter(
+      (p) => p.payment_status_name === "Pending",
+    );
+    if (!bills.length) {
+      const err = new Error("This booking has no unpaid items left.");
+      err.statusCode = 409;
+      throw err;
+    }
+    if (bills.some((p) => !(Number(p.total_amount) > 0))) {
+      const err = new Error(
+        "Part of this booking is priced at the clinic, so it can't be paid online. Please pay at the clinic.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const { shares, error } = groupDepositShares(
+      bills.map((p) => Number(p.total_amount)),
+      amount_sent,
+    );
+    if (error) {
+      const err = new Error(error);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    validatePaymentMethod({ payment_method: "GCash", gcash_reference_number });
+    if (
+      await paymentModel.isGcashReferenceInUse({
+        gcash_reference_number,
+        excludeGroup: booking_group,
+      })
+    ) {
+      const err = new Error(
+        "This GCash reference number has already been used for another payment. Please double-check the number, or contact the clinic if you believe this is an error.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const awaitingVerificationStatusId = await paymentModel.getPaymentStatusId(
+      "Awaiting Verification",
+    );
+    const updated = [];
+    for (const [i, bill] of bills.entries()) {
+      updated.push(
+        await paymentModel.submitOnlinePaymentProof({
+          payment_id: bill.payment_id,
+          payment_status_id: awaitingVerificationStatusId,
+          gcash_reference_number,
+          payment_proof_image,
+          amount_sent: shares[i],
+        }),
+      );
+    }
+    return updated;
+  }
+
   // Staff reviews the proof submitted above and approves or rejects it.
   // Approve reuses completePayment as-is — the client already supplied a
   // reference number in the required GCash format, so this is exactly the
@@ -386,8 +454,26 @@ export default class PaymentService {
   // client can fix a mistaken reference or resubmit a better screenshot —
   // nothing else needs to change since a resubmission overwrites the old
   // reference/image outright.
+  // One GCash proof covers every bill of a multi-item booking, so verifying
+  // any of them verifies (or rejects) the whole group.
+  // ponytail: one transaction per bill, not one for the group — a failure
+  // midway leaves the rest Awaiting Verification, and verifying again finishes them.
   async verifyPayment({ payment_id, decision, updated_by }) {
     const payment = await this.getPaymentById(payment_id); // throws 404 if missing
+    if (!payment.booking_group) return this.#verifyOne({ payment, decision, updated_by });
+
+    const group = await paymentModel.getGroupPayments(payment.booking_group);
+    const awaiting = group.filter((p) => p.payment_status_name === "Awaiting Verification");
+    if (!awaiting.length) return this.#verifyOne({ payment, decision, updated_by }); // explains the status
+    const results = [];
+    for (const bill of awaiting) {
+      results.push(await this.#verifyOne({ payment: bill, decision, updated_by }));
+    }
+    return results.find((r) => r.payment_id === Number(payment_id)) ?? results[0];
+  }
+
+  async #verifyOne({ payment, decision, updated_by }) {
+    const { payment_id } = payment;
 
     if (payment.payment_status_name !== "Awaiting Verification") {
       const err = new Error(

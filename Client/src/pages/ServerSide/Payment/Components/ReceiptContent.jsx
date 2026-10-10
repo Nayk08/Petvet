@@ -14,6 +14,7 @@ export default function ReceiptContent({ payment, appointment }) {
 
   const items = payment.items ?? [];
   const isAppointment = Boolean(payment.appointment_id);
+  const isPartiallyPaid = payment.payment_status_name === "Partially Paid";
 
   return (
     <div
@@ -139,7 +140,9 @@ export default function ReceiptContent({ payment, appointment }) {
             )}
             <div className="flex justify-between">
               <span className="text-slate-500">
-                Balance ({payment.balance_gcash_reference ? "GCash" : "Cash"}, at clinic)
+                {isPartiallyPaid
+                  ? "Balance due at the clinic"
+                  : `Balance (${payment.balance_gcash_reference ? "GCash" : "Cash"}, at clinic)`}
               </span>
               <span>{fmt(Number(payment.total_amount) - Number(payment.amount_sent))}</span>
             </div>
@@ -191,6 +194,19 @@ export default function ReceiptContent({ payment, appointment }) {
         <span>TOTAL</span>
         <span>{fmt(payment.total_amount)}</span>
       </div>
+      {isPartiallyPaid && (
+        // Reservation fee paid online; the rest is paid at the clinic.
+        <>
+          <div className="flex justify-between items-center text-sm">
+            <span>PAID SO FAR</span>
+            <span>{fmt(payment.amount_sent)}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm font-bold">
+            <span>BALANCE DUE</span>
+            <span>{fmt(Number(payment.total_amount) - Number(payment.amount_sent))}</span>
+          </div>
+        </>
+      )}
 
       <p className="text-center text-slate-500 mt-4 pt-3 border-t border-dashed border-slate-300">
         Thank you for visiting PetVet!

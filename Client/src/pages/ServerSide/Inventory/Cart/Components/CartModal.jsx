@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   useNavigate,
   useSubmit,
@@ -34,43 +34,7 @@ import {
   requiresExactAmount,
 } from "@/utils/paymentValidation.js";
 
-// Editable quantity field. Keeps its own local "draft" text while the user is
-// typing so digits don't get clobbered by the store on every keystroke, then
-// commits on blur or Enter. Clamping to [1, maxStock] happens inside
-// useCartStore.updateQuantity, so this just passes the raw parsed number
-// through — the store is the single source of truth for the final value.
-function QuantityInput({ quantity, maxStock, onCommit }) {
-  const [draft, setDraft] = useState(String(quantity));
-
-  React.useEffect(() => {
-    setDraft(String(quantity));
-  }, [quantity]);
-
-  const commit = () => {
-    const parsed = parseInt(draft, 10);
-    const next = Number.isNaN(parsed) ? quantity : parsed;
-    if (next !== quantity) onCommit(next);
-    // Resync draft from the (possibly store-clamped) committed quantity
-    // once it flows back in via the `quantity` prop / useEffect above.
-  };
-
-  return (
-    <input
-      type="number"
-      inputMode="numeric"
-      min={1}
-      max={maxStock ?? undefined}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.target.blur();
-      }}
-      className="w-12 text-center text-sm font-medium text-slate-900 dark:text-slate-100 bg-transparent border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-cyan-500 focus:outline-none rounded transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      aria-label="Quantity"
-    />
-  );
-}
+import QuantityInput from "@/components/ui/QuantityInput.jsx";
 
 export function Component() {
   const navigate = useNavigate();
@@ -128,7 +92,9 @@ export function Component() {
       toast.error("Could not start checkout", {
         description: startFetcher.data.error,
       });
+      if (autoCharge) navigate(".."); // nothing else to show here
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startFetcher.state, startFetcher.data]);
 
   // "confirm" succeeded (a real navigation submission, via useSubmit — not
@@ -140,8 +106,13 @@ export function Component() {
     }
   }, [actionData]);
 
+  // Opened from the POS order panel's "Charge" button (?charge): go straight
+  // to payment — the order panel already shows the items, so the cart list
+  // dialog is skipped, and backing out returns to the POS screen.
+  const autoCharge = new URLSearchParams(location.search).has("charge");
+
   const closeModal = () => {
-    navigate(`..${location.search}`); // Go back to the main items catalog
+    navigate(autoCharge ? ".." : `..${location.search}`); // Go back to the main items catalog
   };
 
   // Clamping to [1, product_quantity] lives in the store, so these
@@ -196,12 +167,24 @@ export function Component() {
   // calling checkoutOrder() directly, so the ["Payments"] query cache
   // gets invalidated from inside the action.
   const handleOpenCheckout = () => {
-    setPaymentMethod("Cash");
+    // The POS panel can pre-pick the method (?charge&method=GCash).
+    const preset = new URLSearchParams(location.search).get("method");
+    setPaymentMethod(["Cash", "GCash", "Split"].includes(preset) ? preset : "Cash");
     setAmountPaid("");
     setSplitCashPaid("");
     setSplitGcashPaid("");
     startFetcher.submit({ intent: "start" }, { method: "post" });
   };
+
+  // POS "Charge": start checkout as soon as this opens (once).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoCharge || autoStarted.current) return;
+    autoStarted.current = true;
+    if (cartItems.length) handleOpenCheckout();
+    else navigate("..");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCheckoutOpenChange = (open) => {
     if (open) {
@@ -234,6 +217,7 @@ export function Component() {
         );
     }
     setPayment(null);
+    if (autoCharge) closeModal(); // back to the POS screen, order kept
   };
 
   // Submits the confirm-order form to the route action (intent: "confirm").
@@ -246,7 +230,7 @@ export function Component() {
   return (
     <>
       {/* MAIN CART MODAL */}
-      <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
+      <Dialog open={!autoCharge} onOpenChange={(isOpen) => !isOpen && closeModal()}>
         <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-w-2xl p-0 overflow-hidden shadow-2xl transition-colors">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -331,6 +315,7 @@ export function Component() {
                         quantity={item.quantity}
                         maxStock={item.product_quantity}
                         onCommit={(newQty) => handleSetQuantity(item, newQty)}
+                        className="w-12 h-8"
                       />
                       <button
                         type="button"

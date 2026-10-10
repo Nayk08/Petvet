@@ -74,8 +74,9 @@ export function Component() {
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 shrink-0">
             <img src={petvetLogo} alt="PetVet logo" className="h-7 w-7" />
-            <span className="font-extrabold text-slate-900 dark:text-white">
-              Pet<span className="text-emerald-600">Vet</span>
+            <span className="font-extrabold">
+              <span className="text-red-600 dark:text-red-500">Pet</span>
+              <span className="text-emerald-600 dark:text-emerald-500">Vet</span>
             </span>
           </div>
 

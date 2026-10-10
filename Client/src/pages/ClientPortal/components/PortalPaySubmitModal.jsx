@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
-import { fetchClinicQrCode, submitPaymentProof } from "@/api/clientPortal.js";
+import {
+  fetchClinicQrCode,
+  submitPaymentProof,
+  submitGroupPaymentProof,
+} from "@/api/clientPortal.js";
 
 const GCASH_REFERENCE_PATTERN = /^\d{13}$/;
 
@@ -40,6 +44,9 @@ function formatVisitDate(value) {
 // `closeLabel`: the back-out button's text ("Cancel booking" right after booking).
 // `createdAt`: when the bill was created — an unpaid online booking is
 // cancelled UNPAID_HOLD_MINUTES later (server: expireUnpaidOnlineBookings).
+// `group`: a multi-item booking paid in ONE GCash payment —
+// { bookingGroup, reservationFee, items: [details + total_amount] }. Then
+// `amount` is the group total and paymentId/details aren't used.
 const UNPAID_HOLD_MINUTES = 10;
 
 function useSecondsLeft(createdAt) {
@@ -60,6 +67,7 @@ export default function PortalPaySubmitModal({
   onClose,
   closeLabel = "Close",
   createdAt,
+  group,
 }) {
   const secondsLeft = useSecondsLeft(createdAt);
   const isExpired = secondsLeft === 0;
@@ -81,8 +89,11 @@ export default function PortalPaySubmitModal({
   const isReferenceValid = GCASH_REFERENCE_PATTERN.test(referenceNumber);
   // Reservation fee = 50% rounded up to the centavo, or the full bill.
   // Mirrors server/utils/deposit.js, which accepts only these two amounts.
+  // A group's fee is each item's 50% added up (computed by the server).
   const toCents = (v) => Math.round(Number(v) * 100);
-  const reservationFee = Math.ceil(toCents(amount ?? 0) * 0.5) / 100;
+  const reservationFee = group
+    ? Number(group.reservationFee)
+    : Math.ceil(toCents(amount ?? 0) * 0.5) / 100;
   const fullAmount = Number(amount ?? 0);
   const amountToPay = payOption === "full" ? fullAmount : reservationFee;
   const balanceLeft = Math.round((fullAmount - amountToPay) * 100) / 100;
@@ -99,7 +110,8 @@ export default function PortalPaySubmitModal({
       formData.append("gcash_reference_number", referenceNumber);
       formData.append("amount_paid", amountToPay.toFixed(2));
       formData.append("payment_proof_image", proofFile);
-      await submitPaymentProof(paymentId, formData);
+      if (group) await submitGroupPaymentProof(group.bookingGroup, formData);
+      else await submitPaymentProof(paymentId, formData);
       await queryClient.invalidateQueries({ queryKey: ["clientPortal", "payments"] });
       setSubmitted(true);
     } catch (err) {
@@ -151,7 +163,27 @@ export default function PortalPaySubmitModal({
             )}
             {/* What this bill is for */}
             <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-1.5 text-sm">
-              {[
+              {group?.items.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-1.5 last:border-b-0"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium text-slate-900 dark:text-slate-100">
+                      {item.pets_name} · {item.service_name}
+                    </span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      {formatVisitDate(item.appointment_date)}, {formatClock(item.start_time)} –{" "}
+                      {formatClock(item.end_time)}
+                      {item.staff_name ? ` · ${item.staff_name}` : ""}
+                    </span>
+                  </span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                    ₱{Number(item.total_amount).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+              {!group && [
                 ["Pet", details?.pets_name],
                 ["Service", details?.service_name],
                 ["Staff", details?.staff_name],
@@ -245,10 +277,14 @@ export default function PortalPaySubmitModal({
               </label>
               <Input
                 value={referenceNumber}
-                onChange={(e) => setReferenceNumber(e.target.value.trim())}
+                // Digits only: letters, spaces and dashes (e.g. from a pasted
+                // "1234 567 890123") are dropped as they're typed.
+                onChange={(e) => setReferenceNumber(e.target.value.replace(/\D/g, "").slice(0, 13))}
                 placeholder="13-digit reference number"
                 maxLength={13}
                 inputMode="numeric"
+                pattern="\d{13}"
+                title="Enter the 13-digit GCash reference number (numbers only)"
                 className="text-slate-900 dark:text-slate-100"
               />
               {referenceNumber && !isReferenceValid && (

@@ -28,6 +28,10 @@ const PAYMENT_BADGE = {
   "Partially Paid": "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-800",
 };
 
+// A receipt exists once money was received: paid in full, or the online
+// reservation fee verified (its receipt shows the balance still due).
+const RECEIPT_STATUSES = ["Completed", "Partially Paid"];
+
 export function Component() {
   const { page, limit, setPage, setLimit } = usePagination({ defaultLimit: 10 });
   const [payingPaymentId, setPayingPaymentId] = useState(null);
@@ -70,7 +74,7 @@ export function Component() {
               (data?.rows ?? []).map((p) => {
                 const canPay =
                   p.payment_status_name === "Pending" && Number(p.total_amount) > 0;
-                const hasReceipt = p.payment_status_name === "Completed";
+                const hasReceipt = RECEIPT_STATUSES.includes(p.payment_status_name);
                 return (
                   <div
                     key={p.payment_id}
@@ -174,7 +178,7 @@ export function Component() {
                 className:
                   "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40",
                 onClick: (row) => setReceiptPaymentId(row.payment_id),
-                show: (row) => row.payment_status_name === "Completed",
+                show: (row) => RECEIPT_STATUSES.includes(row.payment_status_name),
               },
             ]}
           />

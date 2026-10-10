@@ -82,3 +82,22 @@ export function resolvePaymentSplit({
 
   return { cash_amount: cash, gcash_amount: gcash };
 }
+
+// One counter payment for a multi-item booking (see Appointment_Model.js:
+// completeGroupPayment): spreads it over the group's bills so each bill gets
+// its own method and amounts. The group total is checked like a single bill;
+// for Split, cash fills the bills in order and GCash covers the rest.
+export function allocateGroupPayment({ payment_method, totals, cash_received, gcash_received }) {
+  const total = round2(totals.reduce((sum, t) => sum + Number(t), 0));
+  const { cash_amount } = resolvePaymentSplit({ payment_method, total_amount: total, cash_received, gcash_received });
+
+  let cashLeft = cash_amount;
+  return totals.map((t) => {
+    const bill = round2(Number(t));
+    const cash = round2(Math.min(bill, cashLeft));
+    cashLeft = round2(cashLeft - cash);
+    const gcash = round2(bill - cash);
+    const method = gcash === 0 ? "Cash" : cash === 0 ? "GCash" : "Split";
+    return { payment_method: method, cash_received: cash, gcash_received: gcash };
+  });
+}

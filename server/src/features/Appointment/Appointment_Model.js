@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import pool from "../../config/db.js";
 import { paginateQuery } from "../../../utils/paginateQuery.js";
-import { resolvePaymentSplit } from "../../../utils/validatePaymentMethod.js";
+import { resolvePaymentSplit, allocateGroupPayment } from "../../../utils/validatePaymentMethod.js";
 import {
   parseTimeString,
   clinicRuleError,
@@ -241,6 +242,70 @@ async function assertPetBelongsToAppointmentClient(client, pets_id, appointment_
   }
 }
 
+// One appointment + its Pending bill, inside the caller's transaction
+// (addAppointment books one, addAppointmentGroup several in one go).
+async function insertBookingTx(
+  client,
+  {
+    client_id,
+    pets_id,
+    appointment_services_id,
+    assigned_staff_id,
+    appointment_date,
+    start_time,
+    appointment_status_id,
+    notes,
+    created_by,
+    booking_group = null,
+  },
+) {
+  await assertPetBelongsToClient(client, pets_id, client_id);
+
+  // end_time = start + the sub-service's current duration, stored on the
+  // row so later duration edits don't move this appointment.
+  const { service, start_time_full, end_time_full } = await resolveSlot(client, {
+    appointment_services_id,
+    assigned_staff_id,
+    pets_id,
+    appointment_date,
+    start_time,
+  });
+
+  const apptRes = await client.query(
+    `INSERT INTO tbl_appointments
+      (client_id, pets_id, appointment_services_id, assigned_staff_id,
+       appointment_date, start_time, end_time, appointment_status_id, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING *`,
+    [
+      client_id,
+      pets_id,
+      appointment_services_id,
+      assigned_staff_id,
+      appointment_date,
+      start_time_full,
+      end_time_full,
+      appointment_status_id,
+      notes,
+      created_by,
+    ],
+  );
+  const appointment = apptRes.rows[0];
+
+  // The sub-service's fixed price; none = priced by hand when payment is
+  // confirmed (0 is a placeholder until then).
+  const paymentRes = await client.query(
+    `INSERT INTO tbl_payments
+      (total_amount, payment_status_id, appointment_id, created_by, booking_group)
+     VALUES ($1, (SELECT payment_status_id FROM tbl_payment_status
+                  WHERE LOWER(TRIM(payment_status_name)) = 'pending'), $2, $3, $4)
+     RETURNING *`,
+    [service.service_price ?? 0, appointment.appointment_id, created_by, booking_group],
+  );
+
+  return { appointment, payment: paymentRes.rows[0] };
+}
+
 export default class AppointmentModel {
   // Payment is now collected at booking time, so a Pending/In Queue
   // appointment whose slot has already passed is presumed to have happened
@@ -274,6 +339,9 @@ export default class AppointmentModel {
          WHERE p.appointment_id = a.appointment_id
            AND p.created_by = 'Client Portal'
            AND p.is_deleted = false
+           -- A service priced at the clinic can't be paid online, so its
+           -- booking isn't held to the online-payment deadline.
+           AND p.total_amount > 0
            AND p.payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
                                       WHERE LOWER(TRIM(payment_status_name)) = 'pending')
            AND p.date_created < NOW() - make_interval(mins => $1)
@@ -441,7 +509,19 @@ export default class AppointmentModel {
         : "appointment_id DESC";
 
       return await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_appointments ${whereClause} ORDER BY ${orderBy}`,
+        // Plus the visit's bill: a Partially Paid one can't be completed until
+        // its balance is collected, so the queues show that instead.
+        baseQuery: `SELECT v_appointments.*, bill.payment_id, bill.payment_status_name, bill.balance_due
+          FROM v_appointments
+          LEFT JOIN LATERAL (
+            SELECT p.payment_id, ps.payment_status_name,
+                   p.total_amount - COALESCE(p.gcash_amount, 0) AS balance_due
+            FROM tbl_payments p
+            JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+            WHERE p.appointment_id = v_appointments.appointment_id AND p.is_deleted IS NOT TRUE
+            ORDER BY p.payment_id DESC LIMIT 1
+          ) bill ON true
+          ${whereClause} ORDER BY ${orderBy}`,
         countQuery: `SELECT COUNT(*) AS total FROM v_appointments ${whereClause}`,
         values,
         page,
@@ -505,66 +585,17 @@ export default class AppointmentModel {
     let queryError = null;
     try {
       await client.query("BEGIN");
-
-      await assertPetBelongsToClient(client, pets_id, client_id);
-
-      // end_time = start + the sub-service's current duration, stored on the
-      // row so later duration edits don't move this appointment.
-      const { service, start_time_full, end_time_full } = await resolveSlot(client, {
+      const { appointment } = await insertBookingTx(client, {
+        client_id,
+        pets_id,
         appointment_services_id,
         assigned_staff_id,
-        pets_id,
         appointment_date,
         start_time,
+        appointment_status_id,
+        notes,
+        created_by,
       });
-
-      const apptRes = await client.query(
-        `INSERT INTO tbl_appointments
-          (client_id, pets_id, appointment_services_id, assigned_staff_id,
-           appointment_date, start_time, end_time, appointment_status_id, notes, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING *`,
-        [
-          client_id,
-          pets_id,
-          appointment_services_id,
-          assigned_staff_id,
-          appointment_date,
-          start_time_full,
-          end_time_full,
-          appointment_status_id,
-          notes,
-          created_by,
-        ],
-      );
-      const appointment = apptRes.rows[0];
-
-      // The sub-service's fixed price; none = priced by hand when payment is
-      // confirmed (0 is a placeholder until then).
-      const total_amount = service.service_price;
-
-      const pendingPaymentStatusRes = await client.query(
-        `SELECT payment_status_id FROM tbl_payment_status
-         WHERE LOWER(TRIM(payment_status_name)) = 'pending'`,
-      );
-      const pending_payment_status_id =
-        pendingPaymentStatusRes.rows[0]?.payment_status_id;
-      if (!pending_payment_status_id) {
-        throw new Error("'Pending' payment status not configured");
-      }
-
-      await client.query(
-        `INSERT INTO tbl_payments
-          (total_amount, payment_status_id, appointment_id, created_by)
-         VALUES ($1, $2, $3, $4)`,
-        [
-          total_amount ?? 0,
-          pending_payment_status_id,
-          appointment.appointment_id,
-          created_by,
-        ],
-      );
-
       await client.query("COMMIT");
       return appointment;
     } catch (error) {
@@ -573,6 +604,62 @@ export default class AppointmentModel {
       const conflict = mapSlotConflictError(error);
       if (conflict) throw conflict;
       console.log(`Error in addAppointment: ${error}`);
+      throw error;
+    } finally {
+      client.release(queryError);
+    }
+  }
+
+  // Several appointments booked as ONE booking (several pets, or one pet
+  // with several services/times): all-or-nothing in one transaction, each
+  // with its own Pending bill tagged with the same booking_group. If any item
+  // fails (slot taken, clinic rule), nothing is booked and the error names
+  // the item ("Item 2: ...").
+  async addAppointmentGroup({ client_id, items, appointment_status_id, created_by }) {
+    await this.expireUnpaidOnlineBookings();
+    const booking_group = randomUUID();
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+      // Take every staff lock, then every pet lock, in sorted order up front:
+      // two groups sharing staff/pets can't then deadlock each other.
+      // (resolveSlot re-takes them per item; advisory locks are re-entrant.)
+      for (const id of [...new Set(items.map((i) => String(i.assigned_staff_id)))].sort()) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext('appt-staff:' || $1::text))`, [id]);
+      }
+      for (const id of [...new Set(items.map((i) => String(i.pets_id)))].sort()) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext('appt-pet:' || $1::text))`, [id]);
+      }
+
+      const booked = [];
+      for (const [index, item] of items.entries()) {
+        try {
+          booked.push(
+            await insertBookingTx(client, {
+              ...item,
+              client_id,
+              appointment_status_id,
+              created_by,
+              booking_group,
+            }),
+          );
+        } catch (error) {
+          const named = mapSlotConflictError(error) ?? error;
+          if (named.statusCode) named.message = `Item ${index + 1}: ${named.message}`;
+          throw named;
+        }
+      }
+      await client.query("COMMIT");
+      return {
+        booking_group,
+        appointments: booked.map((b) => b.appointment),
+        payments: booked.map((b) => b.payment),
+      };
+    } catch (error) {
+      queryError = error.statusCode ? null : error;
+      await client.query("ROLLBACK");
+      if (!error.statusCode) console.log(`Error in addAppointmentGroup: ${error}`);
       throw error;
     } finally {
       client.release(queryError);
@@ -1083,114 +1170,19 @@ export default class AppointmentModel {
     let queryError = null;
     try {
       await client.query("BEGIN");
-
-      const apptRes = await client.query(
-        `SELECT a.*, ast.appointment_status_name, s.appointment_services,
-                ${effectivePriceSql("s", "a.pets_id")} AS service_price
-         FROM tbl_appointments a
-         JOIN tbl_appointment_status ast ON ast.appointment_status_id = a.appointment_status_id
-         JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
-         WHERE a.appointment_id = $1 AND a.is_deleted IS NOT TRUE
-         FOR UPDATE OF a`,
-        [appointment_id],
-      );
-      if (!apptRes.rows.length) {
-        const err = new Error("Appointment not found");
-        err.statusCode = 404;
-        throw err;
-      }
-      const appointment = apptRes.rows[0];
-
-      if (appointment.appointment_status_name !== "Pending") {
-        const err = new Error(
-          `Only pending appointments can be paid. Appointment is already ${appointment.appointment_status_name}.`,
-        );
-        err.statusCode = 409;
-        throw err;
-      }
-
-      const paymentRowRes = await client.query(
-        `SELECT * FROM tbl_payments
-         WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
-         FOR UPDATE`,
-        [appointment_id],
-      );
-      if (!paymentRowRes.rows.length) {
-        throw new Error("Payment record for this appointment not found");
-      }
-      const paymentRow = paymentRowRes.rows[0];
-
-      // The sub-service's fixed price, or (priced per case) the amount entered.
-      const total_amount =
-        Number(appointment.service_price ?? amount) + Number(additional_fee_amount || 0);
-
-      const { cash_amount, gcash_amount } = resolvePaymentSplit({
+      const result = await completeAppointmentPaymentTx(client, {
+        appointment_id,
+        amount,
         payment_method,
-        total_amount,
+        gcash_reference_number,
         cash_received,
         gcash_received,
+        additional_fee_label,
+        additional_fee_amount,
+        updated_by,
       });
-
-      const paymentStatusRes = await client.query(
-        `SELECT payment_status_id FROM tbl_payment_status
-         WHERE LOWER(TRIM(payment_status_name)) = 'completed'`,
-      );
-      const payment_status_id = paymentStatusRes.rows[0]?.payment_status_id;
-      if (!payment_status_id) {
-        throw new Error("'Completed' payment status not configured");
-      }
-
-      const confirmedStatusRes = await client.query(
-        `SELECT appointment_status_id FROM tbl_appointment_status
-         WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'`,
-      );
-      const confirmed_status_id =
-        confirmedStatusRes.rows[0]?.appointment_status_id;
-      if (!confirmed_status_id) {
-        throw new Error("'In Queue' appointment status not configured");
-      }
-
-      const paymentRes = await client.query(
-        `UPDATE tbl_payments SET
-           total_amount = $1,
-           payment_status_id = $2,
-           payment_method = $3,
-           gcash_reference_number = $4,
-           cash_amount = $5,
-           gcash_amount = $6,
-           additional_fee_label = $7,
-           additional_fee_amount = $8,
-           updated_by = $9,
-           date_updated = NOW()
-         WHERE payment_id = $10
-         RETURNING *`,
-        [
-          total_amount,
-          payment_status_id,
-          payment_method,
-          gcash_reference_number || null,
-          cash_amount,
-          gcash_amount,
-          additional_fee_label || null,
-          additional_fee_amount || null,
-          updated_by,
-          paymentRow.payment_id,
-        ],
-      );
-
-      const updatedApptRes = await client.query(
-        `UPDATE tbl_appointments
-         SET appointment_status_id = $1, updated_by = $2, date_updated = NOW()
-         WHERE appointment_id = $3
-         RETURNING *`,
-        [confirmed_status_id, updated_by, appointment_id],
-      );
-
       await client.query("COMMIT");
-      return {
-        appointment: updatedApptRes.rows[0],
-        payment: paymentRes.rows[0],
-      };
+      return result;
     } catch (error) {
       queryError = error;
       await client.query("ROLLBACK");
@@ -1200,4 +1192,206 @@ export default class AppointmentModel {
       client.release(queryError);
     }
   }
+
+  // One counter payment for a whole multi-item booking: every still-unpaid
+  // bill in the group is completed in ONE transaction, each with its share
+  // of the payment (allocateGroupPayment). `amounts` gives the price of any
+  // item without a fixed one, keyed by appointment_id.
+  async completeGroupPayment({
+    booking_group,
+    amounts = {},
+    payment_method,
+    gcash_reference_number,
+    cash_received,
+    gcash_received,
+    updated_by,
+  }) {
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+      const { rows: bills } = await client.query(
+        `SELECT a.appointment_id, ${effectivePriceSql("s", "a.pets_id")} AS service_price
+         FROM tbl_payments p
+         JOIN tbl_payment_status ps ON ps.payment_status_id = p.payment_status_id
+         JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
+         JOIN tbl_appointment_status ast ON ast.appointment_status_id = a.appointment_status_id
+         JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+         WHERE p.booking_group = $1 AND p.is_deleted IS NOT TRUE AND a.is_deleted IS NOT TRUE
+           AND ps.payment_status_name = 'Pending' AND ast.appointment_status_name = 'Pending'
+         ORDER BY a.start_time, a.appointment_id
+         FOR UPDATE OF p, a`,
+        [booking_group],
+      );
+      if (!bills.length) throw httpError(409, "This booking has nothing left to pay.");
+
+      const totals = bills.map((b) => {
+        const price = b.service_price ?? amounts[b.appointment_id];
+        if (!(Number(price) > 0)) {
+          throw httpError(400, "Enter the agreed amount for every item that has no fixed price.");
+        }
+        return Number(price);
+      });
+      const shares = allocateGroupPayment({ payment_method, totals, cash_received, gcash_received });
+
+      const results = [];
+      for (const [i, bill] of bills.entries()) {
+        results.push(
+          await completeAppointmentPaymentTx(client, {
+            appointment_id: bill.appointment_id,
+            amount: totals[i],
+            payment_method: shares[i].payment_method,
+            gcash_reference_number: shares[i].gcash_received > 0 ? gcash_reference_number : null,
+            cash_received: shares[i].cash_received,
+            gcash_received: shares[i].gcash_received,
+            updated_by,
+          }),
+        );
+      }
+      await client.query("COMMIT");
+      return results;
+    } catch (error) {
+      queryError = error.statusCode ? null : error;
+      await client.query("ROLLBACK");
+      if (!error.statusCode) console.log(`Error in completeGroupPayment: ${error}`);
+      throw error;
+    } finally {
+      client.release(queryError);
+    }
+  }
+
+  // The bills of one booking group, with their appointments (for the group
+  // payment screens and the receipt email). Includes cancelled/expired ones.
+  async getBookingGroup(booking_group) {
+    const { rows } = await pool.query(
+      `SELECT p.payment_id, p.total_amount, p.payment_status_name, p.control_number,
+              p.amount_sent, p.gcash_reference_number, p.booking_group, p.created_by AS payment_created_by,
+              a.*
+       FROM v_payments p
+       JOIN v_appointments a ON a.appointment_id = p.appointment_id
+       WHERE p.booking_group = $1
+       ORDER BY a.start_time, a.appointment_id`,
+      [booking_group],
+    );
+    return rows;
+  }
+}
+
+// Marks one Pending appointment paid (bill Completed, visit In Queue) inside
+// the caller's transaction; completeAppointmentPayment does one,
+// completeGroupPayment every bill of a multi-item booking.
+async function completeAppointmentPaymentTx(
+  client,
+  {
+    appointment_id,
+    amount,
+    payment_method,
+    gcash_reference_number,
+    cash_received,
+    gcash_received,
+    additional_fee_label,
+    additional_fee_amount,
+    updated_by,
+  },
+) {
+  const apptRes = await client.query(
+    `SELECT a.*, ast.appointment_status_name, s.appointment_services,
+            ${effectivePriceSql("s", "a.pets_id")} AS service_price
+     FROM tbl_appointments a
+     JOIN tbl_appointment_status ast ON ast.appointment_status_id = a.appointment_status_id
+     JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+     WHERE a.appointment_id = $1 AND a.is_deleted IS NOT TRUE
+     FOR UPDATE OF a`,
+    [appointment_id],
+  );
+  if (!apptRes.rows.length) throw httpError(404, "Appointment not found");
+  const appointment = apptRes.rows[0];
+
+  if (appointment.appointment_status_name !== "Pending") {
+    throw httpError(
+      409,
+      `Only pending appointments can be paid. Appointment is already ${appointment.appointment_status_name}.`,
+    );
+  }
+
+  const paymentRowRes = await client.query(
+    `SELECT * FROM tbl_payments
+     WHERE appointment_id = $1 AND is_deleted IS NOT TRUE
+     FOR UPDATE`,
+    [appointment_id],
+  );
+  if (!paymentRowRes.rows.length) {
+    throw new Error("Payment record for this appointment not found");
+  }
+  const paymentRow = paymentRowRes.rows[0];
+
+  // The sub-service's fixed price, or (priced per case) the amount entered.
+  const total_amount =
+    Number(appointment.service_price ?? amount) + Number(additional_fee_amount || 0);
+
+  const { cash_amount, gcash_amount } = resolvePaymentSplit({
+    payment_method,
+    total_amount,
+    cash_received,
+    gcash_received,
+  });
+
+  const paymentStatusRes = await client.query(
+    `SELECT payment_status_id FROM tbl_payment_status
+     WHERE LOWER(TRIM(payment_status_name)) = 'completed'`,
+  );
+  const payment_status_id = paymentStatusRes.rows[0]?.payment_status_id;
+  if (!payment_status_id) {
+    throw new Error("'Completed' payment status not configured");
+  }
+
+  const confirmedStatusRes = await client.query(
+    `SELECT appointment_status_id FROM tbl_appointment_status
+     WHERE LOWER(TRIM(appointment_status_name)) = 'in queue'`,
+  );
+  const confirmed_status_id = confirmedStatusRes.rows[0]?.appointment_status_id;
+  if (!confirmed_status_id) {
+    throw new Error("'In Queue' appointment status not configured");
+  }
+
+  const paymentRes = await client.query(
+    `UPDATE tbl_payments SET
+       total_amount = $1,
+       payment_status_id = $2,
+       payment_method = $3,
+       gcash_reference_number = $4,
+       cash_amount = $5,
+       gcash_amount = $6,
+       additional_fee_label = $7,
+       additional_fee_amount = $8,
+       updated_by = $9,
+       date_updated = NOW()
+     WHERE payment_id = $10
+     RETURNING *`,
+    [
+      total_amount,
+      payment_status_id,
+      payment_method,
+      gcash_reference_number || null,
+      cash_amount,
+      gcash_amount,
+      additional_fee_label || null,
+      additional_fee_amount || null,
+      updated_by,
+      paymentRow.payment_id,
+    ],
+  );
+
+  const updatedApptRes = await client.query(
+    `UPDATE tbl_appointments
+     SET appointment_status_id = $1, updated_by = $2, date_updated = NOW()
+     WHERE appointment_id = $3
+     RETURNING *`,
+    [confirmed_status_id, updated_by, appointment_id],
+  );
+
+  return {
+    appointment: updatedApptRes.rows[0],
+    payment: paymentRes.rows[0],
+  };
 }

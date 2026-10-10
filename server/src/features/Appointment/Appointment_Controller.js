@@ -161,6 +161,49 @@ export default class AppointmentController {
     }
   }
 
+  async addAppointmentGroup(req, res) {
+    try {
+      const result = await appointmentService.addAppointmentGroup({
+        client_id: req.body.client_id,
+        items: req.body.items,
+        created_by: req.session.user.name,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      console.log("Error on Controller addAppointmentGroup function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async getBookingGroup(req, res) {
+    try {
+      res.json(await appointmentService.getBookingGroup(req.params.booking_group));
+    } catch (error) {
+      console.log("Error on Controller getBookingGroup function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async completeGroupPayment(req, res) {
+    try {
+      const { payment_method, gcash_reference_number, cash_received, gcash_received, amounts } =
+        req.body;
+      const result = await appointmentService.completeGroupPayment({
+        booking_group: req.params.booking_group,
+        amounts,
+        payment_method,
+        gcash_reference_number,
+        cash_received,
+        gcash_received,
+        updated_by: req.session.user.name,
+      });
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller completeGroupPayment function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async editAppointment(req, res) {
     try {
       const {

@@ -8,6 +8,9 @@ import {
   bookAppointmentWithPaymentSchema,
   completeAppointmentPaymentSchema,
   appointmentIdParamSchema,
+  addAppointmentGroupSchema,
+  bookingGroupParamSchema,
+  completeGroupPaymentSchema,
 } from "../../validators/appointmentSchema.js";
 
 const router = express.Router();
@@ -42,6 +45,30 @@ router.post(
   hasPermission("APPOINTMENT", "can_create"),
   validateBody(addAppointmentSchema),
   (req, res) => appointmentController.addAppointment(req, res),
+);
+
+// Multi-item booking: several pets / services / times in one booking,
+// paid together via the group complete-payment below.
+router.post(
+  "/appointments/add-group",
+  hasPermission("APPOINTMENT", "can_create"),
+  validateBody(addAppointmentGroupSchema),
+  (req, res) => appointmentController.addAppointmentGroup(req, res),
+);
+
+router.get(
+  "/appointments/groups/:booking_group",
+  hasPermission("APPOINTMENT", "can_view"),
+  validateParams(bookingGroupParamSchema),
+  (req, res) => appointmentController.getBookingGroup(req, res),
+);
+
+router.patch(
+  "/appointments/groups/:booking_group/complete-payment",
+  hasPermission("APPOINTMENT", "can_edit"),
+  validateParams(bookingGroupParamSchema),
+  validateBody(completeGroupPaymentSchema),
+  (req, res) => appointmentController.completeGroupPayment(req, res),
 );
 
 router.post(

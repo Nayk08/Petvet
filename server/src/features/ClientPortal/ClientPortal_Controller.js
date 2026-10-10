@@ -16,15 +16,9 @@ export default class ClientPortalController {
       if (!credential) {
         return res.status(400).json({ message: "Missing Google credential" });
       }
-      const result = await clientPortalService.loginWithGoogle(credential);
-      // First-time client: no record yet, so no session — the page shows
-      // the registration step instead.
-      if (result.needs_registration) return res.json(result);
-      res.cookie(CLIENT_TOKEN_COOKIE, result.token, CLIENT_TOKEN_COOKIE_OPTIONS);
-      // Deliberately NOT echoing the token back in the body — an httpOnly
-      // cookie the browser stores for us defeats the purpose if the JSON
-      // response then hands the same token to page JS anyway.
-      res.json({ client: result.client });
+      // No session yet either way: a first-time client gets the registration
+      // step, a known one gets the emailed sign-in code (verifyOtp below).
+      res.json(await clientPortalService.loginWithGoogle(credential));
     } catch (error) {
       console.log("Error on Controller loginWithGoogle function");
       sendError(res, error, "Could not sign in with Google. Please try again.");
@@ -33,12 +27,35 @@ export default class ClientPortalController {
 
   async registerWithGoogle(req, res) {
     try {
-      const { token, client } = await clientPortalService.registerWithGoogle(req.body);
-      res.cookie(CLIENT_TOKEN_COOKIE, token, CLIENT_TOKEN_COOKIE_OPTIONS);
-      res.status(201).json({ client });
+      // Creates the client record, then emails the sign-in code.
+      res.status(201).json(await clientPortalService.registerWithGoogle(req.body));
     } catch (error) {
       console.log("Error on Controller registerWithGoogle function");
       sendError(res, error, "Could not complete registration. Please try again.");
+    }
+  }
+
+  // The right code is the only way to get the session cookie.
+  async verifyOtp(req, res) {
+    try {
+      const { token, client } = await clientPortalService.verifyOtp(req.body);
+      // Deliberately NOT echoing the token back in the body — an httpOnly
+      // cookie the browser stores for us defeats the purpose if the JSON
+      // response then hands the same token to page JS anyway.
+      res.cookie(CLIENT_TOKEN_COOKIE, token, CLIENT_TOKEN_COOKIE_OPTIONS);
+      res.json({ client });
+    } catch (error) {
+      console.log("Error on Controller verifyOtp function");
+      sendError(res, error, "Could not verify your code. Please try again.");
+    }
+  }
+
+  async resendOtp(req, res) {
+    try {
+      res.json(await clientPortalService.resendOtp(req.body));
+    } catch (error) {
+      console.log("Error on Controller resendOtp function");
+      sendError(res, error, "Could not send a new code. Please try again.");
     }
   }
 
@@ -336,6 +353,54 @@ export default class ClientPortalController {
       res.json(payment);
     } catch (error) {
       console.log("Error on Controller submitPaymentProof function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  // Several pets / services / times in one booking.
+  async bookAppointmentGroup(req, res) {
+    try {
+      const result = await clientPortalService.bookAppointmentGroup({
+        client_id: req.clientUser.client_id,
+        items: req.body.items,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      console.log("Error on Controller bookAppointmentGroup function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  // One GCash proof for every item of a group booking.
+  async submitGroupPaymentProof(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No payment screenshot uploaded" });
+      }
+      const { gcash_reference_number, amount_paid } = req.body;
+      const result = await clientPortalService.submitGroupPaymentProof({
+        booking_group: req.params.booking_group,
+        client_id: req.clientUser.client_id,
+        gcash_reference_number,
+        amount_paid,
+        payment_proof_image: req.file.path,
+      });
+      res.json(result);
+    } catch (error) {
+      console.log("Error on Controller submitGroupPaymentProof function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async cancelMyUnpaidGroup(req, res) {
+    try {
+      res.json(
+        await clientPortalService.cancelMyUnpaidGroup({
+          booking_group: req.params.booking_group,
+          client_id: req.clientUser.client_id,
+        }),
+      );
+    } catch (error) {
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }

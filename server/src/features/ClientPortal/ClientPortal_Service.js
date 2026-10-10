@@ -1,6 +1,10 @@
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { depositError } from "../../../utils/deposit.js";
+import { sendMail } from "../../config/mailer.js";
+import { depositError, minDeposit } from "../../../utils/deposit.js";
+import { bookingReceiptEmail } from "../../../utils/emailTemplates.js";
+import { UNPAID_HOLD_MINUTES } from "../Appointment/Appointment_Model.js";
 import ClientPortalModel from "./ClientPortal_Model.js";
 import ClientRecordsService from "../Client_Records/Client_Records_Service.js";
 import AppointmentService from "../Appointment/Appointment_Service.js";
@@ -13,6 +17,38 @@ const appointmentService = new AppointmentService();
 const paymentService = new PaymentService();
 const medicalRecordsService = new MedicalRecordsService();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Sign-in OTP: after Google, a 6-digit code is emailed and must be entered
+// before the session cookie is set. Stateless — the code's HMAC (keyed with
+// the server secret, so it can't be brute-forced offline) rides in a
+// short-lived signed token; wrong guesses are capped by loginLimiter.
+// ponytail: a code stays valid until it expires even after use; store used
+// tokens if one-time use ever matters.
+export const OTP_MINUTES = 10;
+const otpHash = (client_id, code) =>
+  crypto
+    .createHmac("sha256", process.env.CLIENT_JWT_SECRET)
+    .update(`${client_id}:${code}`)
+    .digest("hex");
+// "kyanvillarin60@gmail.com" -> "ky***@gmail.com"
+export const maskEmail = (email) =>
+  email.replace(/^(.{1,2})[^@]*@/, (_, start) => `${start}***@`);
+
+function httpError(statusCode, message) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
+
+function readOtpToken(otp_token, { ignoreExpiration = false } = {}) {
+  try {
+    const t = jwt.verify(otp_token, process.env.CLIENT_JWT_SECRET, { ignoreExpiration });
+    if (t.purpose === "otp") return t;
+  } catch {
+    // fall through
+  }
+  throw httpError(401, "Your sign-in code expired. Please sign in with Google again.");
+}
 
 export default class ClientPortalService {
   // Verifies the Google ID token server-side (signature, audience, issuer),
@@ -52,7 +88,7 @@ export default class ClientPortalService {
       };
     }
 
-    return this.#signIn(existingClient, payload.sub);
+    return this.#startOtp(existingClient, payload.sub);
   }
 
   // Step two of a first Google sign-in: creates the Client Records row
@@ -72,7 +108,7 @@ export default class ClientPortalService {
 
     // Registered in another tab meanwhile — just sign in.
     const existingClient = await clientPortalModel.findClientByEmail(reg.email);
-    if (existingClient) return this.#signIn(existingClient, reg.sub);
+    if (existingClient) return this.#startOtp(existingClient, reg.sub);
 
     const newClient = await clientRecordsService.addClient({
       client_name,
@@ -80,7 +116,60 @@ export default class ClientPortalService {
       contact_no,
       created_by: "Client Portal",
     });
-    return this.#signIn(newClient, reg.sub);
+    return this.#startOtp(newClient, reg.sub);
+  }
+
+  // Emails a fresh 6-digit code; the session starts only in verifyOtp.
+  async #startOtp(clientRow, google_sub) {
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    const otp_token = jwt.sign(
+      { purpose: "otp", client_id: clientRow.client_id, sub: google_sub, h: otpHash(clientRow.client_id, code) },
+      process.env.CLIENT_JWT_SECRET,
+      { expiresIn: `${OTP_MINUTES}m` },
+    );
+
+    const { sent } = await sendMail({
+      to: clientRow.email,
+      subject: `Your PetVet sign-in code: ${code}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:420px">
+        <p>Use this code to finish signing in to PetVet:</p>
+        <p style="font-size:30px;font-weight:bold;letter-spacing:6px;color:#2E7D32">${code}</p>
+        <p>It expires in ${OTP_MINUTES} minutes. If you didn't try to sign in, you can ignore this email.</p>
+      </div>`,
+    });
+    if (!sent) {
+      // No email set up: a dev machine can read the code from the server
+      // log; production can't sign anyone in without it, so say so.
+      if (process.env.NODE_ENV === "production") {
+        throw httpError(503, "We couldn't send your sign-in code right now. Please try again later.");
+      }
+      console.log(`[dev] PetVet sign-in code for ${clientRow.email}: ${code}`);
+    }
+
+    return { needs_otp: true, otp_token, email: maskEmail(clientRow.email) };
+  }
+
+  async verifyOtp({ otp_token, code }) {
+    const t = readOtpToken(otp_token);
+    const expected = Buffer.from(t.h);
+    const given = Buffer.from(otpHash(t.client_id, code));
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
+      throw httpError(400, "That code is incorrect. Check your email and try again.");
+    }
+    const client = await clientPortalModel.getClientById(t.client_id);
+    if (!client) throw httpError(401, "This account is no longer active. Please contact the clinic.");
+    return this.#signIn(client, t.sub);
+  }
+
+  // New code to the same client; works for a while after the old one expired.
+  async resendOtp({ otp_token }) {
+    const t = readOtpToken(otp_token, { ignoreExpiration: true });
+    if (Date.now() / 1000 - t.iat > 60 * 60) {
+      throw httpError(401, "Your sign-in code expired. Please sign in with Google again.");
+    }
+    const client = await clientPortalModel.getClientById(t.client_id);
+    if (!client) throw httpError(401, "This account is no longer active. Please contact the clinic.");
+    return this.#startOtp(client, t.sub);
   }
 
   async #signIn(clientRow, google_sub) {
@@ -155,9 +244,11 @@ export default class ClientPortalService {
       throw err;
     }
 
-    if (payment.payment_status_name !== "Completed") {
+    // Completed, or Partially Paid (reservation fee verified; the receipt
+    // shows the balance still due at the clinic).
+    if (!["Completed", "Partially Paid"].includes(payment.payment_status_name)) {
       const err = new Error(
-        "A receipt is only available once this payment is completed.",
+        "A receipt is available once your payment has been verified by the clinic.",
       );
       err.statusCode = 409;
       throw err;
@@ -317,7 +408,103 @@ export default class ClientPortalService {
       appointment.appointment_id,
     );
 
+    this.#emailBookingReceipt(
+      appointmentService
+        .getAppointmentById(appointment.appointment_id) // full row: email, pet, service, staff
+        .then((details) => [{ appointment: details, payment }]),
+    );
+
     return { ...appointment, payment };
+  }
+
+  // Several pets / services / times in ONE booking: all-or-nothing, one
+  // bill per appointment tagged with a shared booking_group, paid together
+  // with one GCash proof (submitGroupPaymentProof).
+  async bookAppointmentGroup({ client_id, items }) {
+    // The group is paid online in one go, so every item needs a price; a
+    // service priced at the clinic is booked on its own.
+    for (const [index, item] of items.entries()) {
+      const price = await appointmentService.getEffectivePrice(item.appointment_services_id, item.pets_id);
+      if (price == null) {
+        const err = new Error(
+          `Item ${index + 1}: this service is priced at the clinic, so it can't be paid online with other appointments. Book it on its own.`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+    // Pet ownership is also checked per item inside the booking transaction.
+    const result = await appointmentService.addAppointmentGroup({
+      client_id,
+      items,
+      created_by: "Client Portal",
+    });
+    const rows = await appointmentService.getBookingGroup(result.booking_group);
+    this.#emailBookingReceipt(Promise.resolve(groupItems(rows)));
+    return {
+      booking_group: result.booking_group,
+      items: groupItems(rows),
+      total_amount: centsSum(rows.map((r) => Number(r.total_amount))),
+      reservation_fee: centsSum(rows.map((r) => minDeposit(Number(r.total_amount)))),
+      unpriced: rows.some((r) => !(Number(r.total_amount) > 0)),
+    };
+  }
+
+  // Throws unless every appointment in the group is this client's.
+  async #getOwnGroup(booking_group, client_id) {
+    const rows = await appointmentService.getBookingGroup(booking_group); // 404 if none
+    if (rows.some((r) => String(r.client_id) !== String(client_id))) {
+      const err = new Error("You don't have access to this booking.");
+      err.statusCode = 403;
+      throw err;
+    }
+    return rows;
+  }
+
+  // One GCash payment (reservation fee or full) for a whole group booking.
+  async submitGroupPaymentProof({ booking_group, client_id, gcash_reference_number, amount_paid, payment_proof_image }) {
+    // Apply the 10-minute hold first, so a late proof is refused consistently.
+    await appointmentService.expireUnpaidOnlineBookings();
+    const rows = await this.#getOwnGroup(booking_group, client_id);
+    if (rows.every((r) => r.payment_status_name === "Cancelled")) {
+      const err = new Error(
+        "This booking expired because no payment was submitted within 10 minutes, and the time slots were released. Please book again. If you already sent money by GCash, contact the clinic with your reference number.",
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    return paymentService.submitGroupOnlinePaymentProof({
+      booking_group,
+      gcash_reference_number,
+      payment_proof_image,
+      amount_sent: amount_paid,
+    });
+  }
+
+  // Backs out of a whole unpaid group booking (same rules as one booking).
+  async cancelMyUnpaidGroup({ booking_group, client_id }) {
+    const rows = await this.#getOwnGroup(booking_group, client_id);
+    const open = rows.filter((r) => !["Cancelled", "No Show", "Completed"].includes(r.appointment_status_name));
+    for (const r of open) {
+      await this.cancelMyUnpaidAppointment({ appointment_id: r.appointment_id, client_id });
+    }
+    return { cancelled: open.length };
+  }
+
+  // Booking receipt to the client's email. Not awaited: the booking already
+  // succeeded, and a slow or failing mail server must not change that
+  // (sendMail itself never throws). itemsPromise: [{ appointment, payment }].
+  #emailBookingReceipt(itemsPromise) {
+    itemsPromise
+      .then((items) => {
+        const { subject, html } = bookingReceiptEmail({
+          items,
+          reservationFee: centsSum(items.map((i) => minDeposit(Number(i.payment?.total_amount) || 0))),
+          holdMinutes: UNPAID_HOLD_MINUTES,
+        });
+        return sendMail({ to: items[0].appointment.email, subject, html });
+      })
+      .catch((error) => console.log("Booking receipt email failed:", error.message));
   }
 
   // A client backing out of a booking they haven't paid for. Only their own,
@@ -418,3 +605,19 @@ export default class ClientPortalService {
     return paymentService.getGcashQrCode();
   }
 }
+
+// getBookingGroup rows (appointment + bill columns) -> [{ appointment, payment }].
+function groupItems(rows) {
+  return rows.map((r) => ({
+    appointment: r,
+    payment: {
+      payment_id: r.payment_id,
+      total_amount: r.total_amount,
+      payment_status_name: r.payment_status_name,
+      control_number: r.control_number,
+    },
+  }));
+}
+
+// Adds peso amounts without floating-point drift (to the centavo).
+const centsSum = (amounts) => amounts.reduce((sum, a) => sum + Math.round(a * 100), 0) / 100;

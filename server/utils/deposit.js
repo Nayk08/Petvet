@@ -29,3 +29,17 @@ export function isFullAmount(total, amountSent) {
 export function balanceDue(total, paid) {
   return fromCents(toCents(total) - toCents(paid ?? 0));
 }
+
+// One online payment for a multi-item booking: either every item's 50%
+// reservation fee (each rounded like a single booking) or every item in full.
+// Returns each bill's share, or { error } when the amount is neither.
+export function groupDepositShares(totals, amountSent) {
+  const deposits = totals.map((t) => minDeposit(t));
+  const sumCents = (list) => list.reduce((s, v) => s + toCents(v), 0);
+  const sent = toCents(amountSent);
+  if (sent === sumCents(deposits)) return { shares: deposits, full: false };
+  if (sent === sumCents(totals)) return { shares: totals.map(Number), full: true };
+  return {
+    error: `Pay either the ₱${fromCents(sumCents(deposits)).toFixed(2)} reservation fee (50%) or the full ₱${fromCents(sumCents(totals)).toFixed(2)}.`,
+  };
+}

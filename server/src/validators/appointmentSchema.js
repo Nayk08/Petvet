@@ -134,6 +134,27 @@ export const clientPortalBookAppointmentSchema = z
   .object(baseAppointmentSlotFields)
   .superRefine(validateSlot);
 
+// Multi-item booking (several pets, or one pet with several services/times):
+// each item gets exactly the single-booking checks above.
+const bookingItemsSchema = z
+  .array(clientPortalBookAppointmentSchema)
+  .min(1, "Add at least one appointment")
+  .max(10, "Up to 10 appointments per booking");
+
+export const addAppointmentGroupSchema = z.object({
+  client_id: z.coerce
+    .number({ error: "Please select a client" })
+    .int()
+    .positive("Please select a client"),
+  items: bookingItemsSchema,
+});
+
+export const clientPortalBookGroupSchema = z.object({ items: bookingItemsSchema });
+
+export const bookingGroupParamSchema = z.object({
+  booking_group: z.uuid({ error: "Invalid booking" }),
+});
+
 export const editAppointmentSchema = z
   .object({
     pets_id: z.coerce
@@ -281,6 +302,28 @@ export const completeAppointmentPaymentSchema = z
   })
   .superRefine(validatePaymentFields)
   .superRefine(validateAdditionalFee);
+
+// One counter payment for a whole multi-item booking. `amounts` prices any
+// item without a fixed price, keyed by appointment_id.
+export const completeGroupPaymentSchema = z
+  .object({
+    payment_method: z.enum(["Cash", "GCash", "Split"], {
+      error: "Invalid payment method",
+    }),
+    gcash_reference_number: gcashReferenceNumberSchema,
+    cash_received: z.coerce
+      .number({ error: "Cash received must be a valid number" })
+      .min(0, "Cash received must be 0 or more")
+      .optional(),
+    gcash_received: z.coerce
+      .number({ error: "GCash received must be a valid number" })
+      .min(0, "GCash received must be 0 or more")
+      .optional(),
+    amounts: z
+      .record(z.string(), z.coerce.number().positive("Amount must be greater than 0"))
+      .optional(),
+  })
+  .superRefine(validatePaymentFields);
 
 export const appointmentIdParamSchema = z.object({
   appointment_id: z.coerce

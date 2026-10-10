@@ -2,15 +2,21 @@ import express from "express";
 import ClientPortalController from "./ClientPortal_Controller.js";
 import AnnouncementsController from "../Announcements/Announcements_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
-import authLimiter from "../../middleware/rate-Limiter.js";
+import authLimiter, { loginLimiter } from "../../middleware/rate-Limiter.js";
 import { uploadPaymentProof } from "../../middleware/upload.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import {
   clientPortalBookAppointmentSchema,
   appointmentIdParamSchema,
+  clientPortalBookGroupSchema,
+  bookingGroupParamSchema,
 } from "../../validators/appointmentSchema.js";
 import { clientPortalAddPetSchema } from "../../validators/petSchema.js";
-import { clientPortalRegisterSchema } from "../../validators/clientSchema.js";
+import {
+  clientPortalRegisterSchema,
+  clientPortalVerifyOtpSchema,
+  clientPortalResendOtpSchema,
+} from "../../validators/clientSchema.js";
 import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
@@ -35,6 +41,21 @@ router.post(
   authLimiter,
   validateBody(clientPortalRegisterSchema),
   (req, res) => clientPortalController.registerWithGoogle(req, res),
+);
+// Step after Google: the emailed 6-digit code. loginLimiter caps wrong
+// guesses (8 failed tries / 15 min per IP); the body's signed otp_token
+// can't come from a cross-site page, same CSRF reasoning as above.
+router.post(
+  "/auth/otp/verify",
+  loginLimiter,
+  validateBody(clientPortalVerifyOtpSchema),
+  (req, res) => clientPortalController.verifyOtp(req, res),
+);
+router.post(
+  "/auth/otp/resend",
+  authLimiter,
+  validateBody(clientPortalResendOtpSchema),
+  (req, res) => clientPortalController.resendOtp(req, res),
 );
 
 router.post(
@@ -84,6 +105,30 @@ router.post(
   doubleCsrfProtection,
   validateBody(clientPortalBookAppointmentSchema),
   (req, res) => clientPortalController.bookAppointment(req, res),
+);
+// Several pets / services / times in one booking (each item gets the same
+// checks as a single booking), paid with one GCash proof below.
+router.post(
+  "/appointments/group",
+  isClientAuth,
+  doubleCsrfProtection,
+  validateBody(clientPortalBookGroupSchema),
+  (req, res) => clientPortalController.bookAppointmentGroup(req, res),
+);
+router.post(
+  "/booking-groups/:booking_group/proof",
+  isClientAuth,
+  doubleCsrfProtection,
+  uploadPaymentProof.single("payment_proof_image"),
+  validateParams(bookingGroupParamSchema),
+  (req, res) => clientPortalController.submitGroupPaymentProof(req, res),
+);
+router.patch(
+  "/booking-groups/:booking_group/cancel",
+  isClientAuth,
+  doubleCsrfProtection,
+  validateParams(bookingGroupParamSchema),
+  (req, res) => clientPortalController.cancelMyUnpaidGroup(req, res),
 );
 // Back out of a booking that hasn't been paid yet (see the service).
 router.patch(

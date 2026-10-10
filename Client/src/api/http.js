@@ -1306,6 +1306,44 @@ export async function bookAppointmentWithPayment(payload) {
   return handleResponse(response, "Failed to book appointment");
 }
 
+// Multi-item booking: several pets / services / times in one booking
+// (all-or-nothing). Returns { booking_group, appointments, payments }.
+export async function addAppointmentGroup(payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/add-group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response, "Failed to book appointments");
+}
+
+// The appointments + bills of one multi-item booking.
+export async function fetchBookingGroup(bookingGroup, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/groups/${bookingGroup}`, {
+    credentials: "include",
+    signal,
+  });
+  return handleResponse(response, "Failed to load the booking");
+}
+
+// One Cash / GCash / Split payment for every unpaid item of a booking.
+// amounts: { [appointment_id]: price } for items with no fixed price.
+export async function completeGroupPayment(bookingGroup, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(
+    `${baseUrl}/appointments/groups/${bookingGroup}/complete-payment`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    },
+  );
+  return handleResponse(response, "Failed to complete the payment");
+}
+
 export async function completeAppointmentPayment(appointment_id, payload) {
   const csrfToken = await getCsrfToken();
   const response = await fetchWithTimeout(

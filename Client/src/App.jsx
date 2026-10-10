@@ -329,6 +329,15 @@ const router =
               ),
           },
           {
+            // One payment for several appointments booked together.
+            path: "confirm-group-payment",
+            loader: requirePermission("APPOINTMENT", "can_create"),
+            lazy: () =>
+              import(
+                "./pages/ServerSide/components/ConfirmGroupPaymentModal.jsx"
+              ),
+          },
+          {
             path: ":appointment_id/edit-appointment",
             lazy: async () => {
               const mod = await import(

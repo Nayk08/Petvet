@@ -23,9 +23,20 @@ import {
   queryClient,
   invalidateAppointmentQueries,
   fetchPaymentById,
+  fetchBookingGroup,
   fetchAppointmentById,
   verifyPayment,
 } from "@/api/http";
+
+// "2026-10-15 16:30:00" -> "4:30 PM" (plain string parsing: Manila wall clock).
+function formatClock(value) {
+  const [h, m] = String(value ?? "").split(" ")[1]?.split(":").map(Number) ?? [];
+  if (h == null || Number.isNaN(h)) return "";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+const peso = (n) =>
+  `₱${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function formatDateLabel(dateString) {
   if (!dateString) return "";
@@ -70,6 +81,23 @@ export function Component() {
     enabled: Boolean(payment?.appointment_id),
   });
 
+  // One GCash payment can cover several appointments booked together: show
+  // all of them and the combined amounts (what the screenshot shows).
+  const { data: groupRows } = useQuery({
+    queryKey: ["booking-group", payment?.booking_group],
+    queryFn: ({ signal }) => fetchBookingGroup(payment.booking_group, { signal }),
+    enabled: Boolean(payment?.booking_group),
+  });
+  const groupAwaiting = (groupRows ?? []).filter(
+    (r) => r.payment_status_name === "Awaiting Verification",
+  );
+  const isGroup = groupAwaiting.length > 1;
+  const sum = (list, key) => list.reduce((s, r) => s + Number(r[key] ?? r.total_amount), 0);
+  const billTotal = isGroup ? sum(groupAwaiting, "total_amount") : Number(payment?.total_amount);
+  const sentTotal = isGroup
+    ? sum(groupAwaiting, "amount_sent")
+    : Number(payment?.amount_sent ?? payment?.total_amount);
+
   function handleDecision(decision) {
     const formData = new FormData();
     formData.append("decision", decision);
@@ -78,7 +106,7 @@ export function Component() {
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && closeModal()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Verify GCash Payment</DialogTitle>
           <DialogDescription>
@@ -100,59 +128,93 @@ export function Component() {
           </div>
         ) : (
           <div className="space-y-4">
-            {payment.appointment_id && (
-              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Client</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {appointment?.client_name ?? "—"}
+            {/* What the payment is for, and the amounts to check. */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm">
+              <div className="flex justify-between items-center gap-3 px-4 py-3">
+                <span className="text-slate-500 dark:text-slate-400">Client</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100 text-right">
+                  {appointment?.client_name ?? groupRows?.[0]?.client_name ?? "—"}
+                </span>
+              </div>
+
+              {isGroup ? (
+                <ul className="border-t border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800">
+                  {groupAwaiting.map((r) => (
+                    <li key={r.payment_id} className="flex justify-between gap-3 px-4 py-2.5">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {r.pets_name} · {r.service_name}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {formatDateLabel(r.appointment_date)} · {formatClock(r.start_time)}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                          {peso(r.amount_sent ?? r.total_amount)}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                          of {peso(r.total_amount)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                payment.appointment_id && (
+                  <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1.5">
+                    {[
+                      ["Pet", appointment?.pets_name],
+                      ["Service", appointment?.service_name],
+                      ["Date", formatDateLabel(appointment?.appointment_date)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex justify-between gap-3">
+                        <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100 text-right">
+                          {value || "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {isGroup ? `Total bill (${groupAwaiting.length} appointments)` : "Total bill"}
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                    {peso(billTotal)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Pet</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {appointment?.pets_name ?? "—"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Service</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {appointment?.service_name ?? "—"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Date</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {formatDateLabel(appointment?.appointment_date)}
+                {/* What the client says they sent — check it against the screenshot. */}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-slate-400">Amount sent (check screenshot)</span>
+                  <span className="font-bold text-lg text-cyan-700 dark:text-cyan-400 tabular-nums">
+                    {peso(sentTotal)}
                   </span>
                 </div>
               </div>
+            </div>
+
+            {(isGroup || sentTotal < billTotal) && (
+              <div className="text-xs rounded-md bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 px-3 py-2 space-y-1">
+                {isGroup && (
+                  <p>
+                    <strong>One payment for {groupAwaiting.length} appointments.</strong>{" "}
+                    Approving or rejecting applies to all of them.
+                  </p>
+                )}
+                {sentTotal < billTotal && (
+                  <p>
+                    Reservation fee only. Approving marks{" "}
+                    {isGroup ? "the bills" : "the bill"} Partially Paid; collect the remaining{" "}
+                    <strong>{peso(billTotal - sentTotal)}</strong> at the clinic with Process.
+                  </p>
+                )}
+              </div>
             )}
-
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500 dark:text-slate-400">Total bill</span>
-              <span className="font-semibold text-slate-900 dark:text-slate-100">
-                ₱{Number(payment.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            {/* What the client says they sent — check it against the screenshot. */}
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500 dark:text-slate-400">Amount sent (check screenshot)</span>
-              <span className="font-bold text-lg text-cyan-700 dark:text-cyan-400">
-                ₱{Number(payment.amount_sent ?? payment.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            {payment.amount_sent != null &&
-              Number(payment.amount_sent) < Number(payment.total_amount) && (
-                <p className="text-xs rounded-md bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 px-3 py-2">
-                  Partial payment. Approving confirms the appointment and marks the bill
-                  Partially Paid — collect the remaining ₱
-                  {(Number(payment.total_amount) - Number(payment.amount_sent)).toFixed(2)} at the
-                  clinic with Process.
-                </p>
-              )}
 
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-500 dark:text-slate-400">
@@ -180,7 +242,7 @@ export function Component() {
                   <img
                     src={payment.payment_proof_image}
                     alt="GCash payment screenshot submitted by the client"
-                    className="w-full max-h-80 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-950/40 hover:opacity-90 transition-opacity"
+                    className="w-full max-h-64 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-950/40 hover:opacity-90 transition-opacity"
                   />
                   <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     Click to open full size
