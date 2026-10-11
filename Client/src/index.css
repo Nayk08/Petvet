@@ -10,9 +10,29 @@
 
 /* Thin scrollbars with a soft thumb in both themes, instead of the thick
    default ones (Chrome 121+, Edge, Firefox). */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: oklch(0.704 0.012 125 / 0.45) transparent;
+/* In the base layer so a utility like [scrollbar-width:none] on a swipe
+   row (or the phone content area) can still override it. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.704 0.012 125 / 0.45) transparent;
+  }
+}
+
+/* Phones: 16px form fields (iOS Safari zooms the whole page when a field
+   under 16px is focused) and 44px tap height. Deliberately NOT in a layer,
+   so it beats every field's own text-sm/text-xs utility in one place.
+   Desktop and tablets are untouched. */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select {
+    min-height: 44px;
+  }
 }
 
 @theme {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef, useLayoutEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -70,6 +70,31 @@ export default function DynamicGrid({
   const visibleColumns = useMemo(() => {
     return tableColumnsConfig.filter((col) => !hiddenColumns.has(col.key));
   }, [tableColumnsConfig, hiddenColumns]);
+
+  // Fit the table's scroll box to the space left in the window, so the
+  // page itself doesn't scroll too (a second scrollbar) unless other content
+  // really needs it. Never shorter than 320px. Inside dialogs (bare) the CSS
+  // max-height on the box is used instead.
+  const tableWrapRef = useRef(null);
+  useLayoutEffect(() => {
+    if (bare) return;
+    const fit = () => {
+      const box = tableWrapRef.current?.querySelector('[data-slot="table-container"]');
+      if (!box || !box.offsetParent) return; // hidden on phones
+      // Below md the app scrolls <main>, not the window: keep the CSS max-height.
+      if (window.innerWidth < 768) {
+        box.style.maxHeight = "";
+        return;
+      }
+      box.style.maxHeight = "none";
+      const top = box.getBoundingClientRect().top + window.scrollY;
+      const below = document.documentElement.scrollHeight - (top + box.offsetHeight);
+      box.style.maxHeight = `${Math.max(320, Math.floor(window.innerHeight - top - below))}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [bare, data.length, visibleColumns.length]);
 
   const toggleColumnVisibility = (columnKey) => {
     setHiddenColumns((prev) => {
@@ -240,7 +265,7 @@ export default function DynamicGrid({
           type="button"
           disabled={loading}
           onClick={() => action.onClick(row)}
-          className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+          className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 max-sm:min-h-11 max-sm:px-3.5 max-sm:text-sm rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
         >
           {Icon && <Icon size={13} />}
           {loading ? "Processing..." : label}
@@ -271,7 +296,7 @@ export default function DynamicGrid({
             </p>
           </div>
           {buttonLink && (
-            <div className="shrink-0">
+            <div className="shrink-0 max-sm:hidden">
               <Button asChild variant="default" size="default">
                 <Link
                   to={buttonLink}
@@ -294,19 +319,22 @@ export default function DynamicGrid({
           container is, which used to scramble the wrap order when this
           rendered inside a Dialog. */}
       <div
-        className={`flex flex-wrap items-center gap-3 w-full relative z-20 ${bare ? "" : "pt-4"}`}
+        className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 w-full relative z-20 ${bare ? "" : "pt-4"}`}
       >
         <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search records..."
             value={search}
             onChange={(e) => onSearchChange?.(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
+            className="w-full pl-9 pr-3 py-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
           />
         </div>
 
+        {/* Phones: filters in one line that scrolls left/right. From sm up
+            the wrapper disappears (contents) and they join the toolbar row. */}
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1.5 [scrollbar-width:none] has-[[data-daterange]]:flex-wrap empty:hidden sm:contents">
         {columnsConfig
               .filter(
                 (col) =>
@@ -327,14 +355,14 @@ export default function DynamicGrid({
                       })
                     }
                     title={col.label}
-                    className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                    className={`shrink-0 max-sm:grow max-sm:min-h-11 text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
                       filters[col.key]
                         ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
                         : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
                     }`}
                   />
                 ) : col.filterType === "dateRange" ? (
-                  <div key={col.key} className="flex items-center gap-1.5">
+                  <div key={col.key} data-daterange className="shrink-0 max-sm:basis-full flex items-center gap-1.5">
                     <input
                       type="date"
                       value={filters[`${col.key}_from`] || ""}
@@ -346,7 +374,7 @@ export default function DynamicGrid({
                         })
                       }
                       title={`${col.label} from`}
-                      className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                      className={`min-w-0 flex-1 sm:flex-none max-sm:min-h-11 text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
                         filters[`${col.key}_from`]
                           ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
                           : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -366,7 +394,7 @@ export default function DynamicGrid({
                         })
                       }
                       title={`${col.label} to`}
-                      className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
+                      className={`min-w-0 flex-1 sm:flex-none max-sm:min-h-11 text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer dark:bg-slate-950 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] ${
                         filters[`${col.key}_to`]
                           ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
                           : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -393,7 +421,7 @@ export default function DynamicGrid({
                         [col.key]: e.target.value,
                       })
                     }
-                    className={`text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer max-w-[160px] truncate dark:bg-slate-950 dark:text-slate-300 ${
+                    className={`shrink-0 max-sm:grow max-sm:min-h-11 text-xs px-2.5 py-2 bg-slate-50 border rounded-lg text-slate-600 focus:outline-none transition-all cursor-pointer sm:max-w-[160px] truncate dark:bg-slate-950 dark:text-slate-300 ${
                       filters[col.key]
                         ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300"
                         : "border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -417,24 +445,30 @@ export default function DynamicGrid({
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 px-2 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer font-medium"
+                className="shrink-0 whitespace-nowrap flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 px-2 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer font-medium"
               >
                 <X size={14} />
                 <span>Reset</span>
               </button>
             )}
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto max-w-full justify-end">
-          {extraActions}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:ml-auto max-w-full sm:justify-end">
+          {extraActions && (
+            <div className="max-sm:order-2 flex flex-col gap-2 max-sm:[&>*]:w-full max-sm:[&>*]:min-h-11 max-sm:[&>*]:justify-center sm:contents">
+              {extraActions}
+            </div>
+          )}
           {onLimitChange && (
-            <div className="shrink-0">
+            <div className="shrink-0 max-sm:order-1">
               <select
                 value={limit ?? 10}
                 onChange={(e) => {
                   const value = e.target.value;
                   onLimitChange(value === "all" ? "all" : Number(value));
                 }}
-                className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer font-semibold hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="w-full max-sm:min-h-11 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer font-semibold hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
               >
                 {limitOptions.map((opt) => (
                   <option key={opt} value={opt}>
@@ -445,11 +479,11 @@ export default function DynamicGrid({
             </div>
           )}
 
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 max-sm:hidden">
             <button
               type="button"
               onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-              className="flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer transition-colors dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+              className="w-full max-sm:min-h-11 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer transition-colors dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
             >
               <Filter size={14} />
               <span>Columns</span>
@@ -487,6 +521,15 @@ export default function DynamicGrid({
               </>
             )}
           </div>
+
+          {buttonLink && !bare && (
+            <Button asChild variant="default" size="default" className="sm:hidden order-3 w-full h-11">
+              <Link to={buttonLink} className="flex items-center justify-center gap-1.5 font-medium">
+                <Plus size={16} />
+                <span>{buttonText}</span>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -519,7 +562,14 @@ export default function DynamicGrid({
                   ))}
                 </dl>
                 {rowActions.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  // Same placement on every page: equal-width outlined buttons,
+                  // one row for 1–3 actions, a 2×2 grid for 4.
+                  <div
+                    className="grid gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 [&>button]:w-full [&>button]:justify-center [&>button]:border [&>button]:border-slate-200 dark:[&>button]:border-slate-700"
+                    style={{
+                      gridTemplateColumns: `repeat(${rowActions.length === 4 ? 2 : Math.min(rowActions.length, 3)}, minmax(0, 1fr))`,
+                    }}
+                  >
                     {renderActions(row, rowActions)}
                   </div>
                 )}
@@ -534,13 +584,19 @@ export default function DynamicGrid({
       </ul>
 
       {/* Main Table Layout (tablet and up) */}
-      <div className="hidden sm:block overflow-x-auto mt-4 relative z-0">
+      <div ref={tableWrapRef} className="hidden sm:block mt-4 relative z-0">
         <div className="w-full">
-          <Table className="w-full text-left border-collapse">
+          {/* Own vertical scrollbar so long lists ("Show All") stay inside the
+              card; the header row stays pinned while scrolling. Height is fitted
+              to the window by the effect above. */}
+          <Table
+            className="w-full text-left border-collapse"
+            containerClassName="max-h-[max(20rem,calc(100dvh-23rem))] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800"
+          >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {resolvedActions.length > 0 && (
-                  <TableHead className="py-4 px-4 text-[11px] font-bold text-center text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
+                  <TableHead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-center text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
                     Actions
                   </TableHead>
                 )}
@@ -548,7 +604,7 @@ export default function DynamicGrid({
                 {visibleColumns.map((col) => (
                   <TableHead
                     key={col.key}
-                    className={`py-4 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800 ${
+                    className={`sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800 ${
                       col.align === "right" ? "text-right" : ""
                     }`}
                   >

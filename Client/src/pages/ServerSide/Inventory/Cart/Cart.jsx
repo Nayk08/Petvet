@@ -331,7 +331,7 @@ export default function Cart() {
                             onClick={() => setDetailsFor(product)}
                             aria-label={`Details for ${product.product_name}`}
                             title="Product details"
-                            className="absolute top-2.5 right-2.5 h-7 w-7 rounded-full bg-white/95 dark:bg-slate-900/95 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-indigo-600 shadow-sm"
+                            className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5 size-11 sm:size-7 rounded-full bg-white/95 dark:bg-slate-900/95 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-indigo-600 shadow-sm"
                           >
                             <Info size={14} />
                           </button>
@@ -672,7 +672,7 @@ export default function Cart() {
       </Dialog>
       {/* Phones: the order panel is below the products — keep the order in reach. */}
       {cartItems.length > 0 && (
-        <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="lg:hidden fixed inset-x-0 bottom-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-md:pb-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {itemCount} {itemCount === 1 ? "item" : "items"}

@@ -16,7 +16,7 @@ const STATUS_DESCRIPTIONS = {
 };
 
 const chip = (active) =>
-  `px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+  `shrink-0 whitespace-nowrap px-3 py-1.5 max-sm:min-h-11 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
     active
       ? "bg-indigo-600 text-white border-indigo-600"
       : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-indigo-500/60"
@@ -34,7 +34,9 @@ export default function PaymentStatusChips({ counts = [], filters, onFiltersChan
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+      {/* Phones: one line that scrolls sideways inside the page margins, with
+          the app's thin scrollbar (soft thumb, transparent track). */}
+      <div className="flex gap-2 overflow-x-auto pb-2.5 sm:flex-wrap sm:overflow-visible sm:pb-0">
         {[{ payment_status_name: "All", count: total }, ...counts].map(({ payment_status_name: name, count }) => (
           <button
             key={name}

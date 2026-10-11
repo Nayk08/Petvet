@@ -61,7 +61,7 @@ function DateRangeControl({ range, onChange }) {
           key={p.days}
           type="button"
           onClick={() => applyPreset(p.days)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+          className={`px-3 py-1.5 max-sm:min-h-11 text-xs font-semibold rounded-lg border transition-all ${
             !showCustom && activePreset === p.days
               ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
               : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -73,7 +73,7 @@ function DateRangeControl({ range, onChange }) {
       <button
         type="button"
         onClick={() => setShowCustom((s) => !s)}
-        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+        className={`px-3 py-1.5 max-sm:min-h-11 text-xs font-semibold rounded-lg border transition-all ${
           showCustom
             ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -648,7 +648,7 @@ export function Component() {
             </Button>
             <Link
               to="/inventory"
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
+              className="inline-flex items-center max-sm:min-h-11 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
             >
               View Inventory →
             </Link>

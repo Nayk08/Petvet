@@ -32,11 +32,11 @@ export function MultiSelectFilter({ label, options, selected = [], onChange }) {
   const hasSelection = selected.length > 0;
 
   return (
-    <div className="relative inline-block" ref={ref}>
+    <div className="relative inline-block shrink-0 max-sm:grow" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border focus:outline-none transition-all cursor-pointer min-w-[130px] max-w-[160px] ${
+        className={`flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border focus:outline-none transition-all cursor-pointer max-sm:w-full max-sm:max-w-none max-sm:min-h-11 min-w-[130px] max-w-[160px] ${
           hasSelection
             ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500"
             : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -56,7 +56,7 @@ export function MultiSelectFilter({ label, options, selected = [], onChange }) {
       </button>
 
       {open && (
-        <div className="absolute top-[100%] left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl p-1 z-50 shadow-xl dark:bg-slate-950 dark:border-slate-800">
+        <div className="absolute max-sm:fixed max-sm:inset-x-4 max-sm:top-auto max-sm:w-auto top-[100%] left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl p-1 z-50 shadow-xl dark:bg-slate-950 dark:border-slate-800">
           {options.map((opt) => {
             const isChecked = selected.includes(opt.value);
             return (

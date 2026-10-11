@@ -81,18 +81,7 @@ export function Component() {
     ? Number(draft.servicePrice)
     : Number(manualAmount || 0);
 
-  const FEE_PRESETS = [
-    "De-matting fee",
-    "Aggressive pet handling fee",
-    "After-hours service fee",
-    "Other",
-  ];
-  const [feeLabel, setFeeLabel] = useState("");
-  const [feeCustomLabel, setFeeCustomLabel] = useState("");
-  const [feeAmount, setFeeAmount] = useState("");
-  const resolvedFeeLabel = feeLabel === "Other" ? feeCustomLabel : feeLabel;
-  const feeAmountNum = feeLabel ? Number(feeAmount || 0) : 0;
-  const total = serviceAmount + feeAmountNum;
+  const total = serviceAmount;
 
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const isSplit = paymentMethod === "Split";
@@ -346,70 +335,6 @@ export function Component() {
               </span>
             </div>
           )}
-
-          {/* Additional fee — de-matting, aggressive-pet handling, after-hours, etc. */}
-          <div className="space-y-1.5 pt-1 border-t border-slate-200 dark:border-slate-800">
-            <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-              Additional Fee (optional)
-            </label>
-            <div className="flex items-center gap-2">
-              <select
-                value={feeLabel}
-                onChange={(e) => setFeeLabel(e.target.value)}
-                className="flex-1 h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
-              >
-                <option value="">No additional fee</option>
-                {FEE_PRESETS.map((label) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              {feeLabel && (
-                <div className="flex items-center gap-1 w-28 shrink-0">
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">
-                    ₱
-                  </span>
-                  <Input
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    required
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={feeAmount}
-                    onChange={(e) => setFeeAmount(e.target.value)}
-                    className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                  />
-                </div>
-              )}
-            </div>
-            {feeLabel === "Other" && (
-              <Input
-                type="text"
-                required
-                maxLength={100}
-                placeholder="Describe the fee"
-                value={feeCustomLabel}
-                onChange={(e) => setFeeCustomLabel(e.target.value)}
-                className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-              />
-            )}
-            {feeLabel && (
-              <input
-                type="hidden"
-                name="additional_fee_label"
-                value={resolvedFeeLabel}
-              />
-            )}
-            {feeLabel && (
-              <input
-                type="hidden"
-                name="additional_fee_amount"
-                value={feeAmount}
-              />
-            )}
-          </div>
 
           <PaymentMethodPicker
             value={paymentMethod}

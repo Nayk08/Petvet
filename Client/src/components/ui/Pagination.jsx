@@ -46,17 +46,18 @@ export function Pagination({
           size="sm"
           disabled={disabled || page === 1}
           onClick={() => onPageChange(page - 1)}
-          className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 dark:hover:border-slate-700 disabled:opacity-40"
+          className="h-8 w-8 max-sm:size-11 p-0 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 dark:hover:border-slate-700 disabled:opacity-40"
+          aria-label="Previous page"
         >
           <ChevronLeft size={14} />
         </Button>
 
-        {/* Page Numbers */}
+        {/* Page Numbers (phones: "Page X of Y" instead, below) */}
         {pages.map((p, i) =>
           p === "..." ? (
             <span
               key={`ellipsis-${i}`}
-              className="px-2 text-slate-400 dark:text-slate-500 text-xs select-none"
+              className="max-sm:hidden px-2 text-slate-400 dark:text-slate-500 text-xs select-none"
             >
               …
             </span>
@@ -67,7 +68,7 @@ export function Pagination({
               size="sm"
               disabled={disabled}
               onClick={() => onPageChange(p)}
-              className={`h-8 min-w-[32px] px-2 text-xs font-medium transition-colors ${
+              className={`max-sm:hidden h-8 min-w-[32px] px-2 text-xs font-medium transition-colors ${
                 p === page
                   ? "border-transparent font-semibold"
                   : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white dark:hover:border-slate-700"
@@ -78,13 +79,18 @@ export function Pagination({
           ),
         )}
 
+        <span className="sm:hidden px-3 text-sm font-medium text-slate-600 dark:text-slate-300 tabular-nums">
+          Page {page} of {totalPages}
+        </span>
+
         {/* Next Page Button */}
         <Button
           variant="outline"
           size="sm"
           disabled={disabled || page === totalPages}
           onClick={() => onPageChange(page + 1)}
-          className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 dark:hover:border-slate-700 disabled:opacity-40"
+          className="h-8 w-8 max-sm:size-11 p-0 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 dark:hover:border-slate-700 disabled:opacity-40"
+          aria-label="Next page"
         >
           <ChevronRight size={14} />
         </Button>

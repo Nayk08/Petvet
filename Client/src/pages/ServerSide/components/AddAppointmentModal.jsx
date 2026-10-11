@@ -669,7 +669,9 @@ export function Component() {
             )}
 
             {/* Category -> Sub-service (only that category's sub-services) */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Equal halves from sm (stacked on phones); the description
+                spans the full width under both. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Category
@@ -696,7 +698,7 @@ export function Component() {
                 </select>
               </div>
 
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Sub-service
                 </label>
@@ -724,13 +726,14 @@ export function Component() {
                     </option>
                   ))}
                 </select>
-                {/* What the picked sub-service is (set in Maintenance). */}
-                {selectedService?.description && (
-                  <p className="text-xs rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-slate-700 dark:text-slate-300 px-3 py-2">
-                    {selectedService.description}
-                  </p>
-                )}
               </div>
+
+              {/* What the picked sub-service is (set in Maintenance). */}
+              {selectedService?.description && (
+                <p className="sm:col-span-2 text-xs rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-100 px-3 py-2">
+                  {selectedService.description}
+                </p>
+              )}
             </div>
 
             {/* Staff / Date */}

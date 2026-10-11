@@ -23,6 +23,7 @@ import {
   PawPrint,
   Sun,
   Moon,
+  Menu,
 } from "lucide-react";
 import { Link, redirect } from "react-router-dom";
 import PetVetLogo from "../assets/petvet_icon.svg";
@@ -53,6 +54,18 @@ import petvetC3 from "../assets/petVet/petvet-customer3.jpg";
 import petvetC4 from "../assets/petVet/petvet-customer4.jpg";
 import { tierPriceRange } from "@/utils/groomingTier.js";
 
+const NAV_LINKS = [
+  ["#home", "Home"],
+  ["#about", "About Us"],
+  ["#gallery", "Gallery"],
+  ["#services", "Services & Hours"],
+  ["#products", "Products"],
+  ["#calendar", "Live Calendar"],
+  ["#location", "Location"],
+  ["#announcements", "Announcements"],
+  ["#testimonials", "Testimonials"],
+];
+
 export default function LandingPage() {
   const [activeImage, setActiveImage] = useState(null);
 
@@ -64,17 +77,20 @@ export default function LandingPage() {
     localStorage.setItem("theme", theme);
   }, [theme]);
   const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Dismiss lightbox on 'Escape' key press
+  // Escape dismisses the lightbox or the phone menu
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") setActiveImage(null);
+      if (e.key !== "Escape") return;
+      setActiveImage(null);
+      setMenuOpen(false);
     };
-    if (activeImage) {
+    if (activeImage || menuOpen) {
       window.addEventListener("keydown", handleKeyDown);
     }
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeImage]);
+  }, [activeImage, menuOpen]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
@@ -85,68 +101,23 @@ export default function LandingPage() {
             <img src={PetVetLogo} alt="PetVet Logo" className="h-6 w-6" />
             Pet<span className="text-green-600 dark:text-green-500">Vet</span>
           </div>
-          <nav className="hidden md:flex gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            <a
-              href="#home"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Home
-            </a>
-            <a
-              href="#about"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              About Us
-            </a>
-            <a
-              href="#gallery"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Gallery
-            </a>
-            <a
-              href="#services"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Services & Hours
-            </a>
-            <a
-              href="#products"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Products
-            </a>
-            <a
-              href="#calendar"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Live Calendar
-            </a>
-            <a
-              href="#location"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Location
-            </a>
-            <a
-              href="#announcements"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Announcements
-            </a>
-            <a
-              href="#testimonials"
-              className="hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Testimonials
-            </a>
+          <nav className="hidden lg:flex gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            {NAV_LINKS.map(([href, label]) => (
+              <a
+                key={href}
+                href={href}
+                className="hover:text-zinc-900 dark:hover:text-white transition-colors"
+              >
+                {label}
+              </a>
+            ))}
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3">
             <Button
               variant="outline"
               size="icon"
               onClick={toggleTheme}
-              className="border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="size-11 sm:size-9 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? (
@@ -159,20 +130,63 @@ export default function LandingPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-zinc-700 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="h-11 sm:h-9 text-zinc-700 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800"
               asChild
             >
               <Link to="/login">Sign In</Link>
             </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="lg:hidden size-11 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-expanded={menuOpen}
+              aria-controls="landing-menu"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
+
+        {/* Phone/tablet menu: drops down under the sticky header and closes
+            when a section is picked. */}
+        {menuOpen && (
+          <nav
+            id="landing-menu"
+            className="lg:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 max-h-[calc(100dvh-4rem)] overflow-y-auto"
+          >
+            <ul className="container max-w-6xl mx-auto px-4 py-2 grid grid-cols-1 sm:grid-cols-2">
+              {NAV_LINKS.map(([href, label]) => (
+                <li key={href}>
+                  <a
+                    href={href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center min-h-12 px-2 text-base font-medium text-zinc-700 dark:text-zinc-200 rounded-lg active:bg-zinc-100 dark:active:bg-zinc-900"
+                  >
+                    {label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <div className="container max-w-6xl mx-auto px-4 pb-4">
+              <Button
+                className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white"
+                asChild
+              >
+                <Link to="/login">Book An Appointment</Link>
+              </Button>
+            </div>
+          </nav>
+        )}
       </header>
 
       <main className="flex-1">
         {/* Home / Hero Section */}
         <section
           id="home"
-          className="container px-4 md:px-6 py-20 md:py-28 flex flex-col items-center text-center gap-6 max-w-4xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 md:py-28 flex flex-col items-center text-center gap-6 max-w-4xl mx-auto"
         >
           <div className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
             <AlertCircle className="h-4 w-4 mr-2" />
@@ -180,7 +194,7 @@ export default function LandingPage() {
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl text-zinc-900 dark:text-white">
             Streamlined Care for Your Best Friends at{" "}
-            <span className="bg-gradient-to-r lg:bg-clip-text lg:text-transparent lg:from-green-600 lg:to-green-700">
+            <span className="text-green-700 dark:text-green-500">
               <span className="text-red-600 dark:text-red-500">Pet</span>Vet Center
             </span>
           </h1>
@@ -215,7 +229,7 @@ export default function LandingPage() {
         {/* About Us Section */}
         <section
           id="about"
-          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
@@ -255,7 +269,7 @@ export default function LandingPage() {
         <hr className="border-zinc-200 dark:border-zinc-800" />
 
         {/* Gallery — photos of the clinic in a swipeable carousel */}
-        <section id="gallery" className="container px-4 md:px-6 py-20 max-w-6xl mx-auto">
+        <section id="gallery" className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
               Inside PetCycle
@@ -293,7 +307,7 @@ export default function LandingPage() {
         {/* Services Section — live catalog from Maintenance */}
         <section
           id="services"
-          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
@@ -312,7 +326,7 @@ export default function LandingPage() {
         {/* Products — photos and full details (brand, purpose, dosage, price) */}
         <section
           id="products"
-          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
@@ -331,7 +345,7 @@ export default function LandingPage() {
         {/* Clinic Policies & Hours Section */}
         <section
           id="hours"
-          className="container px-4 md:px-6 py-20 max-w-5xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-5xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
@@ -395,7 +409,7 @@ export default function LandingPage() {
         {/* Live Calendar Section */}
         <section
           id="calendar"
-          className="container px-4 md:px-6 py-20 max-w-4xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-4xl mx-auto"
         >
           <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-10">
             <div className="p-2 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 mb-3">
@@ -418,7 +432,7 @@ export default function LandingPage() {
         {/* Location — map of the clinic address the admin set */}
         <section
           id="location"
-          className="container px-4 md:px-6 py-20 max-w-4xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-4xl mx-auto"
         >
           <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-8">
             <div className="p-2 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 mb-3">
@@ -436,7 +450,7 @@ export default function LandingPage() {
         {/* Announcements Bulletin Section */}
         <section
           id="announcements"
-          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-12">
             <div className="p-2 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 mb-3">
@@ -460,7 +474,7 @@ export default function LandingPage() {
         {/* Testimonial Section */}
         <section
           id="testimonials"
-          className="container px-4 md:px-6 py-20 max-w-6xl mx-auto"
+          className="scroll-mt-16 container px-4 md:px-6 py-20 max-w-6xl mx-auto"
         >
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-zinc-900 dark:text-white">
@@ -522,7 +536,7 @@ export default function LandingPage() {
             />
           </div>
           <p className="text-zinc-300 text-xs mt-3 bg-zinc-900/50 py-1 px-3 rounded-full backdrop-blur">
-            {activeImage.alt} — Press Esc or click outside to close
+            {activeImage.alt} — Tap outside or press Esc to close
           </p>
         </div>
       )}
@@ -616,7 +630,7 @@ function LiveCalendar() {
           type="button"
           onClick={() => setMonthOffset((o) => Math.max(0, o - 1))}
           disabled={monthOffset === 0}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="size-11 sm:size-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous month"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -630,7 +644,7 @@ function LiveCalendar() {
         <button
           type="button"
           onClick={() => setMonthOffset((o) => o + 1)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          className="size-11 sm:size-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           aria-label="Next month"
         >
           <ChevronRight className="h-4 w-4" />
@@ -755,11 +769,20 @@ function LiveCalendar() {
 // category — so the landing page never shows a stale or hardcoded price.
 // Filter button style shared by the Services and Products catalogs.
 const filterChip = (active) =>
-  `px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+  `shrink-0 whitespace-nowrap inline-flex items-center gap-1 min-h-11 sm:min-h-0 px-3.5 sm:px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
     active
       ? "bg-green-600 text-white border-green-600"
       : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-green-500/60"
   }`;
+
+// Horizontal snap row below `sm`, a plain grid from `sm` up. Bleeds to the
+// screen edges on phones so the next card peeks in as a swipe hint.
+const SWIPE_ROW =
+  "[scrollbar-width:none] flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-2 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:gap-4 sm:overflow-visible";
+
+// Filter chips: one swipeable line on phones, wrapped and centred from `sm` up.
+const CHIP_STRIP =
+  "[scrollbar-width:none] flex gap-2 overflow-x-auto -mx-4 px-4 sm:flex-wrap sm:justify-center sm:mx-0 sm:px-0";
 
 function ServicesList() {
   const [services, setServices] = useState(null);
@@ -803,7 +826,7 @@ function ServicesList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 justify-center">
+      <div className={CHIP_STRIP}>
         {byCategory.map(([name, list]) => (
           <button
             key={name}
@@ -816,12 +839,14 @@ function ServicesList() {
           </button>
         ))}
       </div>
-      <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Phones: a swipeable row (no scroll box inside the page scroll).
+          Wider screens: a grid in a scrollable box. */}
+      <div className="sm:max-h-[70vh] sm:overflow-y-auto sm:rounded-2xl sm:border border-zinc-200 dark:border-zinc-800 sm:bg-white sm:dark:bg-zinc-950 sm:p-6">
+          <div className={SWIPE_ROW + " sm:grid-cols-2 lg:grid-cols-3"}>
             {items.map((s) => (
               <div
                 key={s.appointment_services_id}
-                className="flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900"
+                className="w-[80%] shrink-0 snap-start sm:w-auto flex flex-col gap-2 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900"
               >
                 {/* Picture uploaded in Maintenance; a soft placeholder until then. */}
                 {s.service_image ? (
@@ -925,7 +950,7 @@ function ProductsCatalog() {
     <div className="space-y-4">
       {/* Filter: category buttons + search */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2 justify-center">
+        <div className={CHIP_STRIP}>
           {[["All", products.length], ...byCategory.map(([name, items]) => [name, items.length])].map(
             ([name, count]) => (
               <button
@@ -952,21 +977,21 @@ function ProductsCatalog() {
 
     {/* One scrollable box for the whole catalog; category headings stay
         pinned at the top of the box while scrolling through that category. */}
-    <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 sm:p-6 space-y-8">
+    <div className="sm:max-h-[70vh] sm:overflow-y-auto sm:rounded-2xl sm:border border-zinc-200 dark:border-zinc-800 sm:bg-white sm:dark:bg-zinc-950 sm:p-6 space-y-6 sm:space-y-8">
       {visibleGroups.map(([category, items]) => (
         <div key={category}>
-          <h3 className="sticky -top-4 sm:-top-6 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-3 text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 bg-white/95 dark:bg-zinc-950/95 backdrop-blur">
+          <h3 className="sm:sticky sm:-top-6 z-10 sm:-mx-6 sm:px-6 py-2 mb-2 sm:mb-3 text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 sm:bg-white/95 sm:dark:bg-zinc-950/95 sm:backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-green-500" />
             {category}
             <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({items.length})</span>
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className={SWIPE_ROW + " sm:grid-cols-3 lg:grid-cols-5"}>
             {items.map((p) => (
               <button
                 key={p.product_name}
                 type="button"
                 onClick={() => setSelected(p)}
-                className="text-left flex flex-col gap-1.5 p-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:border-green-500/60 transition-colors cursor-pointer"
+                className="w-[42%] shrink-0 snap-start sm:w-auto text-left flex flex-col gap-1.5 p-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:border-green-500/60 transition-colors cursor-pointer"
               >
                 {p.product_image ? (
                   <img
@@ -1093,7 +1118,7 @@ function ClinicGallery({ onOpenImage }) {
       <button
         type="button"
         onClick={() => goTo(index - 1)}
-        className="absolute left-2 top-[45%] -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
+        className="absolute left-2 top-[45%] -translate-y-1/2 h-11 w-11 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
         aria-label="Previous photo"
       >
         <ChevronLeft className="h-5 w-5" />
@@ -1101,22 +1126,27 @@ function ClinicGallery({ onOpenImage }) {
       <button
         type="button"
         onClick={() => goTo(index + 1)}
-        className="absolute right-2 top-[45%] -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
+        className="absolute right-2 top-[45%] -translate-y-1/2 h-11 w-11 rounded-full bg-white/90 border border-zinc-200 shadow flex items-center justify-center text-zinc-800 hover:bg-white"
         aria-label="Next photo"
       >
         <ChevronRight className="h-5 w-5" />
       </button>
 
-      <div className="mt-4 flex justify-center gap-2">
+      {/* 32px tap area around each small dot (10 × 44px wouldn't fit a phone). */}
+      <div className="mt-2 flex justify-center">
         {GALLERY.map((photo, i) => (
           <button
             key={photo.alt}
             type="button"
             onClick={() => goTo(i)}
-            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-green-600" : "w-2 bg-zinc-300 hover:bg-zinc-400 dark:bg-zinc-700 dark:hover:bg-zinc-500"}`}
+            className="group h-8 min-w-8 px-1 flex items-center justify-center"
             aria-label={`Show photo ${i + 1}`}
             aria-current={i === index}
-          />
+          >
+            <span
+              className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-green-600" : "w-2 bg-zinc-300 group-hover:bg-zinc-400 dark:bg-zinc-700 dark:group-hover:bg-zinc-500"}`}
+            />
+          </button>
         ))}
       </div>
     </div>
@@ -1231,19 +1261,26 @@ function AnnouncementCard({
       className={`bg-zinc-50 dark:bg-zinc-900 overflow-hidden flex flex-col shadow-sm border-x-0 border-b-0 border-t-4 ${borderColor} border-zinc-200 dark:border-zinc-800`}
     >
       {img && (
-      <div
-        className="aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900 relative group cursor-zoom-in"
+      <button
+        type="button"
+        className="block aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900 relative group cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-green-600"
         onClick={() => onOpenImage({ src: img, alt: title })}
+        aria-label={`View full image: ${title}`}
       >
         <img
           src={img}
-          alt={title}
+          alt=""
+          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium gap-1">
+        <span className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium gap-1">
           <Maximize2 className="h-4 w-4" /> View Full Image
-        </div>
-      </div>
+        </span>
+        {/* Touch screens can't hover: a small always-on expand hint instead. */}
+        <span className="[@media(hover:hover)]:hidden absolute bottom-2 right-2 rounded-full bg-black/60 p-1.5 text-white">
+          <Maximize2 className="h-3.5 w-3.5" />
+        </span>
+      </button>
       )}
       <CardContent className="pt-4 flex-1 flex flex-col">
         {badge && (
@@ -1268,7 +1305,7 @@ function TestimonialCard({ img, quote, author }) {
   return (
     <Card className="bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col justify-between text-zinc-900 dark:text-white">
       <div className="aspect-[4/3] bg-zinc-100 dark:bg-zinc-900 w-full overflow-hidden">
-        <img src={img} alt={author} className="w-full h-full object-cover" />
+        <img src={img} alt={author} loading="lazy" className="w-full h-full object-cover" />
       </div>
       <CardContent className="pt-4 flex flex-col gap-2">
         <div className="flex text-amber-400 gap-0.5">

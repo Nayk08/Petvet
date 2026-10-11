@@ -23,6 +23,7 @@ import {
   Shield,
   Lock,
   ChevronDown,
+  ChevronLeft,
   Circle,
   LogOut,
   Cat,
@@ -60,10 +61,23 @@ const MODULE_ICONS = {
   USER_MGMT_PERMS: Lock,
 };
 
+// Phone bottom tab bar: these modules first (when the user's role has them),
+// then the next routable modules in sidebar order fill any empty slot.
+// Everything else lives under "More".
+const PRIMARY_TABS = ["DASHBOARD", "APPOINTMENT", "CART", "PAYMENTS"];
+const TAB_COUNT = 4;
+
+// Pages that aren't a module of their own: title + where Back goes when
+// there's no in-app history (e.g. the page was opened from a bookmark).
+const NESTED_PAGES = [
+  { prefix: "/client-pet-record", title: "Pet Records", back: "/client-record" },
+];
+
 export const SIDEBAR_WIDTH_CLASS = "md:w-64";
 
 export default function Sidebar({ onLogout }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState(() => new Set());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -85,10 +99,23 @@ export default function Sidebar({ onLogout }) {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
-  // Close the mobile drawer on every navigation.
+  // Close the mobile sheet and user menu on every navigation.
   useEffect(() => {
     setIsMobileOpen(false);
+    setIsUserMenuOpen(false);
   }, [location.pathname]);
+
+  // Escape closes whichever phone overlay is open.
+  useEffect(() => {
+    if (!isMobileOpen && !isUserMenuOpen) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      setIsMobileOpen(false);
+      setIsUserMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isMobileOpen, isUserMenuOpen]);
 
   const { data: currentUserData, isPending: isUserPending } = useQuery({
     queryKey: ["currentUser"],
@@ -143,6 +170,54 @@ export default function Sidebar({ onLogout }) {
     return { topLevel: top, childrenMap: map };
   }, [modules]);
 
+  // Every module the user can open, in sidebar order (group children in
+  // place of their group). Same permission-filtered list as the sidebar.
+  const routableModules = useMemo(
+    () =>
+      topLevel
+        .flatMap((m) => {
+          const children = childrenMap.get(m.module_code) || [];
+          return children.length ? children : [m];
+        })
+        .filter((m) => m.route),
+    [topLevel, childrenMap],
+  );
+
+  const tabModules = useMemo(() => {
+    const picked = PRIMARY_TABS.map((code) =>
+      routableModules.find((m) => m.module_code === code),
+    ).filter(Boolean);
+    for (const m of routableModules) {
+      if (picked.length >= TAB_COUNT) break;
+      if (!picked.includes(m)) picked.push(m);
+    }
+    return picked;
+  }, [routableModules]);
+
+  // Phone top bar: the current module (longest matching route) or a known
+  // nested page, which also gets a Back button.
+  const nestedPage = NESTED_PAGES.find((p) =>
+    location.pathname.startsWith(p.prefix),
+  );
+  // Module routes may be stored without the leading "/" (NavLink resolves
+  // them from the root either way), so normalize before matching.
+  const toPath = (route) => (route.startsWith("/") ? route : `/${route}`);
+  const currentModule = routableModules
+    .filter(
+      (m) =>
+        location.pathname === toPath(m.route) ||
+        location.pathname.startsWith(`${toPath(m.route)}/`),
+    )
+    .sort((a, b) => toPath(b.route).length - toPath(a.route).length)[0];
+  const pageTitle = nestedPage?.title ?? currentModule?.module_name ?? "PetVet";
+  const isOnTab = tabModules.some((m) => m === currentModule);
+
+  const goBack = () => {
+    // "default" = first page of this tab's history: don't leave the app.
+    if (location.key !== "default") navigate(-1);
+    else navigate(nestedPage.back);
+  };
+
   // Auto-expand whichever group contains the page currently being viewed,
   // so landing on a child route (e.g. via a bookmark) doesn't hide it
   // inside a collapsed section.
@@ -171,6 +246,7 @@ export default function Sidebar({ onLogout }) {
 
   const handleLogout = async () => {
     setIsMobileOpen(false);
+    setIsUserMenuOpen(false);
     setIsLoggingOut(true);
 
     try {
@@ -189,15 +265,42 @@ export default function Sidebar({ onLogout }) {
     }
   };
 
+  // max-md:min-h-11 — 44px rows when the sidebar is the phone "More" sheet.
   const linkClass = ({ isActive }) =>
-    `flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all ${
+    `flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 rounded-xl text-sm transition-all ${
       isActive
         ? "bg-indigo-50 text-indigo-600 font-medium dark:bg-indigo-500/15 dark:text-indigo-300"
-        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white dark:active:bg-slate-800"
     }`;
 
   const fetching = useIsFetching();
   const showNav = !isUserPending && hasUserId && !isPending && !isError;
+
+  const avatar = (sizeClass) => (
+    <div
+      className={`${sizeClass} shrink-0 rounded-full overflow-hidden bg-indigo-600 text-xs font-semibold text-white flex items-center justify-center shadow-sm`}
+    >
+      {user?.user_picture ? (
+        <img src={user.user_picture} alt="" className="w-full h-full object-cover" />
+      ) : (
+        userInitials
+      )}
+    </div>
+  );
+
+  const paymentsBadge = (className) =>
+    awaitingCount > 0 && (
+      <span
+        className={`${className} min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center`}
+        title={`${awaitingCount} online payment(s) to verify`}
+        aria-label={`${awaitingCount} online payments to verify`}
+      >
+        {awaitingCount > 99 ? "99+" : awaitingCount}
+      </span>
+    );
+
+  const userMenuItemClass =
+    "w-full flex items-center gap-2.5 px-3 min-h-11 rounded-lg text-sm text-left text-slate-700 active:bg-slate-100 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-800 bg-transparent border-none cursor-pointer";
 
   return (
     <>
@@ -227,31 +330,147 @@ export default function Sidebar({ onLogout }) {
         }
       `}</style>
 
-      {/* Mobile top bar — the sidebar itself is off-canvas below md */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 z-40 flex items-center justify-between px-4 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm dark:bg-slate-950/85 dark:border-slate-800">
-        <Link to="/" className="flex items-center gap-2 select-none shrink-0">
-          <img
-            src={petvetLogo}
-            alt="PetVet logo"
-            className="h-8 w-8 object-contain"
-          />
-          <p className="text-red-600 dark:text-red-500 font-extrabold text-lg tracking-tight">
-            Pet<span className="text-emerald-600 dark:text-emerald-500">Vet</span>
-          </p>
-        </Link>
-        {showNav && (
-          <button
-            type="button"
-            onClick={() => setIsMobileOpen(true)}
-            className="flex items-center justify-center w-9 h-9 rounded-lg bg-transparent border-none cursor-pointer text-slate-600 dark:text-slate-300"
-            aria-label="Open menu"
-          >
-            <Menu size={22} />
-          </button>
-        )}
-      </div>
+      {/* Phone top bar: back (on nested pages) or logo, page title, user menu */}
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 pt-[env(safe-area-inset-top)] bg-white/85 backdrop-blur-md border-b border-slate-200 dark:bg-slate-950/85 dark:border-slate-800">
+        <div className="h-14 px-1.5 flex items-center gap-1">
+          {nestedPage ? (
+            <button
+              type="button"
+              onClick={goBack}
+              className="size-11 shrink-0 flex items-center justify-center rounded-full text-slate-700 active:bg-slate-100 dark:text-slate-200 dark:active:bg-slate-800 bg-transparent border-none cursor-pointer"
+              aria-label="Back"
+            >
+              <ChevronLeft size={24} />
+            </button>
+          ) : (
+            <Link
+              to="/"
+              className="size-11 shrink-0 flex items-center justify-center rounded-full active:bg-slate-100 dark:active:bg-slate-800"
+              aria-label="PetVet home"
+            >
+              <img src={petvetLogo} alt="" className="h-8 w-8 object-contain" />
+            </Link>
+          )}
+          <h1 className="flex-1 min-w-0 truncate text-[17px] font-bold text-slate-900 dark:text-white">
+            {pageTitle}
+          </h1>
+          {showNav && (
+            <button
+              type="button"
+              onClick={() => setIsUserMenuOpen((open) => !open)}
+              aria-expanded={isUserMenuOpen}
+              aria-controls="mobile-user-menu"
+              aria-label="Account menu"
+              className="size-11 shrink-0 flex items-center justify-center rounded-full active:bg-slate-100 dark:active:bg-slate-800 bg-transparent border-none cursor-pointer"
+            >
+              {avatar("w-8 h-8")}
+            </button>
+          )}
+        </div>
 
-      {/* Mobile backdrop */}
+        {isUserMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-0"
+              onClick={() => setIsUserMenuOpen(false)}
+            />
+            <div
+              id="mobile-user-menu"
+              className="absolute right-2 top-full mt-1.5 z-10 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:bg-slate-900 dark:border-slate-800"
+            >
+              <div className="flex items-center gap-2.5 px-2.5 py-2 border-b border-slate-100 mb-1 dark:border-slate-800">
+                {avatar("w-9 h-9")}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate dark:text-white">
+                    {user?.name || user?.email || "User"}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{userRole}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  setShowProfileModal(true);
+                }}
+                className={userMenuItemClass}
+              >
+                <User size={18} />
+                Profile
+              </button>
+              <button type="button" onClick={toggleTheme} className={userMenuItemClass}>
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={`${userMenuItemClass} text-rose-600! dark:text-rose-400! font-medium disabled:opacity-50`}
+              >
+                <LogOut size={18} />
+                {isLoggingOut ? "Logging out..." : "Log Out"}
+              </button>
+            </div>
+          </>
+        )}
+      </header>
+
+      {/* Phone bottom tab bar: up to 4 permitted modules + More */}
+      {showNav && (
+        <nav
+          aria-label="Main"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)] bg-white/95 backdrop-blur-md border-t border-slate-200 dark:bg-slate-950/95 dark:border-slate-800"
+        >
+          <ul
+            className="grid h-16"
+            style={{ gridTemplateColumns: `repeat(${tabModules.length + 1}, minmax(0, 1fr))` }}
+          >
+            {tabModules.map((module) => {
+              const Icon = MODULE_ICONS[module.module_code] || Circle;
+              return (
+                <li key={module.module_code}>
+                  <NavLink
+                    to={module.route}
+                    className={({ isActive }) =>
+                      `relative h-full flex flex-col items-center justify-center gap-1 px-0.5 text-[10px] tracking-tight font-medium transition-colors active:bg-slate-100 dark:active:bg-slate-900 ${
+                        isActive
+                          ? "text-indigo-600 dark:text-indigo-400"
+                          : "text-slate-500 dark:text-slate-400"
+                      }`
+                    }
+                  >
+                    <span className="relative">
+                      <Icon size={22} />
+                      {module.module_code === "PAYMENTS" &&
+                        paymentsBadge("absolute -top-1.5 left-3.5")}
+                    </span>
+                    <span className="max-w-full truncate">{module.module_name}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                type="button"
+                onClick={() => setIsMobileOpen(true)}
+                aria-expanded={isMobileOpen}
+                aria-controls="app-sidebar"
+                className={`w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] tracking-tight font-medium bg-transparent border-none cursor-pointer active:bg-slate-100 dark:active:bg-slate-900 ${
+                  isMobileOpen || (currentModule && !isOnTab)
+                    ? "text-indigo-600 dark:text-indigo-400"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                <Menu size={22} />
+                More
+              </button>
+            </li>
+          </ul>
+        </nav>
+      )}
+
+      {/* Mobile backdrop (covers the tab bar too) */}
       {isMobileOpen && (
         <div
           className="md:hidden fixed inset-0 bg-black/40 z-40"
@@ -259,12 +478,18 @@ export default function Sidebar({ onLogout }) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — on phones the "More" bottom sheet, from md a fixed left column */}
       <aside
-        className={`fixed top-0 left-0 h-full w-72 md:w-64 bg-white border-r border-slate-200 z-50 flex flex-col shadow-sm transition-transform duration-200 dark:bg-slate-950 dark:border-slate-800 ${
-          isMobileOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
+        id="app-sidebar"
+        className={`fixed z-50 flex flex-col bg-white border-slate-200 shadow-sm transition-transform duration-200 dark:bg-slate-950 dark:border-slate-800 inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border-t pb-[env(safe-area-inset-bottom)] ${
+          isMobileOpen ? "translate-y-0" : "translate-y-full"
+        } md:inset-x-auto md:bottom-auto md:top-0 md:left-0 md:h-full md:w-64 md:max-h-none md:rounded-none md:border-t-0 md:border-r md:pb-0 md:translate-y-0`}
       >
+        {/* Sheet grab handle (phones) */}
+        <div className="md:hidden flex justify-center pt-2" aria-hidden="true">
+          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
+        </div>
+
         {/* Brand */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 shrink-0 dark:border-slate-800">
           <Link
@@ -285,10 +510,10 @@ export default function Sidebar({ onLogout }) {
           <button
             type="button"
             onClick={() => setIsMobileOpen(false)}
-            className="md:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-transparent border-none cursor-pointer text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+            className="md:hidden flex items-center justify-center size-11 -mr-2 rounded-full bg-transparent border-none cursor-pointer text-slate-500 active:bg-slate-100 dark:text-slate-400 dark:active:bg-slate-800"
             aria-label="Close menu"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -314,7 +539,7 @@ export default function Sidebar({ onLogout }) {
 
         {/* Nav tree */}
         {showNav && (
-          <nav className="flex-1 overflow-y-auto petvet-nav-scroll px-3 py-3 space-y-1">
+          <nav className="flex-1 overflow-y-auto overscroll-contain petvet-nav-scroll px-3 py-3 space-y-1">
             {topLevel.map((module) => {
               const children = childrenMap.get(module.module_code) || [];
               const IconComponent = MODULE_ICONS[module.module_code] || Circle;
@@ -330,15 +555,7 @@ export default function Sidebar({ onLogout }) {
                   >
                     <IconComponent size={16} />
                     {module.module_name}
-                    {module.module_code === "PAYMENTS" && awaitingCount > 0 && (
-                      <span
-                        className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center"
-                        title={`${awaitingCount} online payment(s) to verify`}
-                        aria-label={`${awaitingCount} online payments to verify`}
-                      >
-                        {awaitingCount > 99 ? "99+" : awaitingCount}
-                      </span>
-                    )}
+                    {module.module_code === "PAYMENTS" && paymentsBadge("ml-auto")}
                   </NavLink>
                 );
               }
@@ -350,7 +567,7 @@ export default function Sidebar({ onLogout }) {
                     type="button"
                     onClick={() => toggleSection(module.module_code)}
                     aria-expanded={isExpanded}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
                   >
                     <IconComponent size={16} />
                     <span className="flex-1 text-left">
@@ -386,9 +603,9 @@ export default function Sidebar({ onLogout }) {
         )}
 
         {/* Footer: settings (profile + dark mode) + logout, above the
-            avatar/picture row */}
+            avatar/picture row. Phones use the top-bar account menu instead. */}
         {showNav && (
-          <div className="border-t border-slate-200 p-3 space-y-2 shrink-0 dark:border-slate-800">
+          <div className="max-md:hidden border-t border-slate-200 p-3 space-y-2 shrink-0 dark:border-slate-800">
             <div>
               <button
                 type="button"
@@ -439,17 +656,7 @@ export default function Sidebar({ onLogout }) {
             </div>
 
             <div className="flex items-center gap-2 px-1 py-1">
-              <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-indigo-600 text-xs font-semibold text-white flex items-center justify-center shadow-sm">
-                {user?.user_picture ? (
-                  <img
-                    src={user.user_picture}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  userInitials
-                )}
-              </div>
+              {avatar("w-8 h-8")}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-slate-800 truncate dark:text-slate-100">
                   {user?.name || user?.email || "User"}

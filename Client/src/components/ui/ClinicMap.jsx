@@ -16,7 +16,7 @@ export default function ClinicMap({ address, className = "" }) {
         href={`https://www.google.com/maps/search/?api=1&query=${q}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-block text-sm font-medium text-green-700 dark:text-green-400 hover:underline"
+        className="inline-flex items-center min-h-11 text-sm font-medium text-green-700 dark:text-green-400 hover:underline"
       >
         Open in Google Maps →
       </a>
