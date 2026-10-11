@@ -34,8 +34,13 @@ const app = express();
 const PgSession = connectPgSimple(session);
 
 // --- Trust proxy (must be set before anything relies on secure cookies) ---
+// Hops between the visitor and this app: 1 = Render's load balancer only;
+// 2 when the front end proxies /api through Vercel (vercel.json), so req.ip
+// is still the visitor — not Vercel — and per-IP rate limits stay per user.
+// ponytail: someone calling Render directly can fake one X-Forwarded-For
+// entry to dodge the per-IP limit; restrict Render to Vercel if that matters.
 if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS) || 1);
 }
 
 // --- Core middleware ---
