@@ -329,6 +329,26 @@ export async function addMyPet(payload) {
   return handlePortalResponse(response, "Failed to add pet");
 }
 
+// One of my pets with its ids and notes (to pre-fill the edit form).
+export async function fetchMyPet(petsId, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${petsId}`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to load pet");
+}
+
+export async function editMyPet(petsId, payload) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/pets/${petsId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handlePortalResponse(response, "Failed to update pet");
+}
+
 // A simple timeline of this pet's past appointments (service, staff, date,
 // status, notes) — not a full EMR, just what's already on file.
 export async function fetchMyPetHistory(petsId, { signal } = {}) {

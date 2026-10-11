@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { Plus, History } from "lucide-react";
+import { Plus, History, Pencil } from "lucide-react";
 import DynamicGrid from "@/components/ui/DynamicGrid";
 import { Pagination } from "@/components/ui/Pagination";
 import { Button } from "@/components/ui/button.jsx";
@@ -12,17 +12,15 @@ import { fetchMyPets } from "@/api/clientPortal.js";
 import PortalAddPetModal from "./components/PortalAddPetModal.jsx";
 import PortalPetHistoryModal from "./components/PortalPetHistoryModal.jsx";
 
-// Editing an existing pet (with the Cloudinary image upload the staff side
-// uses) is a reasonable follow-up but was left out of this pass to ship a
-// working slice rather than block on rebuilding that upload flow for a
-// second, ownership-checked endpoint — adding a new pet and viewing
-// history don't need it.
+// Clients add and edit their own pets (details only — the photo and status
+// stay staff-managed) and view each pet's visit history.
 export function Component() {
   const [search, setSearch] = useState("");
   const { page, limit, setPage, setLimit } = usePagination({ defaultLimit: 10 });
   const debouncedSearch = useDebouncedValue(search, 400);
   const [showAddPet, setShowAddPet] = useState(false);
   const [historyPet, setHistoryPet] = useState(null);
+  const [editPetId, setEditPetId] = useState(null);
 
   useEffect(() => {
     setPage(1);
@@ -43,7 +41,7 @@ export function Component() {
             My Pets
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            On file with the clinic. Contact us to update existing details.
+            On file with the clinic. Tap Edit to update a pet's details.
           </p>
         </div>
         <Button
@@ -105,15 +103,26 @@ export function Component() {
                       </p>
                     )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setHistoryPet({ id: pet.pet_id, name: pet.pet_name })}
-                    className="shrink-0 gap-1"
-                  >
-                    <History size={14} />
-                    History
-                  </Button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditPetId(pet.pet_id)}
+                      className="gap-1 min-h-11"
+                    >
+                      <Pencil size={14} />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setHistoryPet({ id: pet.pet_id, name: pet.pet_name })}
+                      className="gap-1 min-h-11"
+                    >
+                      <History size={14} />
+                      History
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
@@ -129,6 +138,13 @@ export function Component() {
             onSearchChange={setSearch}
             onLimitChange={setLimit}
             actions={[
+              {
+                label: "Edit",
+                icon: Pencil,
+                className:
+                  "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40",
+                onClick: (row) => setEditPetId(row.pet_id),
+              },
               {
                 label: "View History",
                 icon: History,
@@ -154,6 +170,10 @@ export function Component() {
 
       {showAddPet && (
         <PortalAddPetModal onClose={() => setShowAddPet(false)} />
+      )}
+
+      {editPetId && (
+        <PortalAddPetModal petId={editPetId} onClose={() => setEditPetId(null)} />
       )}
 
       {historyPet && (

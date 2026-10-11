@@ -73,7 +73,7 @@ export default function DynamicGrid({
 
   // Fit the table's scroll box to the space left in the window, so the
   // page itself doesn't scroll too (a second scrollbar) unless other content
-  // really needs it. Never shorter than 320px. Inside dialogs (bare) the CSS
+  // really needs it. Never shorter than 480px. Inside dialogs (bare) the CSS
   // max-height on the box is used instead.
   const tableWrapRef = useRef(null);
   useLayoutEffect(() => {
@@ -89,7 +89,11 @@ export default function DynamicGrid({
       box.style.maxHeight = "none";
       const top = box.getBoundingClientRect().top + window.scrollY;
       const below = document.documentElement.scrollHeight - (top + box.offsetHeight);
-      box.style.maxHeight = `${Math.max(320, Math.floor(window.innerHeight - top - below))}px`;
+      // Enough room: fill it exactly (no second scrollbar). Not enough —
+      // the page scrolls anyway (e.g. cards above the table), so use most
+      // of the screen instead of shrinking to a few rows.
+      const room = Math.floor(window.innerHeight - top - below);
+      box.style.maxHeight = `${room >= 480 ? room : Math.max(480, Math.floor(window.innerHeight * 0.75))}px`;
     };
     fit();
     window.addEventListener("resize", fit);
@@ -596,7 +600,7 @@ export default function DynamicGrid({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {resolvedActions.length > 0 && (
-                  <TableHead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-center text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
+                  <TableHead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-left text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
                     Actions
                   </TableHead>
                 )}
@@ -627,7 +631,7 @@ export default function DynamicGrid({
                     >
                       {resolvedActions.length > 0 && (
                         <TableCell className="py-3.5 px-4">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-start gap-1.5">
                             {rowActions.length > 0 ? (
                               renderActions(row, rowActions)
                             ) : (

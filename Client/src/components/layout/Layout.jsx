@@ -73,7 +73,7 @@ export default function Layout() {
       {/* Main content. Below md the page scrolls normally under the fixed top
           bar and tab bar (a 100dvh inner scroller broke in browsers/simulators
           that misreport the viewport height); padding clears both bars. */}
-      <main className="w-full md:pl-64 max-md:pt-[calc(3.5rem+env(safe-area-inset-top))]">
+      <main className="w-full md:pl-[var(--sidebar-w,16rem)] md:transition-[padding] md:duration-200 max-md:pt-[calc(3.5rem+env(safe-area-inset-top))]">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8 max-md:pb-[calc(5rem+env(safe-area-inset-bottom))]">
           <Outlet />
         </div>

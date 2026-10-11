@@ -24,6 +24,8 @@ import {
   Lock,
   ChevronDown,
   ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   Circle,
   LogOut,
   Cat,
@@ -73,7 +75,7 @@ const NESTED_PAGES = [
   { prefix: "/client-pet-record", title: "Pet Records", back: "/client-record" },
 ];
 
-export const SIDEBAR_WIDTH_CLASS = "md:w-64";
+export const SIDEBAR_WIDTH_CLASS = "md:w-[var(--sidebar-w,16rem)]";
 
 export default function Sidebar({ onLogout }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -98,6 +100,24 @@ export default function Sidebar({ onLogout }) {
   const toggleTheme = () => {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
+
+  // Desktop: collapse to an icon rail (remembered). The width lives in one
+  // CSS variable that both the sidebar and Layout's <main> padding read.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-w", collapsed ? "4rem" : "16rem");
+    try {
+      localStorage.setItem("sidebar-collapsed", collapsed ? "1" : "0");
+    } catch {
+      /* private mode: just not remembered */
+    }
+  }, [collapsed]);
 
   // Close the mobile sheet and user menu on every navigation.
   useEffect(() => {
@@ -265,9 +285,15 @@ export default function Sidebar({ onLogout }) {
     }
   };
 
+  // Collapsed rail (desktop only — the `collapsed` flag is ignored on phones,
+  // where these variants never match): hide labels, centre the icons.
+  const HIDE = "md:group-data-[collapsed=true]:hidden";
+  const RAIL = "md:group-data-[collapsed=true]:justify-center md:group-data-[collapsed=true]:px-0";
+  const tip = (label) => (collapsed ? label : undefined);
+
   // max-md:min-h-11 — 44px rows when the sidebar is the phone "More" sheet.
   const linkClass = ({ isActive }) =>
-    `flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 rounded-xl text-sm transition-all ${
+    `flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 ${RAIL} rounded-xl text-sm transition-all ${
       isActive
         ? "bg-indigo-50 text-indigo-600 font-medium dark:bg-indigo-500/15 dark:text-indigo-300"
         : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white dark:active:bg-slate-800"
@@ -481,19 +507,34 @@ export default function Sidebar({ onLogout }) {
       {/* Sidebar — on phones the "More" bottom sheet, from md a fixed left column */}
       <aside
         id="app-sidebar"
-        className={`fixed z-50 flex flex-col bg-white border-slate-200 shadow-sm transition-transform duration-200 dark:bg-slate-950 dark:border-slate-800 inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border-t pb-[env(safe-area-inset-bottom)] ${
+        data-collapsed={collapsed}
+        className={`group fixed z-50 flex flex-col bg-white border-slate-200 shadow-sm transition-[transform,width] duration-200 dark:bg-slate-950 dark:border-slate-800 inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border-t pb-[env(safe-area-inset-bottom)] ${
           isMobileOpen ? "translate-y-0" : "translate-y-full"
-        } md:inset-x-auto md:bottom-auto md:top-0 md:left-0 md:h-full md:w-64 md:max-h-none md:rounded-none md:border-t-0 md:border-r md:pb-0 md:translate-y-0`}
+        } md:inset-x-auto md:bottom-auto md:top-0 md:left-0 md:h-full md:w-[var(--sidebar-w,16rem)] md:max-h-none md:rounded-none md:border-t-0 md:border-r md:pb-0 md:translate-y-0`}
       >
+        {/* Desktop collapse/expand handle, centred on the brand row's bottom
+            border so it never covers a menu item */}
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="app-sidebar"
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="max-md:hidden absolute -right-3 top-11 z-10 size-6 flex items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-slate-900 hover:border-slate-300 cursor-pointer dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+        >
+          {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+        </button>
         {/* Sheet grab handle (phones) */}
         <div className="md:hidden flex justify-center pt-2" aria-hidden="true">
           <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
         </div>
 
         {/* Brand */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 shrink-0 dark:border-slate-800">
+        <div className={`h-14 px-4 flex items-center justify-between border-b border-slate-200 shrink-0 dark:border-slate-800 ${RAIL}`}>
           <Link
             to="/"
+            title={tip("PetVet")}
             className="flex items-center gap-2 select-none active:scale-[0.98] transition-transform shrink-0"
           >
             <div className="h-9 w-9 flex items-center justify-center shrink-0">
@@ -503,7 +544,7 @@ export default function Sidebar({ onLogout }) {
                 className="h-full w-full object-contain"
               />
             </div>
-            <p className="text-red-600 dark:text-red-500 font-extrabold text-xl tracking-tight">
+            <p className={`text-red-600 dark:text-red-500 font-extrabold text-xl tracking-tight ${HIDE}`}>
               Pet<span className="text-emerald-600 dark:text-emerald-500">Vet</span>
             </p>
           </Link>
@@ -539,7 +580,7 @@ export default function Sidebar({ onLogout }) {
 
         {/* Nav tree */}
         {showNav && (
-          <nav className="flex-1 overflow-y-auto overscroll-contain petvet-nav-scroll px-3 py-3 space-y-1">
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain petvet-nav-scroll px-3 md:group-data-[collapsed=true]:px-2 py-3 space-y-1">
             {topLevel.map((module) => {
               const children = childrenMap.get(module.module_code) || [];
               const IconComponent = MODULE_ICONS[module.module_code] || Circle;
@@ -552,10 +593,17 @@ export default function Sidebar({ onLogout }) {
                     key={module.module_code}
                     to={module.route}
                     className={linkClass}
+                    title={tip(module.module_name)}
                   >
-                    <IconComponent size={16} />
-                    {module.module_name}
-                    {module.module_code === "PAYMENTS" && paymentsBadge("ml-auto")}
+                    <span className="relative shrink-0">
+                      <IconComponent size={16} />
+                      {/* Collapsed rail: a dot instead of the count badge. */}
+                      {module.module_code === "PAYMENTS" && awaitingCount > 0 && (
+                        <span className="hidden md:group-data-[collapsed=true]:block absolute -top-1 -right-1 size-2 rounded-full bg-red-600" />
+                      )}
+                    </span>
+                    <span className={`truncate ${HIDE}`}>{module.module_name}</span>
+                    {module.module_code === "PAYMENTS" && paymentsBadge(`ml-auto ${HIDE}`)}
                   </NavLink>
                 );
               }
@@ -567,7 +615,7 @@ export default function Sidebar({ onLogout }) {
                     type="button"
                     onClick={() => toggleSection(module.module_code)}
                     aria-expanded={isExpanded}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 max-md:min-h-11 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${HIDE}`}
                   >
                     <IconComponent size={16} />
                     <span className="flex-1 text-left">
@@ -578,8 +626,14 @@ export default function Sidebar({ onLogout }) {
                       className={`text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                     />
                   </button>
-                  {isExpanded && (
-                    <div className="mt-1 ml-4 pl-3 border-l border-slate-200 flex flex-col gap-1 dark:border-slate-800">
+                  {/* Collapsed rail: the group header is hidden and its pages
+                      always show as icons (a divider marks the group). */}
+                  {(isExpanded || collapsed) && (
+                    <div
+                      className={`mt-1 ml-4 pl-3 border-l border-slate-200 flex-col gap-1 dark:border-slate-800 md:group-data-[collapsed=true]:flex md:group-data-[collapsed=true]:ml-0 md:group-data-[collapsed=true]:pl-0 md:group-data-[collapsed=true]:border-l-0 md:group-data-[collapsed=true]:border-t md:group-data-[collapsed=true]:pt-1 ${
+                        isExpanded ? "flex" : "hidden"
+                      }`}
+                    >
                       {children.map((child) => {
                         const ChildIcon =
                           MODULE_ICONS[child.module_code] || Circle;
@@ -588,9 +642,10 @@ export default function Sidebar({ onLogout }) {
                             key={child.module_code}
                             to={child.route}
                             className={linkClass}
+                            title={tip(child.module_name)}
                           >
-                            <ChildIcon size={16} />
-                            {child.module_name}
+                            <ChildIcon size={16} className="shrink-0" />
+                            <span className={`truncate ${HIDE}`}>{child.module_name}</span>
                           </NavLink>
                         );
                       })}
@@ -605,59 +660,66 @@ export default function Sidebar({ onLogout }) {
         {/* Footer: settings (profile + dark mode) + logout, above the
             avatar/picture row. Phones use the top-bar account menu instead. */}
         {showNav && (
-          <div className="max-md:hidden border-t border-slate-200 p-3 space-y-2 shrink-0 dark:border-slate-800">
+          <div className="max-md:hidden border-t border-slate-200 p-3 md:group-data-[collapsed=true]:px-2 space-y-2 shrink-0 dark:border-slate-800">
             <div>
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen((open) => !open)}
                 aria-expanded={isSettingsOpen}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                title={tip("Settings")}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 ${RAIL} rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white`}
               >
-                <Settings size={16} />
-                <span className="flex-1 text-left">Settings</span>
+                <Settings size={16} className="shrink-0" />
+                <span className={`flex-1 text-left ${HIDE}`}>Settings</span>
                 <ChevronDown
                   size={14}
-                  className={`text-slate-400 transition-transform ${isSettingsOpen ? "rotate-180" : ""}`}
+                  className={`text-slate-400 transition-transform ${isSettingsOpen ? "rotate-180" : ""} ${HIDE}`}
                 />
               </button>
               {isSettingsOpen && (
-                <div className="mt-1 ml-4 pl-3 border-l border-slate-200 flex flex-col gap-1 dark:border-slate-800">
+                <div className="mt-1 ml-4 pl-3 border-l border-slate-200 flex flex-col gap-1 dark:border-slate-800 md:group-data-[collapsed=true]:ml-0 md:group-data-[collapsed=true]:pl-0 md:group-data-[collapsed=true]:border-l-0">
                   <button
                     type="button"
                     onClick={() => setShowProfileModal(true)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer text-left transition-all dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                    title={tip("Profile")}
+                    className={`flex items-center gap-2.5 px-3 py-2 ${RAIL} rounded-xl text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer text-left transition-all dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white`}
                   >
-                    <User size={16} />
-                    Profile
+                    <User size={16} className="shrink-0" />
+                    <span className={HIDE}>Profile</span>
                   </button>
                   <button
                     type="button"
                     onClick={toggleTheme}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer text-left transition-all dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                    title={tip(theme === "dark" ? "Light mode" : "Dark mode")}
+                    className={`flex items-center gap-2.5 px-3 py-2 ${RAIL} rounded-xl text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-transparent border-none cursor-pointer text-left transition-all dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white`}
                   >
                     {theme === "dark" ? (
-                      <Sun size={16} />
+                      <Sun size={16} className="shrink-0" />
                     ) : (
-                      <Moon size={16} />
+                      <Moon size={16} className="shrink-0" />
                     )}
-                    {theme === "dark" ? "Light mode" : "Dark mode"}
+                    <span className={HIDE}>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-rose-600 hover:bg-rose-50 bg-transparent border-none cursor-pointer text-left transition-all hover:text-rose-700 font-medium disabled:opacity-50 dark:hover:bg-rose-950/30"
+                    title={tip("Log Out")}
+                    className={`flex items-center gap-2.5 px-3 py-2 ${RAIL} rounded-xl text-sm text-rose-600 hover:bg-rose-50 bg-transparent border-none cursor-pointer text-left transition-all hover:text-rose-700 font-medium disabled:opacity-50 dark:hover:bg-rose-950/30`}
                   >
-                    <LogOut size={16} />
-                    {isLoggingOut ? "Logging out..." : "Log Out"}
+                    <LogOut size={16} className="shrink-0" />
+                    <span className={HIDE}>{isLoggingOut ? "Logging out..." : "Log Out"}</span>
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 px-1 py-1">
+            <div
+              className="flex items-center gap-2 px-1 py-1 md:group-data-[collapsed=true]:justify-center md:group-data-[collapsed=true]:px-0"
+              title={tip(`${user?.name || user?.email || "User"} · ${userRole}`)}
+            >
               {avatar("w-8 h-8")}
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 flex-1 ${HIDE}`}>
                 <p className="text-xs font-semibold text-slate-800 truncate dark:text-slate-100">
                   {user?.name || user?.email || "User"}
                 </p>

@@ -11,7 +11,7 @@ import {
   clientPortalBookGroupSchema,
   bookingGroupParamSchema,
 } from "../../validators/appointmentSchema.js";
-import { clientPortalAddPetSchema } from "../../validators/petSchema.js";
+import { clientPortalAddPetSchema, petIdParamSchema } from "../../validators/petSchema.js";
 import {
   clientPortalRegisterSchema,
   clientPortalVerifyOtpSchema,
@@ -169,6 +169,22 @@ router.post(
   doubleCsrfProtection,
   validateBody(clientPortalAddPetSchema),
   (req, res) => clientPortalController.addMyPet(req, res),
+);
+// One pet (with its ids/notes, for the edit form) and editing it — both
+// ownership-checked in the service.
+router.get(
+  "/pets/:pets_id",
+  isClientAuth,
+  validateParams(petIdParamSchema),
+  (req, res) => clientPortalController.getMyPet(req, res),
+);
+router.patch(
+  "/pets/:pets_id",
+  isClientAuth,
+  doubleCsrfProtection,
+  validateParams(petIdParamSchema),
+  validateBody(clientPortalAddPetSchema),
+  (req, res) => clientPortalController.editMyPet(req, res),
 );
 router.get("/pets/:pets_id/history", isClientAuth, (req, res) =>
   clientPortalController.getMyPetHistory(req, res),

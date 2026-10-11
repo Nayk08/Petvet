@@ -4,9 +4,10 @@
 //
 // Used for predictable actions (delete, restore, status changes, edits).
 // NOT used where the server decides the outcome — booking (slot conflicts,
-// pricing), payments/checkout (amounts, stock, deposit vs full), verifying
-// GCash, adding records (the server assigns the id) — showing "success"
-// first there would sometimes be wrong.
+// pricing), payments/checkout (amounts, stock, deposit vs full), adding
+// records (the server assigns the id) — showing "success" first there would
+// sometimes be wrong. (Verifying GCash is the one payment step done
+// optimistically: its outcome follows a fixed rule — see VerifyPaymentModal.)
 import { queryClient } from "./http.js";
 import { applyToRows, removeWhere, patchWhere } from "../utils/applyToRows.js";
 

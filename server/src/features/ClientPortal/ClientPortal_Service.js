@@ -286,6 +286,43 @@ export default class ClientPortalService {
     return medicalRecordsService.getPetMedicalRecords(pets_id);
   }
 
+  // The pet, only if it belongs to this client (404 if missing/archived).
+  async #getOwnPet(pets_id, client_id) {
+    const pet = await clientRecordsService.getPetById(pets_id); // throws if missing
+    if (String(pet.client_id) !== String(client_id)) {
+      const err = new Error("You don't have access to this pet.");
+      err.statusCode = 403;
+      throw err;
+    }
+    return pet;
+  }
+
+  async getMyPet({ pets_id, client_id }) {
+    return this.#getOwnPet(pets_id, client_id);
+  }
+
+  // Same fields a client can set when adding a pet. Status (a clinical,
+  // staff-managed value) and the photo (uploaded by staff) are kept as is.
+  async editMyPet({ pets_id, client_id, ...fields }) {
+    const pet = await this.#getOwnPet(pets_id, client_id);
+    return clientRecordsService.editPet({
+      pets_id: pet.pets_id,
+      pets_name: fields.pets_name,
+      breed: fields.breed,
+      is_spayed_neutered: fields.is_spayed_neutered,
+      date_of_birth: fields.date_of_birth,
+      weight_kg: fields.weight_kg,
+      species_id: fields.species_id,
+      gender_id: fields.gender_id,
+      allergies: fields.allergies,
+      medical_conditions: fields.medical_conditions,
+      temperament: fields.temperament,
+      pet_status_id: pet.pet_status_id,
+      pet_image: pet.pet_image,
+      updated_by: "Client Portal",
+    });
+  }
+
   async addMyPet({
     client_id,
     pets_name,

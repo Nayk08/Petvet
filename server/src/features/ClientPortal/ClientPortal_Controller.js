@@ -140,6 +140,54 @@ export default class ClientPortalController {
     }
   }
 
+  async getMyPet(req, res) {
+    try {
+      const pet = await clientPortalService.getMyPet({
+        pets_id: req.params.pets_id,
+        client_id: req.clientUser.client_id,
+      });
+      res.json(pet);
+    } catch (error) {
+      console.log("Error on Controller getMyPet function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async editMyPet(req, res) {
+    try {
+      const {
+        pets_name,
+        breed,
+        is_spayed_neutered,
+        date_of_birth,
+        weight_kg,
+        species_id,
+        gender_id,
+        allergies,
+        medical_conditions,
+        temperament,
+      } = req.body;
+      const pet = await clientPortalService.editMyPet({
+        pets_id: req.params.pets_id,
+        client_id: req.clientUser.client_id,
+        pets_name,
+        breed,
+        is_spayed_neutered,
+        date_of_birth,
+        weight_kg,
+        species_id,
+        gender_id,
+        allergies,
+        medical_conditions,
+        temperament,
+      });
+      res.json(pet);
+    } catch (error) {
+      console.log("Error on Controller editMyPet function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async getMyPetHistory(req, res) {
     try {
       const history = await clientPortalService.getMyPetHistory({

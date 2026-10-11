@@ -27,6 +27,7 @@ import {
   fetchAppointmentById,
   verifyPayment,
 } from "@/api/http";
+import { runOptimistic } from "@/api/optimistic.js";
 
 // "2026-10-15 16:30:00" -> "4:30 PM" (plain string parsing: Manila wall clock).
 function formatClock(value) {
@@ -314,55 +315,78 @@ export async function action({ params, request }) {
   const isDeposit =
     cached?.amount_sent != null && Number(cached.amount_sent) < Number(cached.total_amount);
 
-  try {
-    await verifyPayment(params.payment_id, decision);
-  } catch (error) {
-    const errorMessage = error.message || "Failed to verify payment.";
+  // Optimistic: the row(s) show the outcome at once and the modal closes.
+  // The status follows the same rule the server uses (deposit vs full). A
+  // group's per-bill deposit shares are worked out server-side, so for a
+  // group only the status is patched; the refetch below fills in amounts.
+  const group = cached?.booking_group;
+  const patch = {
+    payment_status_name:
+      decision === "approve" ? (isDeposit ? "Partially Paid" : "Completed") : "Pending",
+    ...(decision === "approve" && !group && cached?.amount_sent != null
+      ? { gcash_amount: cached.amount_sent }
+      : {}),
+  };
+  const isTarget = (row) =>
+    group ? row?.booking_group === group : String(row?.payment_id) === String(params.payment_id);
 
-    toast.error("Failed to verify payment", {
-      className:
-        "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
-      description: errorMessage,
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 2000,
-      icon: <XCircle className="h-5 w-5 text-destructive" />,
-    });
+  // The single-payment record too: the Process screen reads it, and a stale
+  // "Awaiting Verification" copy made it charge the full amount again.
+  const singleKey = ["Payment", params.payment_id];
+  const previousSingle = queryClient.getQueryData(singleKey);
+  if (previousSingle) queryClient.setQueryData(singleKey, { ...previousSingle, ...patch });
 
-    return { error: errorMessage };
-  }
-
-  // Approve has the exact same downstream effects as completePayment
-  // (stock deduction, appointment flip to In Queue, revenue changes) since
-  // it reuses that method server-side — invalidate the same query keys
-  // PaymentProcessModal.jsx does. Reject only changes the payment's own
-  // status, but re-invalidating the same broad set is harmless.
-  await queryClient.invalidateQueries({ queryKey: ["Payments"] });
-  await queryClient.invalidateQueries({ queryKey: ["awaiting-payments-count"] }); // sidebar badge
-  await queryClient.invalidateQueries({ queryKey: ["TodayPayments"] });
-  await queryClient.invalidateQueries({ queryKey: ["RevenueSummary"] });
-  await queryClient.invalidateQueries({ queryKey: ["TodayRevenueSummary"] });
-  await queryClient.invalidateQueries({ queryKey: ["TodayRevenueTransactions"] });
-  await queryClient.invalidateQueries({ queryKey: ["RevenueTransactions"] });
-  await queryClient.invalidateQueries({ queryKey: ["appointment"] });
-  await queryClient.invalidateQueries({ queryKey: ["TodayAppointments"] });
-  await invalidateAppointmentQueries();
-
-  toast.success(
-    decision === "approve" ? "Payment verified" : "Payment sent back to Pending",
-    {
-      className:
-        "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-500 flex items-center gap-3 p-4 rounded-lg shadow-lg",
-      description:
-        decision === "approve"
-          ? isDeposit
-            ? "Deposit verified: the bill is Partially Paid. Collect the balance at the clinic."
-            : "The payment is now marked Completed."
-          : "The client can submit a corrected reference/screenshot.",
-      descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
-      duration: 2000,
-      icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
+  runOptimistic({
+    keys: [["Payments"], ["TodayPayments"]],
+    update: (row) => (isTarget(row) ? { ...row, ...patch } : row),
+    request: async () => {
+      await verifyPayment(params.payment_id, decision);
+      await invalidateAppointmentQueries();
     },
-  );
+    // Approve has the same downstream effects as completePayment (stock,
+    // appointment to In Queue, revenue), so refetch the same broad set —
+    // plus every cached single payment (["Payment", …]), which ["Payments"]
+    // does not cover.
+    refresh: [
+      ["Payment"],
+      ["awaiting-payments-count"], // sidebar badge
+      ["RevenueSummary"],
+      ["TodayRevenueSummary"],
+      ["TodayRevenueTransactions"],
+      ["RevenueTransactions"],
+      ["appointment"],
+      ["TodayAppointments"],
+      ["booking-group"],
+    ],
+    onSuccess: () =>
+      toast.success(
+        decision === "approve" ? "Payment verified" : "Payment sent back to Pending",
+        {
+          className:
+            "bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 text-emerald-500 flex items-center gap-3 p-4 rounded-lg shadow-lg",
+          description:
+            decision === "approve"
+              ? isDeposit
+                ? "Deposit verified: the bill is Partially Paid. Collect the balance at the clinic."
+                : "The payment is now marked Completed."
+              : "The client can submit a corrected reference/screenshot.",
+          descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+          duration: 2000,
+          icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
+        },
+      ),
+    onError: (error) => {
+      if (previousSingle) queryClient.setQueryData(singleKey, previousSingle);
+      toast.error("Failed to verify payment", {
+        className:
+          "bg-destructive/10 dark:bg-destructive/20 border border-destructive/20 text-destructive flex items-center gap-3 p-4 rounded-lg shadow-lg",
+        description: error.message || "Failed to verify payment.",
+        descriptionClassName: "text-muted-foreground text-sm font-normal mt-1",
+        duration: 2000,
+        icon: <XCircle className="h-5 w-5 text-destructive" />,
+      });
+    },
+  });
 
   return redirect(`../${referrerSearch}`);
 }
