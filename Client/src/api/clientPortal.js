@@ -258,8 +258,8 @@ export async function fetchPublicClinicSchedule({
 
 // ── Payments ──────────────────────────────────────────
 
-export async function fetchMyPayments({ page = 1, limit = 10, signal } = {}) {
-  const params = new URLSearchParams({ page, limit });
+export async function fetchMyPayments({ page = 1, limit = 10, search = "", signal } = {}) {
+  const params = new URLSearchParams({ page, limit, ...(search && { search }) });
   const response = await fetchWithTimeout(`${baseUrl}/payments?${params}`, {
     credentials: "include",
     signal,

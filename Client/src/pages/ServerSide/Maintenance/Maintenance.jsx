@@ -21,6 +21,14 @@ import GroomingTierModal from "./components/GroomingTierModal.jsx";
 
 const GROOMING_CATEGORY_ID = 1; // fixed seed id (migrations/001)
 
+// Both grids are small and fully loaded, so search filters them in place.
+const matchesSearch = (term, ...values) =>
+  !term ||
+  values
+    .flat()
+    .filter((v) => v != null)
+    .some((v) => String(v).toLowerCase().includes(term));
+
 // Three fixed categories (Grooming / Consultation / Operation) — one tab
 // each, listing only that category's sub-services. Categories themselves
 // can't be added, renamed or deleted; sub-services can.
@@ -29,6 +37,9 @@ export function Component() {
   const [editingService, setEditingService] = useState(null); // {} = add, row = edit
   const [editingTier, setEditingTier] = useState(null); // {} = add, row = edit
   const [confirmDeleteTier, setConfirmDeleteTier] = useState(null);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceFilters, setServiceFilters] = useState({});
+  const [tierSearch, setTierSearch] = useState("");
 
   const categoriesQuery = useQuery({
     queryKey: ["maintenance-service-categories"],
@@ -45,8 +56,12 @@ export function Component() {
   const categories = categoriesQuery.data ?? [];
   const categoryId = activeCategoryId ?? categories[0]?.category_id;
   const activeCategory = categories.find((c) => c.category_id === categoryId);
+  const serviceTerm = serviceSearch.trim().toLowerCase();
   const services = (servicesQuery.data ?? []).filter(
-    (s) => s.category_id === categoryId,
+    (s) =>
+      s.category_id === categoryId &&
+      (!serviceFilters.is_active || String(s.is_active) === serviceFilters.is_active) &&
+      matchesSearch(serviceTerm, s.appointment_services, s.description, s.allowed_roles),
   );
 
   // Optimistic: Active/Deleted flips at once (undone on failure).
@@ -128,6 +143,10 @@ export function Component() {
             columnsConfig={MaintenanceServiceColumns}
             title={`${activeCategory?.category_name ?? ""} Sub-services`}
             subtitle={`Sub-services offered under ${activeCategory?.category_name ?? "this category"}. Each one's duration sets the appointment end time.`}
+            search={serviceSearch}
+            onSearchChange={setServiceSearch}
+            filters={serviceFilters}
+            onFiltersChange={setServiceFilters}
             extraActions={
               <Button
                 onClick={() => setEditingService({})}
@@ -167,8 +186,12 @@ export function Component() {
               {tiersQuery.isSuccess && tierService && (
                 <DynamicGrid
                   data={tiersQuery.data.filter(
-                    (t) => t.appointment_services_id === tierService.appointment_services_id,
+                    (t) =>
+                      t.appointment_services_id === tierService.appointment_services_id &&
+                      matchesSearch(tierSearch.trim().toLowerCase(), t.tier_name, t.description),
                   )}
+                  search={tierSearch}
+                  onSearchChange={setTierSearch}
                   columnsConfig={MaintenanceGroomingTierColumns}
                   title={`Weight Tiers — ${tierService.appointment_services}`}
                   subtitle="Each grooming sub-service has its own weight tiers: the smallest tier that covers the pet's weight applies. With no tiers, the sub-service's flat price is charged. A pet with no weight, or heavier than every tier, is priced by staff at payment."

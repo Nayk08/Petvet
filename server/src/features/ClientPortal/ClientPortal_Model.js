@@ -139,11 +139,18 @@ export default class ClientPortalModel {
   // can never appear here. Client is only reachable by joining through
   // tbl_appointments; this is a real, existing limitation, not a bug in
   // this query — see README/plan notes on payment client-linkage.
-  async getMyPayments({ client_id, page = 1, limit = 10 } = {}) {
+  async getMyPayments({ client_id, page = 1, limit = 10, search = "" } = {}) {
     const client = await pool.connect();
     try {
       const values = [client_id];
-      const whereClause = `WHERE a.client_id = $1 AND p.is_deleted = false`;
+      let whereClause = `WHERE a.client_id = $1 AND p.is_deleted = false`;
+      // Search stays inside this client's own bills (the client_id condition above).
+      if (search && search.trim()) {
+        values.push(`%${search.trim()}%`);
+        const i = values.length;
+        whereClause += ` AND (p.control_number ILIKE $${i} OR va.pets_name ILIKE $${i}
+                         OR va.service_name ILIKE $${i} OR p.payment_status_name ILIKE $${i})`;
+      }
 
       return await paginateQuery(client, {
         // The appointment's details travel with each bill, so the GCash pay
@@ -159,6 +166,7 @@ export default class ClientPortalModel {
                     ORDER BY p.date_updated DESC NULLS LAST, p.date_created DESC`,
         countQuery: `SELECT COUNT(*) AS total FROM v_payments p
                      JOIN tbl_appointments a ON a.appointment_id = p.appointment_id
+                     JOIN v_appointments va ON va.appointment_id = p.appointment_id
                      ${whereClause}`,
         values,
         page,

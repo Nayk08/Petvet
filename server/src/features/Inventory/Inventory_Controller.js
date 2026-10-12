@@ -12,10 +12,12 @@ export default class InventoryController {
         search,
         status_name,
         is_expired,
+        expiring_soon,
         category_name,
         grouped,
       } = req.query;
-      const filters = { status_name, is_expired, category_name };
+      // expiring_soon was dropped here, so that filter never filtered.
+      const filters = { status_name, is_expired, expiring_soon, category_name };
 
       const { rows, pagination } = await inventoryService.getProducts({
         page,
@@ -150,11 +152,12 @@ export default class InventoryController {
 
   async getArchivedProducts(req, res) {
     try {
-      const { page, limit, search } = req.query;
+      const { page, limit, search, status_name, is_expired, expiring_soon, category_name } = req.query;
       const { rows, pagination } = await inventoryService.getArchivedProducts({
         page,
         limit,
         search,
+        filters: { status_name, is_expired, expiring_soon, category_name },
       });
       return res.status(200).json({ rows, pagination });
     } catch (error) {

@@ -91,9 +91,9 @@ export default class InventoryService {
     }
   }
 
-  async getArchivedProducts({ page, limit, search } = {}) {
+  async getArchivedProducts({ page, limit, search, filters } = {}) {
     try {
-      return await inventoryModel.getArchivedProducts({ page, limit, search });
+      return await inventoryModel.getArchivedProducts({ page, limit, search, filters });
     } catch (error) {
       console.error("Error in InventoryService", error);
       throw error;

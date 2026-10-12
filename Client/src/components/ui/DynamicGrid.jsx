@@ -325,21 +325,25 @@ export default function DynamicGrid({
       <div
         className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 w-full relative z-20 ${bare ? "" : "pt-4"}`}
       >
+        {/* Only when the page actually handles it — a box that does nothing
+            when typed into looked like a broken search. */}
+        {onSearchChange && (
         <div className="relative w-full sm:w-64 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search records..."
             value={search}
-            onChange={(e) => onSearchChange?.(e.target.value)}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
           />
         </div>
+        )}
 
         {/* Phones: filters in one line that scrolls left/right. From sm up
             the wrapper disappears (contents) and they join the toolbar row. */}
         <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1.5 [scrollbar-width:none] has-[[data-daterange]]:flex-wrap empty:hidden sm:contents">
-        {columnsConfig
+        {onFiltersChange && columnsConfig
               .filter(
                 (col) =>
                   col.filterType === "date" ||

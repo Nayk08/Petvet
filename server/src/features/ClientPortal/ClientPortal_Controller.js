@@ -98,11 +98,12 @@ export default class ClientPortalController {
 
   async getMyPayments(req, res) {
     try {
-      const { page, limit } = req.query;
+      const { page, limit, search } = req.query;
       const result = await clientPortalService.getMyPayments({
         client_id: req.clientUser.client_id,
         page,
         limit,
+        search,
       });
       res.json(result);
     } catch (error) {

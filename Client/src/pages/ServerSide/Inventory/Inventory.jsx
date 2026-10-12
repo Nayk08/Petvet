@@ -47,6 +47,7 @@ export default function Inventory() {
   const [view, setView] = useState("active");
   const [archivedPage, setArchivedPage] = useState(1);
   const [archivedSearch, setArchivedSearch] = useState("");
+  const [archivedFilters, setArchivedFilters] = useState({});
   const debouncedArchivedSearch = useDebouncedValue(archivedSearch, 400);
 
   useEffect(() => {
@@ -56,7 +57,8 @@ export default function Inventory() {
 
   useEffect(() => {
     setArchivedPage(1);
-  }, [debouncedArchivedSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedArchivedSearch, JSON.stringify(archivedFilters)]);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["inventory", page, limit, debouncedSearch, filters],
@@ -85,12 +87,13 @@ export default function Inventory() {
     isError: isArchivedError,
     error: archivedError,
   } = useQuery({
-    queryKey: ["inventory-archived", archivedPage, debouncedArchivedSearch],
+    queryKey: ["inventory-archived", archivedPage, debouncedArchivedSearch, archivedFilters],
     queryFn: ({ signal }) =>
       fetchArchivedProducts({
         page: archivedPage,
         limit: 10,
         search: debouncedArchivedSearch,
+        filters: archivedFilters,
         signal,
       }),
     enabled: view === "archived",
@@ -227,6 +230,8 @@ export default function Inventory() {
                 data={archivedData?.rows ?? []}
                 columnsConfig={getArchivedInventoryColumns(categories)}
                 title="Archived Products"
+                filters={archivedFilters}
+                onFiltersChange={setArchivedFilters}
                 actions={[
                   {
                     label: "Restore",

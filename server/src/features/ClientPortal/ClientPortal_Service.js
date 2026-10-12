@@ -215,9 +215,9 @@ export default class ClientPortalService {
     });
   }
 
-  async getMyPayments({ client_id, page, limit }) {
+  async getMyPayments({ client_id, page, limit, search }) {
     await appointmentService.expireUnpaidOnlineBookings(); // no "Pay Now" on an expired hold
-    return clientPortalModel.getMyPayments({ client_id, page, limit });
+    return clientPortalModel.getMyPayments({ client_id, page, limit, search });
   }
 
   // Same ownership check as submitPaymentProof — the payment must be

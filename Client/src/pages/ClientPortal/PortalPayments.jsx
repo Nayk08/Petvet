@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Wallet, Receipt, Info } from "lucide-react";
 import {
@@ -13,6 +13,8 @@ import DynamicGrid from "@/components/ui/DynamicGrid";
 import { Pagination } from "@/components/ui/Pagination";
 import { PaymentTransactionModalColumns } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { Input } from "@/components/ui/input.jsx";
 import { fetchMyPayments } from "@/api/clientPortal.js";
 import { Button } from "@/components/ui/button.jsx";
 import PortalPaySubmitModal from "./components/PortalPaySubmitModal.jsx";
@@ -37,10 +39,16 @@ export function Component() {
   const [payingPaymentId, setPayingPaymentId] = useState(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState(null);
   const [detailsRow, setDetailsRow] = useState(null); // payment shown in Details
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 400);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, setPage]);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["clientPortal", "payments", page, limit],
-    queryFn: ({ signal }) => fetchMyPayments({ page, limit, signal }),
+    queryKey: ["clientPortal", "payments", page, limit, debouncedSearch],
+    queryFn: ({ signal }) => fetchMyPayments({ page, limit, search: debouncedSearch, signal }),
     placeholderData: keepPreviousData,
   });
 
@@ -66,9 +74,16 @@ export function Component() {
         <>
           {/* Phones: one card per bill instead of a sideways-scrolling table. */}
           <div className="sm:hidden space-y-3">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search payments..."
+              aria-label="Search payments"
+              className="h-10 bg-white dark:bg-slate-900"
+            />
             {(data?.rows ?? []).length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400 italic text-center py-6">
-                No payments yet.
+                {debouncedSearch ? "No payments match your search." : "No payments yet."}
               </p>
             ) : (
               (data?.rows ?? []).map((p) => {
@@ -154,6 +169,8 @@ export function Component() {
             title="Payments"
             limit={limit}
             onLimitChange={setLimit}
+            search={search}
+            onSearchChange={setSearch}
             actions={[
               {
                 label: "Pay Now",

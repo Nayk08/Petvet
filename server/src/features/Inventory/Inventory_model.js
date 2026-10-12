@@ -544,7 +544,7 @@ export default class InventoryModel {
   // `WHERE is_deleted = false` and so can never surface these rows) but
   // mirrors the same computed status_name/is_expired shape so the existing
   // Inventory columns config renders it without changes.
-  async getArchivedProducts({ page = 1, limit = 10, search = "" } = {}) {
+  async getArchivedProducts({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
     try {
       const values = [];
@@ -557,8 +557,19 @@ export default class InventoryModel {
 
       const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
-      return await paginateQuery(client, {
-        baseQuery: `
+      // Same filters as the active list; they're computed columns, so they
+      // apply to the row set built below (alias a).
+      const filterConditions = [];
+      for (const [key, value] of Object.entries(filters)) {
+        if (!ALLOWED_FILTER_COLUMNS.includes(key) || !value) continue;
+        const valueList = value.split(",").filter(Boolean);
+        if (valueList.length === 0) continue;
+        values.push(valueList);
+        filterConditions.push(`a.${key} = ANY($${values.length})`);
+      }
+      const outerWhere = filterConditions.length ? `WHERE ${filterConditions.join(" AND ")}` : "";
+
+      const archivedRows = `
           SELECT
             p.product_id,
             p.product_name,
@@ -587,9 +598,12 @@ export default class InventoryModel {
             c.category_name
           FROM tbl_products p
           LEFT JOIN tbl_product_categories c ON c.category_id = p.category_id
-          ${whereClause}
-          ORDER BY p.date_updated DESC NULLS LAST, p.product_id DESC`,
-        countQuery: `SELECT COUNT(*) AS total FROM tbl_products p ${whereClause}`,
+          ${whereClause}`;
+
+      return await paginateQuery(client, {
+        baseQuery: `SELECT * FROM (${archivedRows}) a ${outerWhere}
+          ORDER BY a.date_updated DESC NULLS LAST, a.product_id DESC`,
+        countQuery: `SELECT COUNT(*) AS total FROM (${archivedRows}) a ${outerWhere}`,
         values,
         page,
         limit,

@@ -647,6 +647,7 @@ export async function fetchArchivedProducts({
   page,
   limit,
   search = "",
+  filters = {},
   signal,
 }) {
   const effectiveLimit = limit === "all" ? 999999 : limit;
@@ -656,6 +657,14 @@ export async function fetchArchivedProducts({
     page: effectivePage,
     limit: effectiveLimit,
     ...(search && { search }),
+  });
+  // Same filters (and format) as fetchInventory.
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      if (value.length > 0) params.set(key, value.join(","));
+    } else if (value) {
+      params.set(key, value);
+    }
   });
 
   const response = await fetchWithTimeout(`${baseUrl}/inventory/archived?${params}`, {
