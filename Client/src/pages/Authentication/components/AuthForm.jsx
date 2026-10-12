@@ -476,11 +476,11 @@ export async function action({ request }) {
       credentials: "include",
     });
 
+    // Every failure below comes back as a message on the form (actionData),
+    // never a thrown error — that showed the full-page "500 Server Error" for
+    // things like "too many attempts" or an expired session.
     if (!csrfRes.ok) {
-      throw new Response(
-        JSON.stringify({ message: "Could not fetch CSRF token." }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+      return { message: "Couldn't reach the server. Please try again in a moment." };
     }
 
     const { csrfToken } = await csrfRes.json();
@@ -500,13 +500,17 @@ export async function action({ request }) {
     }
 
     if (!response.ok) {
-      throw new Response(
-        JSON.stringify({ message: "Could not authenticate user." }),
-        {
-          status: response.status,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      const body = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        return { message: "Too many sign-in attempts. Please wait a few minutes and try again." };
+      }
+      if (response.status === 403) {
+        return { message: "Your session expired. Please try signing in again." };
+      }
+      return {
+        message:
+          body.message || body.error || "Could not sign in right now. Please try again.",
+      };
     }
 
     queryClient.clear();
@@ -518,10 +522,7 @@ export async function action({ request }) {
     if (returnTo) return redirect(returnTo);
     const { modules } = await fetchNavbar({});
     return redirect(resolveLandingPath(modules));
-  } catch (err) {
-    throw new Response(
-      JSON.stringify({ message: err.message || "Unexpected error occurred." }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+  } catch {
+    return { message: "Couldn't reach the server. Check your connection and try again." };
   }
 }

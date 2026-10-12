@@ -147,6 +147,7 @@ export default function PortalAddPetModal({ petId, onClose }) {
                   name="date_of_birth"
                   type="date"
                   required
+                  max={new Date().toLocaleDateString("en-CA")} // no future birth dates
                   defaultValue={v.date_of_birth?.slice(0, 10) ?? ""}
                   className="[color-scheme:light] dark:[color-scheme:dark]"
                 />

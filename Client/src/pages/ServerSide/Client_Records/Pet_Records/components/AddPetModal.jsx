@@ -195,6 +195,7 @@ export function Component() {
                   name="date_of_birth"
                   type="date"
                   required
+                  max={new Date().toLocaleDateString("en-CA")} // no future birth dates
                   defaultValue={
                     petData?.date_of_birth
                       ? petData.date_of_birth.split("T")[0]

@@ -8,6 +8,7 @@ import { manilaInstant } from "../../utils/manilaTime.js";
 export const CLINIC_OPEN_MINUTE = 9 * 60; // 9:00 AM
 export const CLINIC_CLOSE_MINUTE = 18 * 60; // 6:00 PM
 export const CONSULTATION_CUTOFF_MINUTE = 17 * 60; // 5:00 PM
+export const MAX_BOOKING_DAYS_AHEAD = 183; // about 6 months
 
 // Clinic schedule rules (shown on the landing page; mirrored in the client's
 // utils/serviceSlots.js). Returns why the booking isn't allowed, or null.
@@ -66,11 +67,21 @@ function validateSlot(data, ctx, { allowPast = false } = {}) {
   // The slot is Manila wall-clock time. Treating it as UTC (as this used
   // to) let anyone book a slot up to 8 hours in the past — e.g. 10 AM at
   // 3 PM the same day.
-  if (!allowPast && manilaInstant(new Date(appointment_date), start.hour, start.minute) < Date.now()) {
+  const slotInstant = manilaInstant(new Date(appointment_date), start.hour, start.minute);
+  if (!allowPast && slotInstant < Date.now()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Cannot book an appointment in the past",
       path: ["start_time"],
+    });
+  }
+
+  // A typo like 2099 used to be accepted and hold a slot forever.
+  if (slotInstant > Date.now() + MAX_BOOKING_DAYS_AHEAD * 24 * 60 * 60 * 1000) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Appointments can be booked up to 6 months ahead.",
+      path: ["appointment_date"],
     });
   }
 }

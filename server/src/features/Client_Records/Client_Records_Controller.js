@@ -173,10 +173,8 @@ export default class ClientRecordsController {
       });
       return res.status(200).json(client);
     } catch (error) {
-      console.error(error);
-      return res
-        .status(500)
-        .json({ message: "Failed to fetch client's pet records." });
+      // sendError keeps a deliberate 404 ("Client not found") instead of 500.
+      return sendError(res, error, "Failed to fetch client's pet records.");
     }
   }
 

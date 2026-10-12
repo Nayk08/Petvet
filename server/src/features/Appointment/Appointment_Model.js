@@ -156,20 +156,8 @@ async function resolveSlot(
   const startMinute = start.hour * 60 + start.minute;
   const endMinute = startMinute + duration;
 
-  if (!skipGridCheck) {
-    if ((startMinute - CLINIC_OPEN_MINUTE) % duration !== 0) {
-      throw httpError(
-        400,
-        `${service.appointment_services} takes ${duration} minutes — pick one of its listed start times.`,
-      );
-    }
-    if (endMinute > CLINIC_CLOSE_MINUTE) {
-      throw httpError(
-        400,
-        `${service.appointment_services} takes ${duration} minutes and would end after 6:00 PM.`,
-      );
-    }
-  }
+  // Clinic rules first: "no grooming on Sundays" explains the problem better
+  // than "pick one of its listed start times" when both apply.
   if (checkRules) {
     // The role(s) this staff member works this service as — a Groomer who is
     // also a Veterinarian can still groom on a vet's day off.
@@ -183,6 +171,20 @@ async function resolveSlot(
       isVet: actingRoles.length > 0 && actingRoles.every((r) => r === "Veterinarian"),
     });
     if (ruleError) throw httpError(400, ruleError);
+  }
+  if (!skipGridCheck) {
+    if ((startMinute - CLINIC_OPEN_MINUTE) % duration !== 0) {
+      throw httpError(
+        400,
+        `${service.appointment_services} takes ${duration} minutes — pick one of its listed start times.`,
+      );
+    }
+    if (endMinute > CLINIC_CLOSE_MINUTE) {
+      throw httpError(
+        400,
+        `${service.appointment_services} takes ${duration} minutes and would end after 6:00 PM.`,
+      );
+    }
   }
 
   const start_time_full = toTimestampString(appointment_date, `${pad2(start.hour)}:${pad2(start.minute)}`);

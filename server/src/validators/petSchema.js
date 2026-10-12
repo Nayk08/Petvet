@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { manilaInstant } from "../../utils/manilaTime.js";
+
+// Not in the future (Manila calendar; today is allowed).
+const dateOfBirthSchema = z.coerce
+  .date({ error: "Enter a valid date of birth" })
+  .refine((d) => manilaInstant(d) <= Date.now(), "Date of birth can't be in the future");
 
 // Free-text medical/behavioral notes — kept short enough to stay readable
 // on the pet's record card, not a full chart (see the Maintenance module's
@@ -15,7 +21,7 @@ export const addPetSchema = z.object({
   is_spayed_neutered: z
     .union([z.boolean(), z.string()])
     .transform((v) => v === true || v === "true"),
-  date_of_birth: z.coerce.date({ error: "Enter a valid date of birth" }),
+  date_of_birth: dateOfBirthSchema,
   weight_kg: z.coerce
     .number({ error: "Weight must be a valid number" })
     .positive("Weight must be greater than 0")
@@ -41,7 +47,7 @@ export const editPetSchema = z.object({
   is_spayed_neutered: z
     .union([z.boolean(), z.string()])
     .transform((v) => v === true || v === "true"),
-  date_of_birth: z.coerce.date({ error: "Enter a valid date of birth" }),
+  date_of_birth: dateOfBirthSchema,
   weight_kg: z.coerce
     .number({ error: "Weight must be a valid number" })
     .positive("Weight must be greater than 0")

@@ -1,5 +1,5 @@
 import pool from "../../config/db.js";
-import { paginateQuery } from "../../../utils/paginateQuery.js";
+import { paginateQuery, normalizePaging } from "../../../utils/paginateQuery.js";
 
 const ALLOWED_SEARCH_COLUMNS = ["name", "client_id", "email"];
 const ALLOWED_FILTER_COLUMNS = ["name"];
@@ -279,7 +279,9 @@ export default class ClientRecordsModel {
       );
 
       if (!res.rows.length) {
-        throw new Error("Client Pet record not found.");
+        const err = new Error("Client not found.");
+        err.status = 404;
+        throw err;
       }
 
       const { client_name, pets } = res.rows[0];
@@ -295,12 +297,13 @@ export default class ClientRecordsModel {
       }
 
       const total = filtered.length;
-      const isAll = limit === "all" || limit >= 999999;
-      const effectiveLimit = isAll ? total || 1 : Number(limit);
+      const paging = normalizePaging(page, limit);
+      const isAll = paging.isAll;
+      const effectiveLimit = isAll ? total || 1 : paging.limit;
       const totalPages = isAll
         ? 1
         : Math.max(1, Math.ceil(total / effectiveLimit));
-      const currentPage = isAll ? 1 : Number(page);
+      const currentPage = isAll ? 1 : paging.page;
       const start = isAll ? 0 : (currentPage - 1) * effectiveLimit;
       const rows = isAll
         ? filtered

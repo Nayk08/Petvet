@@ -1,10 +1,25 @@
 // utils/paginateQuery.js
 
+// page/limit arrive straight from the query string: "-1", "abc", "0".
+// Clamp them so a bad URL can't reach SQL as a negative OFFSET or NaN LIMIT
+// (that was a 500). "all" (or the legacy huge number) means no paging.
+const MAX_LIMIT = 1000;
+export function normalizePaging(page, limit) {
+  const isAll = limit === "all" || Number(limit) >= 999999;
+  const parsedLimit = Number.parseInt(limit, 10);
+  const parsedPage = Number.parseInt(page, 10);
+  return {
+    isAll,
+    limit: isAll ? null : Math.min(MAX_LIMIT, parsedLimit > 0 ? parsedLimit : 10),
+    page: parsedPage > 0 ? parsedPage : 1,
+  };
+}
+
 export async function paginateQuery(
   client,
-  { baseQuery, countQuery, values = [], page = 1, limit = 10 },
+  { baseQuery, countQuery, values = [], page: rawPage = 1, limit: rawLimit = 10 },
 ) {
-  const isAll = limit === "all" || limit >= 999999;
+  const { isAll, limit, page } = normalizePaging(rawPage, rawLimit);
   let dataQuery = baseQuery;
   const dataValues = [...values];
 
@@ -24,7 +39,7 @@ export async function paginateQuery(
   return {
     rows: dataResult.rows,
     pagination: {
-      page: Number(page),
+      page,
       limit: isAll ? total : limit,
       total,
       totalPages: isAll ? 1 : Math.ceil(total / limit),
