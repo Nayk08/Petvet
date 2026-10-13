@@ -367,6 +367,26 @@ export default class AppointmentModel {
                                   WHERE LOWER(TRIM(payment_status_name)) = 'pending')`,
       [UNPAID_HOLD_MINUTES],
     );
+
+    // A visit that's already over as No Show / Cancelled can't leave a
+    // payable bill behind. This happens when a GCash proof was still
+    // awaiting verification when the visit closed and staff rejected it
+    // afterwards (reject sends the bill back to Pending) — the client then
+    // saw "Pay Now" for a visit that never happened.
+    await pool.query(
+      `UPDATE tbl_payments p
+       SET payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                WHERE LOWER(TRIM(payment_status_name)) = 'cancelled'),
+           is_deleted = true, deleted_by = 'System', date_deleted = NOW(),
+           updated_by = 'System', date_updated = NOW()
+       FROM tbl_appointments a
+       JOIN tbl_appointment_status s ON s.appointment_status_id = a.appointment_status_id
+       WHERE p.appointment_id = a.appointment_id
+         AND p.is_deleted = false
+         AND LOWER(TRIM(s.appointment_status_name)) IN ('no show', 'cancelled')
+         AND p.payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                    WHERE LOWER(TRIM(payment_status_name)) = 'pending')`,
+    );
   }
 
   // A visit with an online deposit whose balance still isn't paid when its
