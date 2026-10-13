@@ -324,11 +324,14 @@ export default class AppointmentModel {
   // 'Asia/Manila'` converts the current instant to the equivalent Manila
   // wall-clock naive timestamp first, so the comparison is correct
   // regardless of what timezone the DB session itself is set to.
-  // An online booking holds its slot only while the client pays: no GCash
-  // proof within UNPAID_HOLD_MINUTES → booking and bill are cancelled and the
-  // slot is released. Staff bookings (not created by "Client Portal") and
-  // bills with proof sent are never touched. Same lazy-on-read approach as
-  // autoCompletePastAppointments (no job scheduler).
+  // A booking with nothing paid is cancelled (slot released) when:
+  //  - it was booked online and no GCash proof came within
+  //    UNPAID_HOLD_MINUTES, or
+  //  - its start time has arrived, whoever booked it (staff too) — an
+  //    unpaid booking doesn't hold the clinic's time past its start.
+  // Bills with proof sent (Awaiting Verification), a verified deposit
+  // (Partially Paid) or priced at the clinic (₱0) are never touched. Same
+  // lazy-on-read approach as autoCompletePastAppointments (no job scheduler).
   async expireUnpaidOnlineBookings() {
     await pool.query(
       `WITH expired AS (
@@ -339,14 +342,16 @@ export default class AppointmentModel {
              updated_by = 'System', date_updated = NOW()
          FROM tbl_payments p
          WHERE p.appointment_id = a.appointment_id
-           AND p.created_by = 'Client Portal'
+           AND (
+             (p.created_by = 'Client Portal' AND p.date_created < NOW() - make_interval(mins => $1))
+             OR a.start_time <= (NOW() AT TIME ZONE 'Asia/Manila')
+           )
            AND p.is_deleted = false
            -- A service priced at the clinic can't be paid online, so its
            -- booking isn't held to the online-payment deadline.
            AND p.total_amount > 0
            AND p.payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
                                       WHERE LOWER(TRIM(payment_status_name)) = 'pending')
-           AND p.date_created < NOW() - make_interval(mins => $1)
            AND a.is_deleted IS NOT TRUE
            AND a.appointment_status_id = (SELECT appointment_status_id FROM tbl_appointment_status
                                           WHERE LOWER(TRIM(appointment_status_name)) = 'pending')

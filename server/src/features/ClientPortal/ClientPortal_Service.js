@@ -204,6 +204,10 @@ export default class ClientPortalService {
     return client;
   }
 
+  async updateMyPicture(client_id, client_picture) {
+    return clientPortalModel.updateClientPicture(client_id, client_picture);
+  }
+
   async getMyAppointments({ client_id, page, limit, search, filters }) {
     await appointmentService.expireUnpaidOnlineBookings();
     return clientPortalModel.getMyAppointments({

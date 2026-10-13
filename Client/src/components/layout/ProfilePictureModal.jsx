@@ -13,10 +13,18 @@ import {
 import { Button } from "@/components/ui/button.jsx";
 import { updateMyProfilePicture } from "@/api/http";
 
-export default function ProfilePictureModal({ user, onClose }) {
+// Staff by default; the client portal passes its own upload function,
+// current picture and the queries to refresh afterwards.
+export default function ProfilePictureModal({
+  user,
+  onClose,
+  picture = user?.user_picture ?? null,
+  upload = updateMyProfilePicture,
+  refreshKeys = [["currentUser"], ["navData"]],
+}) {
   const queryClient = useQueryClient();
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(user?.user_picture ?? null);
+  const [preview, setPreview] = useState(picture);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -45,10 +53,11 @@ export default function ProfilePictureModal({ user, onClose }) {
     try {
       const formData = new FormData();
       formData.append("profile_picture", file);
-      await updateMyProfilePicture(formData);
+      await upload(formData);
 
-      await queryClient.invalidateQueries({ queryKey: ["currentUser"] });
-      await queryClient.invalidateQueries({ queryKey: ["navData"] });
+      await Promise.all(
+        refreshKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
 
       toast.success("Profile picture updated", {
         className:
@@ -106,7 +115,7 @@ export default function ProfilePictureModal({ user, onClose }) {
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5" />
-              {user?.user_picture ? "Change Picture" : "Upload Picture"}
+              {picture ? "Change Picture" : "Upload Picture"}
             </label>
             <input
               type="file"

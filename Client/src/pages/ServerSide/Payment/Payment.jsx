@@ -349,7 +349,11 @@ export function Component() {
                     pathname: `receipt/${row.payment_id}`,
                     search: window.location.search,
                   }),
-                show: (row) => row.payment_status_name === "Completed",
+                // Partially Paid too: the receipt shows the deposit paid and
+                // the balance still due at the clinic.
+                show: (row) =>
+                  row.payment_status_name === "Completed" ||
+                  row.payment_status_name === "Partially Paid",
               },
               {
                 label: "Mark Refunded",

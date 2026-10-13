@@ -1,4 +1,5 @@
 import PaymentModel from "./Payment_Model.js";
+import AppointmentModel from "../Appointment/Appointment_Model.js";
 import {
   validatePaymentMethod,
   resolvePaymentSplit,
@@ -6,9 +7,12 @@ import {
 import { isFullAmount, balanceDue, groupDepositShares } from "../../../utils/deposit.js";
 
 const paymentModel = new PaymentModel();
+const expiryModel = new AppointmentModel();
 
 export default class PaymentService {
   async getPayments({ page, limit, search, filters }) {
+    // Cancel overdue unpaid bookings first, so this list never shows one as Pending.
+    await expiryModel.expireUnpaidOnlineBookings();
     return paymentModel.getPayments({ page, limit, search, filters });
   }
 

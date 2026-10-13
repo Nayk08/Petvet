@@ -3,7 +3,7 @@ import ClientPortalController from "./ClientPortal_Controller.js";
 import AnnouncementsController from "../Announcements/Announcements_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
 import authLimiter, { loginLimiter } from "../../middleware/rate-Limiter.js";
-import { uploadPaymentProof } from "../../middleware/upload.js";
+import { uploadPaymentProof, uploadProfilePicture } from "../../middleware/upload.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import {
   clientPortalBookAppointmentSchema,
@@ -92,6 +92,14 @@ router.get("/public/services", (req, res) =>
 // Everything below requires a valid client JWT.
 router.get("/me", isClientAuth, (req, res) =>
   clientPortalController.getMe(req, res),
+);
+// The client's own profile picture (same uploader/folder as staff pictures).
+router.patch(
+  "/me/picture",
+  isClientAuth,
+  doubleCsrfProtection,
+  uploadProfilePicture.single("profile_picture"),
+  (req, res) => clientPortalController.updateMyPicture(req, res),
 );
 router.get("/appointments", isClientAuth, (req, res) =>
   clientPortalController.getMyAppointments(req, res),

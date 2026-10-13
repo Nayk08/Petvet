@@ -39,7 +39,7 @@ export default class ClientPortalModel {
     const client = await pool.connect();
     try {
       const res = await client.query(
-        `SELECT client_id, name, email, mobile_no, is_registered
+        `SELECT client_id, name, email, mobile_no, is_registered, client_picture
          FROM tbl_clients WHERE client_id = $1 AND is_deleted IS NOT TRUE`,
         [client_id],
       );
@@ -50,6 +50,18 @@ export default class ClientPortalModel {
     } finally {
       client.release();
     }
+  }
+
+  // The client's own profile picture (Cloudinary URL).
+  async updateClientPicture(client_id, client_picture) {
+    const res = await pool.query(
+      `UPDATE tbl_clients
+       SET client_picture = $1, updated_by = 'Client Portal', date_updated = NOW()
+       WHERE client_id = $2 AND is_deleted IS NOT TRUE
+       RETURNING client_picture`,
+      [client_picture, client_id],
+    );
+    return res.rows[0]?.client_picture ?? null;
   }
 
   // Idempotent — safe to call on every Google login, not just the first

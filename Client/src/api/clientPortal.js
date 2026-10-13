@@ -95,6 +95,18 @@ export async function logoutClient() {
   return handlePortalResponse(response, "Failed to log out");
 }
 
+// The client's own profile picture (multipart, field "profile_picture").
+export async function updateMyClientPicture(formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/me/picture`, {
+    method: "PATCH",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: formData,
+  });
+  return handlePortalResponse(response, "Failed to update profile picture");
+}
+
 export async function fetchMyProfile({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/me`, {
     credentials: "include",

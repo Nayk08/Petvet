@@ -74,6 +74,22 @@ export default class ClientPortalController {
     }
   }
 
+  async updateMyPicture(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No image uploaded" });
+      }
+      const client_picture = await clientPortalService.updateMyPicture(
+        req.clientUser.client_id,
+        req.file.path,
+      );
+      res.json({ client_picture });
+    } catch (error) {
+      console.log("Error on Controller updateMyPicture function");
+      sendError(res, error, "Failed to update profile picture.");
+    }
+  }
+
   async getMyAppointments(req, res) {
     try {
       const {

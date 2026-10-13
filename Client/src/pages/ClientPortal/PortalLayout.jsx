@@ -2,9 +2,18 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { LogOut, Calendar, Cat, CreditCard, Sun, Moon } from "lucide-react";
-import { fetchMyProfile, logoutClient } from "@/api/clientPortal.js";
+import { fetchMyProfile, logoutClient, updateMyClientPicture } from "@/api/clientPortal.js";
+import ProfilePictureModal from "@/components/layout/ProfilePictureModal.jsx";
 import { queryClient } from "@/api/http.js";
 import petvetLogo from "@/assets/petvet_icon.svg";
+
+const initials = (name) =>
+  (name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
 
 const NAV_ITEMS = [
   { to: "/portal/appointments", label: "My Appointments", shortLabel: "Appointments", icon: Calendar },
@@ -29,6 +38,7 @@ const linkClass = ({ isActive }) =>
 
 export function Component() {
   const navigate = useNavigate();
+  const [showPicture, setShowPicture] = useState(false);
 
   // Same localStorage key/logic as the staff Navbar's toggle (Layout.jsx),
   // so switching theme on one side is remembered consistently if someone
@@ -103,9 +113,26 @@ export function Component() {
                 <Moon className="h-4 w-4" />
               )}
             </button>
-            <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:inline">
-              {profile?.name ?? "..."}
-            </span>
+            {/* Avatar (photo or initials) — tap to add/change the picture. */}
+            <button
+              type="button"
+              onClick={() => setShowPicture(true)}
+              disabled={!profile}
+              title="Profile picture"
+              aria-label="Change profile picture"
+              className="flex items-center gap-2 rounded-full sm:pr-2 bg-transparent border-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 disabled:cursor-default"
+            >
+              <span className="h-8 w-8 shrink-0 rounded-full overflow-hidden bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center">
+                {profile?.client_picture ? (
+                  <img src={profile.client_picture} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(profile?.name)
+                )}
+              </span>
+              <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:inline">
+                {profile?.name ?? "..."}
+              </span>
+            </button>
             <button
               type="button"
               onClick={handleLogout}
@@ -118,6 +145,16 @@ export function Component() {
           </div>
         </div>
       </nav>
+
+      {showPicture && profile && (
+        <ProfilePictureModal
+          user={profile}
+          picture={profile.client_picture ?? null}
+          upload={updateMyClientPicture}
+          refreshKeys={[["clientPortal", "me"]]}
+          onClose={() => setShowPicture(false)}
+        />
+      )}
 
       {/* Bottom padding on phones keeps content clear of the tab bar. */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
