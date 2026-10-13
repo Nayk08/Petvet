@@ -340,9 +340,10 @@ export default function DynamicGrid({
         </div>
         )}
 
-        {/* Phones: filters in one line that scrolls left/right. From sm up
-            the wrapper disappears (contents) and they join the toolbar row. */}
-        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1.5 [scrollbar-width:none] has-[[data-daterange]]:flex-wrap empty:hidden sm:contents">
+        {/* Phones: filters wrap onto as many rows as they need (a hidden-
+            scrollbar strip read as cut off). From sm up the wrapper
+            disappears (contents) and they join the toolbar row. */}
+        <div className="flex flex-wrap gap-2 empty:hidden sm:contents">
         {onFiltersChange && columnsConfig
               .filter(
                 (col) =>

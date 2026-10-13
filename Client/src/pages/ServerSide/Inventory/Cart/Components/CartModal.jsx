@@ -256,7 +256,7 @@ export function Component() {
           </DialogHeader>
 
           {/* Cart Items List */}
-          <div className="max-h-[60vh] overflow-y-auto divide-y divide-slate-200 dark:divide-slate-800">
+          <div className="md:max-h-[60vh] md:overflow-y-auto divide-y divide-slate-200 dark:divide-slate-800">
             {cartItems.length === 0 ? (
               <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-sm">
                 Your cart is empty
@@ -460,7 +460,7 @@ export function Component() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="max-h-[55vh] overflow-y-auto">
+              <div className="md:max-h-[55vh] md:overflow-y-auto">
                 <ReceiptContent payment={completedReceipt} />
               </div>
 

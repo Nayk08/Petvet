@@ -208,7 +208,7 @@ export function Component() {
               </p>
             </DialogHeader>
 
-            <div className="max-h-[55vh] overflow-y-auto">
+            <div className="md:max-h-[55vh] md:overflow-y-auto">
               <ReceiptContent
                 payment={receipt.payment}
                 appointment={receipt.appointment}

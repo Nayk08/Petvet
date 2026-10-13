@@ -189,7 +189,7 @@ export function Component() {
 
       {/* Grid Layout Table */}
       {selectedRole && (
-        <div className="p-4 overflow-x-auto">
+        <div className="p-4 max-sm:px-2 overflow-x-auto">
           {isMatrixPending && (
             <div className="flex items-center justify-center py-16 text-slate-500 text-sm dark:text-slate-400">
               Loading permissions...
@@ -206,13 +206,13 @@ export function Component() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800">
-                  <th className="p-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-1/3 dark:text-slate-400">
+                  <th className="sticky left-0 z-10 bg-white dark:bg-slate-900 p-3 max-sm:px-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-1/3 dark:text-slate-400">
                     Module
                   </th>
                   {ACTIONS.map((action) => (
                     <th
                       key={action}
-                      className="p-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center dark:text-slate-400"
+                      className="p-3 max-sm:px-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center dark:text-slate-400"
                     >
                       {action}
                     </th>
@@ -226,7 +226,7 @@ export function Component() {
                     className="hover:bg-slate-50 transition-colors dark:hover:bg-slate-800/50"
                   >
                     {/* Module Title Cell */}
-                    <td className="p-3.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 p-3.5 max-sm:px-2 text-sm font-medium text-slate-800 dark:text-slate-200">
                       <div className="flex items-center gap-2">
                         {mod.isSub && (
                           <span className="text-slate-400 font-mono text-xs mr-1 select-none dark:text-slate-500">
@@ -250,7 +250,7 @@ export function Component() {
                       const field = ACTION_FIELD_MAP[action];
                       const active = !!mod[field];
                       return (
-                        <td key={action} className="p-3.5 text-center">
+                        <td key={action} className="p-3.5 max-sm:px-1.5 text-center">
                           <button
                             onClick={() => handleToggle(mod.id, action)}
                             disabled={isSaving}

@@ -45,7 +45,7 @@ export default function PortalReceiptModal({ paymentId, onClose }) {
             </p>
           </div>
         ) : (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="md:max-h-[60vh] md:overflow-y-auto">
             <ReceiptContent payment={data?.payment} appointment={data?.appointment} />
           </div>
         )}

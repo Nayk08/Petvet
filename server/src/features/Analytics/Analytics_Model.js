@@ -56,7 +56,20 @@ export default class AnalyticsModel {
         [startDate, endDate],
       );
 
-      return { byService: byService.rows, byStatus: byStatus.rows };
+      // Visits that didn't happen (Cancelled / No Show) don't count.
+      const topPets = await client.query(
+        `SELECT pets_name || ' (' || client_name || ')' AS pet_label, COUNT(*) AS count
+         FROM v_appointments
+         WHERE is_deleted IS NOT TRUE
+           AND appointment_date BETWEEN $1 AND $2
+           AND LOWER(TRIM(appointment_status_name)) NOT IN ('cancelled', 'no show')
+         GROUP BY pets_id, pets_name, client_name
+         ORDER BY count DESC, pets_name ASC
+         LIMIT 10`,
+        [startDate, endDate],
+      );
+
+      return { byService: byService.rows, byStatus: byStatus.rows, topPets: topPets.rows };
     } catch (error) {
       console.log(`Error on Model getAppointmentsBreakdown function: ${error}`);
       throw error;

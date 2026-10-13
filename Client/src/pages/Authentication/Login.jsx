@@ -48,7 +48,7 @@ export default function Login() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-emerald-50 dark:bg-zinc-950 px-4 py-8 text-zinc-900 dark:text-zinc-50 antialiased transition-colors duration-300">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-emerald-50 dark:bg-zinc-950 px-4 pt-16 pb-8 sm:py-8 text-zinc-900 dark:text-zinc-50 antialiased transition-colors duration-300">
       {/* Soft background shapes */}
       <div aria-hidden className="pointer-events-none absolute -top-32 -left-32 h-96 w-96 rounded-full bg-emerald-600/20 dark:bg-emerald-600/10 blur-2xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-emerald-600/25 dark:bg-emerald-600/10 blur-2xl" />

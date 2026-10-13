@@ -40,7 +40,7 @@ export function Component() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-y-auto pr-1">
+        <div className="md:max-h-[60vh] md:overflow-y-auto pr-1">
           {isPending ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
               Loading...

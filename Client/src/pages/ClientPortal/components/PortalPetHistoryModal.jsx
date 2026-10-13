@@ -51,7 +51,7 @@ export default function PortalPetHistoryModal({ petId, petName, onClose }) {
 
         <ModuleTabs tabs={TABS} active={tab} onChange={setTab} />
 
-        <div className="max-h-[55vh] overflow-y-auto pr-1 pt-2">
+        <div className="md:max-h-[55vh] md:overflow-y-auto pr-1 pt-2">
           {isPending ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
               Loading...

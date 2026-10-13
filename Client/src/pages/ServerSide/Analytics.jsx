@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useBoxWidth from "@/hooks/useBoxWidth.jsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button.jsx";
 import ChartCard from "@/components/ui/ChartCard.jsx";
-import ProductSalesInsights from "./Inventory/components/ProductSalesInsights.jsx";
+import ProductSalesInsights, { RankedBarChart } from "./Inventory/components/ProductSalesInsights.jsx";
 import {
   fetchRevenueTrend,
   fetchAppointmentsBreakdown,
@@ -144,7 +145,7 @@ function Legend({ items }) {
 
 // Two-series (or one) line chart over a date-indexed series.
 function LineChart({ data, series, formatValue = (v) => v }) {
-  const width = 640;
+  const [boxRef, width] = useBoxWidth(640);
   const innerW = width - CHART_PAD.left - CHART_PAD.right;
   const innerH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
 
@@ -166,11 +167,13 @@ function LineChart({ data, series, formatValue = (v) => v }) {
       })
       .join(" ");
 
-  // Show at most ~6 x-axis labels regardless of range length.
-  const labelEvery = Math.max(1, Math.ceil(data.length / 6));
+  // At most ~6 x-axis labels, fewer when narrow (~55px per label).
+  const labelEvery = Math.max(1, Math.ceil(data.length / Math.min(6, innerW / 55)));
+  // The last day is always labelled, unless it would crowd the one before.
+  const lastFits = (data.length - 1) % labelEvery >= labelEvery / 2;
 
   return (
-    <div className="analytics-viz">
+    <div ref={boxRef} className="analytics-viz">
       {series.length > 1 && (
         <Legend
           items={series.map((s) => ({ label: s.label, colorVar: s.colorVar }))}
@@ -208,7 +211,8 @@ function LineChart({ data, series, formatValue = (v) => v }) {
         })}
 
         {data.map((d, i) => {
-          if (i % labelEvery !== 0 && i !== data.length - 1) return null;
+          const isLast = i === data.length - 1;
+          if (i % labelEvery !== 0 && !(isLast && lastFits)) return null;
           const px = CHART_PAD.left + i * xStep;
           return (
             <text
@@ -266,7 +270,7 @@ const fitLabel = (text, max) =>
 
 // Vertical bar chart for a small set of categories.
 function BarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }) {
-  const width = 320;
+  const [boxRef, width] = useBoxWidth(320);
   const innerW = width - CHART_PAD.left - CHART_PAD.right;
   const innerH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
   const maxVal = Math.max(1, ...data.map((d) => Number(d[valueKey]) || 0));
@@ -277,7 +281,7 @@ function BarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }
   const barW = Math.min(48, bandW * 0.55);
 
   return (
-    <div className="analytics-viz">
+    <div ref={boxRef} className="analytics-viz">
       <svg
         viewBox={`0 0 ${width} ${CHART_H}`}
         className="w-full h-auto"
@@ -537,6 +541,23 @@ export function Component() {
           />
         </ChartCard>
       </div>
+
+      <ChartCard
+        title="Most Frequent Patients"
+        subtitle="Pets with the most visits (excludes Cancelled / No Show)"
+        isPending={appointmentsQuery.isPending}
+        isError={appointmentsQuery.isError}
+        error={appointmentsQuery.error}
+        isEmpty={(appointmentsQuery.data?.topPets?.length ?? 0) === 0}
+      >
+        <RankedBarChart
+          data={appointmentsQuery.data?.topPets ?? []}
+          valueKey="count"
+          labelKey="pet_label"
+          colorVar="--slot-1"
+          formatValue={formatCount}
+        />
+      </ChartCard>
 
       {/* Peak hours + Peak days — booking demand, not just completed visits,
           same scope as Appointments by Service/Status above (every

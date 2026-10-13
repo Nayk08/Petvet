@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useBoxWidth from "@/hooks/useBoxWidth.jsx";
 import { useQuery } from "@tanstack/react-query";
 import ChartCard from "@/components/ui/ChartCard.jsx";
 import { fetchTopProducts, fetchProductMovers } from "@/api/http.js";
@@ -51,16 +52,16 @@ function MonthControl({ month, onChange }) {
 }
 
 // Horizontal ranked bar chart (top products).
-function RankedBarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }) {
+export function RankedBarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) => v }) {
   const rowH = 32;
-  const width = 640;
+  const [boxRef, width] = useBoxWidth(640);
   const height = Math.max(1, data.length) * rowH + 12;
   const labelColW = 140;
   const innerW = width - labelColW - 70;
   const maxVal = Math.max(1, ...data.map((d) => Number(d[valueKey]) || 0));
 
   return (
-    <div className="analytics-viz">
+    <div ref={boxRef} className="analytics-viz">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-auto"
@@ -80,8 +81,8 @@ function RankedBarChart({ data, valueKey, labelKey, colorVar, formatValue = (v) 
                 fontSize="11"
                 fill="var(--text-secondary)"
               >
-                {d[labelKey]?.length > 18
-                  ? `${d[labelKey].slice(0, 17)}…`
+                {d[labelKey]?.length > 22
+                  ? `${d[labelKey].slice(0, 21)}…`
                   : d[labelKey]}
               </text>
               <rect

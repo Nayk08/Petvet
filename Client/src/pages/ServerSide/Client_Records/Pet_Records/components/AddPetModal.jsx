@@ -242,7 +242,7 @@ export function Component() {
             </div>
 
             {/* Species / Gender / Status */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Species

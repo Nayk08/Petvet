@@ -267,15 +267,15 @@ export function Component() {
               Assign roles (select one or more — first pick is primary)
             </label>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {isPending && (
-                <div className="col-span-3 flex items-center justify-center py-6 text-slate-500 dark:text-slate-400 text-xs">
+                <div className="col-span-full flex items-center justify-center py-6 text-slate-500 dark:text-slate-400 text-xs">
                   Loading roles...
                 </div>
               )}
 
               {isError && (
-                <div className="col-span-3 flex items-center justify-center py-6 text-red-500 text-xs">
+                <div className="col-span-full flex items-center justify-center py-6 text-red-500 text-xs">
                   Error: {error.message}
                 </div>
               )}

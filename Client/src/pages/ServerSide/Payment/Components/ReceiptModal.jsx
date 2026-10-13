@@ -59,7 +59,7 @@ export function Component() {
             </p>
           </div>
         ) : (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="md:max-h-[60vh] md:overflow-y-auto">
             <ReceiptContent payment={payment} appointment={appointment} />
           </div>
         )}

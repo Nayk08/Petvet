@@ -94,7 +94,7 @@ export default function AddConsultationModal({ appointment, onClose }) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <form onSubmit={handleSubmit} className="space-y-4 md:max-h-[70vh] md:overflow-y-auto pr-1">
           <div className="space-y-1.5">
             <label className={LABEL}>
               Chief Complaint
@@ -113,7 +113,7 @@ export default function AddConsultationModal({ appointment, onClose }) {
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="space-y-1.5">
               <label className={LABEL}>
                 Temp (°C)
@@ -196,7 +196,7 @@ export default function AddConsultationModal({ appointment, onClose }) {
               </button>
             </div>
             {vaccinations.map((v, i) => (
-              <div key={i} className="grid grid-cols-5 gap-2 items-center">
+              <div key={i} className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
                 <Input
                   placeholder="Vaccine name"
                   required
@@ -271,7 +271,7 @@ export default function AddConsultationModal({ appointment, onClose }) {
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <Input
                     placeholder="Dosage"
                     value={p.dosage}

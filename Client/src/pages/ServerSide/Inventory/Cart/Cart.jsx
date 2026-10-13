@@ -656,7 +656,7 @@ export default function Cart() {
           <DialogHeader className="print:hidden">
             <DialogTitle>Order Placed</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="md:max-h-[60vh] md:overflow-y-auto">
             {receipt && <ReceiptContent payment={receipt} />}
           </div>
           <DialogFooter className="print:hidden">
