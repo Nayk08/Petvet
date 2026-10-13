@@ -120,7 +120,7 @@ export function Component() {
               disabled={!profile}
               title="Profile picture"
               aria-label="Change profile picture"
-              className="flex items-center gap-2 rounded-full sm:pr-2 bg-transparent border-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 disabled:cursor-default"
+              className="flex items-center rounded-full bg-transparent border-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 disabled:cursor-default"
             >
               <span className="h-8 w-8 shrink-0 rounded-full overflow-hidden bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center">
                 {profile?.client_picture ? (
@@ -128,9 +128,6 @@ export function Component() {
                 ) : (
                   initials(profile?.name)
                 )}
-              </span>
-              <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:inline">
-                {profile?.name ?? "..."}
               </span>
             </button>
             <button
