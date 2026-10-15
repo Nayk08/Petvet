@@ -27,6 +27,23 @@ import Login from "./pages/Authentication/Login";
 import { queryClient, fetchNavbar } from "./api/http";
 import UnauthorizedPage from "./pages/UnauthorizedPage.jsx";
 
+// A route's static `loader` wins over the one its lazy module exports, so
+// a modal reading useLoaderData() got the guard's return value (the
+// signed-in user) instead of its own record. Run the guard, then the
+// module's loader.
+function withGuard(guard, importModule) {
+  return async () => {
+    const mod = await importModule();
+    return {
+      ...mod,
+      loader: async (args) => {
+        await guard(args);
+        return mod.loader(args);
+      },
+    };
+  };
+}
+
 // Shown while a route's loader runs on first page load.
 const appLoading = (
   <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-500 text-sm">
@@ -435,21 +452,18 @@ const router =
         children: [
           {
             path: "add-client",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx")),
           },
           {
             path: "edit-client/:client_id",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/components/addClientModal.jsx")),
           },
           {
             path: "delete-client/:client_id",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/components/deleteClientModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/components/deleteClientModal.jsx")),
           },
         ],
       },
@@ -461,21 +475,18 @@ const router =
         children: [
           {
             path: "add-pet",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx")),
           },
           {
             path: "pets/:pets_id/edit-pet",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/AddPetModal.jsx")),
           },
           {
             path: "pets/:pets_id/delete-pet",
-            loader: requirePermission("C_P_RECORDS"),
-            lazy: () =>
-              import("./pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx"),
+            lazy: withGuard(requirePermission("C_P_RECORDS"), () =>
+              import("./pages/ServerSide/Client_Records/Pet_Records/components/deletePetModal.jsx")),
           },
           {
             path: "pets/:pets_id/transfer-owner",
@@ -570,9 +581,8 @@ const router =
               },
               {
                 path: "delete-role/:user_level_id",
-                loader: requirePermission("USER_MGMT_ROLES", "can_delete"),
-                lazy: () =>
-                  import("./pages/Authentication/Users_Management/Roles/components/DeleteRolesModal.jsx"),
+                lazy: withGuard(requirePermission("USER_MGMT_ROLES", "can_delete"), () =>
+                  import("./pages/Authentication/Users_Management/Roles/components/DeleteRolesModal.jsx")),
               },
             ],
           },

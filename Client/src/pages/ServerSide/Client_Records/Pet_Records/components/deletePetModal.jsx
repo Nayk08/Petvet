@@ -75,7 +75,7 @@ export function Component() {
 export async function loader({ params }) {
   return queryClient.fetchQuery({
     queryKey: ["pet", params.pets_id],
-    queryFn: ({ signal }) => fetchPetById({ pets_id: params.pets_id, signal }),
+    queryFn: ({ signal }) => fetchPetById(params.pets_id, { signal }),
   });
 }
 
