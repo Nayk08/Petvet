@@ -24,6 +24,7 @@ import {
   Lock,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Circle,
@@ -35,7 +36,9 @@ import {
   Moon,
   Sun,
   BarChart3,
-  Menu,
+  LayoutGrid,
+  House,
+  Stethoscope,
   X,
   Settings,
   Wrench,
@@ -65,9 +68,41 @@ const MODULE_ICONS = {
 
 // Phone bottom tab bar: these modules first (when the user's role has them),
 // then the next routable modules in sidebar order fill any empty slot.
-// Everything else lives under "More".
-const PRIMARY_TABS = ["DASHBOARD", "APPOINTMENT", "CART", "PAYMENTS"];
+// Everything else lives under "More". SERVICES is one tab for the three
+// service queues (Consultation / Grooming / Operation).
+const PRIMARY_TABS = ["DASHBOARD", "APPOINTMENT", "SERVICES", "CART"];
 const TAB_COUNT = 4;
+const SERVICE_CODES = ["C_APPOINTMENT", "G_APPOINTMENT", "O_APPOINTMENT"];
+const TAB_ICONS = { DASHBOARD: House, SERVICES: Stethoscope };
+const TAB_LABELS = { DASHBOARD: "Home", APPOINTMENT: "Schedule", SERVICES: "Services", CART: "POS" };
+
+// Phone "More" screen: modules not on a tab, grouped like the design, each
+// with a one-line description and an icon tile tint.
+const MORE_GROUPS = [
+  { title: "Clinic setup", codes: ["MAINTENANCE", "USER_MGMT_USERS", "USER_MGMT_ROLES", "USER_MGMT_PERMS", "ANALYTICS"] },
+];
+const MORE_INFO = {
+  C_P_RECORDS: ["Owners, pets and archived clients", "green"],
+  PAYMENTS: ["Revenue, receipts and balances", "teal"],
+  INVENTORY: ["Stock levels, batches and expiry", "amber"],
+  ANNOUNCEMENTS: ["Posts shown on the landing page", "blue"],
+  MAINTENANCE: ["Sub-services, prices and weight tiers", "green"],
+  USER_MGMT_USERS: ["Staff accounts and their roles", "blue"],
+  USER_MGMT_ROLES: ["Roles and what they cover", "blue"],
+  USER_MGMT_PERMS: ["What each role can do", "blue"],
+  ANALYTICS: ["Revenue, appointment and sales trends", "teal"],
+  C_APPOINTMENT: ["Consultation queue", "green"],
+  G_APPOINTMENT: ["Grooming queue", "green"],
+  O_APPOINTMENT: ["Operation queue", "green"],
+};
+const TILE = {
+  green: "bg-indigo-50 text-indigo-700 dark:bg-[#163a1e] dark:text-[#9be3a4]",
+  teal: "bg-teal-50 text-teal-700 dark:bg-[#0f2a27] dark:text-[#6fe0d0]",
+  amber: "bg-amber-50 text-amber-700 dark:bg-[#2b1f08] dark:text-[#ffc861]",
+  blue: "bg-blue-50 text-blue-700 dark:bg-[#10203a] dark:text-[#8fbcff]",
+  slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  red: "bg-red-50 text-red-600 dark:bg-[#2b1214] dark:text-[#ff8a8a]",
+};
 
 // Pages that aren't a module of their own: title + where Back goes when
 // there's no in-app history (e.g. the page was opened from a bookmark).
@@ -204,12 +239,19 @@ export default function Sidebar({ onLogout }) {
   );
 
   const tabModules = useMemo(() => {
-    const picked = PRIMARY_TABS.map((code) =>
-      routableModules.find((m) => m.module_code === code),
-    ).filter(Boolean);
+    const services = routableModules.filter((m) => SERVICE_CODES.includes(m.module_code));
+    const servicesTab = services.length && {
+      module_code: "SERVICES",
+      module_name: "Services",
+      route: services[0].route,
+      routes: services.map((m) => m.route),
+    };
+    const find = (code) =>
+      code === "SERVICES" ? servicesTab : routableModules.find((m) => m.module_code === code);
+    const picked = PRIMARY_TABS.map(find).filter(Boolean);
     for (const m of routableModules) {
       if (picked.length >= TAB_COUNT) break;
-      if (!picked.includes(m)) picked.push(m);
+      if (!picked.includes(m) && !SERVICE_CODES.includes(m.module_code)) picked.push(m);
     }
     return picked;
   }, [routableModules]);
@@ -229,8 +271,13 @@ export default function Sidebar({ onLogout }) {
         location.pathname.startsWith(`${toPath(m.route)}/`),
     )
     .sort((a, b) => toPath(b.route).length - toPath(a.route).length)[0];
-  const pageTitle = nestedPage?.title ?? currentModule?.module_name ?? "PetVet";
-  const isOnTab = tabModules.some((m) => m === currentModule);
+  const pageTitle =
+    nestedPage?.title ??
+    (SERVICE_CODES.includes(currentModule?.module_code) ? "Services" : currentModule?.module_name) ??
+    "PetVet";
+  const isOnTab = tabModules.some(
+    (m) => m === currentModule || m.routes?.includes(currentModule?.route),
+  );
 
   const goBack = () => {
     // "default" = first page of this tab's history: don't leave the app.
@@ -324,6 +371,35 @@ export default function Sidebar({ onLogout }) {
         {awaitingCount > 99 ? "99+" : awaitingCount}
       </span>
     );
+
+  // Phone More screen: every permitted module that isn't already a tab.
+  const onTab = (m) =>
+    tabModules.some((t) => t === m || t.routes?.includes(m.route));
+  const rest = routableModules.filter((m) => !onTab(m));
+  const setupCodes = MORE_GROUPS[0].codes;
+  const moreGroups = [
+    { title: "Records", items: rest.filter((m) => !setupCodes.includes(m.module_code)) },
+    { title: "Clinic setup", items: setupCodes.map((c) => rest.find((m) => m.module_code === c)).filter(Boolean) },
+  ].filter((g) => g.items.length);
+
+  const moreRowClass = (arg) => {
+    const active = typeof arg === "object" && arg?.isActive;
+    return `w-full flex items-center gap-3 min-h-[62px] px-3.5 py-2.5 text-left bg-transparent border-none cursor-pointer transition-colors ${
+      active
+        ? "bg-indigo-50 text-indigo-700 dark:bg-[#102116] dark:text-white"
+        : "text-slate-900 active:bg-slate-50 dark:text-slate-100 dark:active:bg-slate-800"
+    }`;
+  };
+
+  // Bottom tab: label under an icon; the active tab's icon sits in a pill.
+  const tabClass = (on) =>
+    `h-full flex flex-col items-center justify-center gap-1 px-0.5 text-[11px] tracking-tight transition-colors ${
+      on ? "font-bold text-indigo-600 dark:text-indigo-400" : "font-semibold text-slate-500 dark:text-slate-400"
+    }`;
+  const tabPill = (on) =>
+    `relative flex items-center justify-center w-13 h-7 rounded-full transition-colors ${
+      on ? "bg-indigo-50 dark:bg-[#163a1e]" : ""
+    }`;
 
   const userMenuItemClass =
     "w-full flex items-center gap-2.5 px-3 min-h-11 rounded-lg text-sm text-left text-slate-700 active:bg-slate-100 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 dark:active:bg-slate-800 bg-transparent border-none cursor-pointer";
@@ -446,32 +522,35 @@ export default function Sidebar({ onLogout }) {
       {showNav && (
         <nav
           aria-label="Main"
-          className="md:hidden fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)] bg-white/95 backdrop-blur-md border-t border-slate-200 dark:bg-slate-950/95 dark:border-slate-800"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)] bg-white/95 backdrop-blur-md border-t border-slate-200 dark:bg-[#0d100d]/95 dark:border-slate-800"
         >
           <ul
-            className="grid h-16"
+            className="grid h-16 px-1.5"
             style={{ gridTemplateColumns: `repeat(${tabModules.length + 1}, minmax(0, 1fr))` }}
           >
             {tabModules.map((module) => {
-              const Icon = MODULE_ICONS[module.module_code] || Circle;
+              const Icon = TAB_ICONS[module.module_code] || MODULE_ICONS[module.module_code] || Circle;
+              const inServices = module.routes?.some(
+                (r) => location.pathname === toPath(r) || location.pathname.startsWith(`${toPath(r)}/`),
+              );
               return (
                 <li key={module.module_code}>
                   <NavLink
                     to={module.route}
-                    className={({ isActive }) =>
-                      `relative h-full flex flex-col items-center justify-center gap-1 px-0.5 text-[10px] tracking-tight font-medium transition-colors active:bg-slate-100 dark:active:bg-slate-900 ${
-                        isActive
-                          ? "text-indigo-600 dark:text-indigo-400"
-                          : "text-slate-500 dark:text-slate-400"
-                      }`
-                    }
+                    className={({ isActive }) => tabClass(isActive || inServices)}
                   >
-                    <span className="relative">
-                      <Icon size={22} />
-                      {module.module_code === "PAYMENTS" &&
-                        paymentsBadge("absolute -top-1.5 left-3.5")}
-                    </span>
-                    <span className="max-w-full truncate">{module.module_name}</span>
+                    {({ isActive }) => (
+                      <>
+                        <span className={tabPill(isActive || inServices)}>
+                          <Icon size={20} />
+                          {module.module_code === "PAYMENTS" &&
+                            paymentsBadge("absolute -top-1 right-1.5")}
+                        </span>
+                        <span className="max-w-full truncate">
+                          {TAB_LABELS[module.module_code] ?? module.module_name}
+                        </span>
+                      </>
+                    )}
                   </NavLink>
                 </li>
               );
@@ -482,13 +561,13 @@ export default function Sidebar({ onLogout }) {
                 onClick={() => setIsMobileOpen(true)}
                 aria-expanded={isMobileOpen}
                 aria-controls="app-sidebar"
-                className={`w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] tracking-tight font-medium bg-transparent border-none cursor-pointer active:bg-slate-100 dark:active:bg-slate-900 ${
-                  isMobileOpen || (currentModule && !isOnTab)
-                    ? "text-indigo-600 dark:text-indigo-400"
-                    : "text-slate-500 dark:text-slate-400"
-                }`}
+                className={`w-full ${tabClass(isMobileOpen || (currentModule && !isOnTab))} bg-transparent border-none cursor-pointer`}
               >
-                <Menu size={22} />
+                <span className={tabPill(isMobileOpen || (currentModule && !isOnTab))}>
+                  <LayoutGrid size={20} />
+                  {!tabModules.some((m) => m.module_code === "PAYMENTS") &&
+                    paymentsBadge("absolute -top-1 right-1.5")}
+                </span>
                 More
               </button>
             </li>
@@ -508,7 +587,7 @@ export default function Sidebar({ onLogout }) {
       <aside
         id="app-sidebar"
         data-collapsed={collapsed}
-        className={`group fixed z-50 flex flex-col bg-white border-slate-200 shadow-sm transition-[transform,width] duration-200 dark:bg-slate-950 dark:border-slate-800 inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border-t pb-[env(safe-area-inset-bottom)] ${
+        className={`group fixed z-50 flex flex-col bg-white border-slate-200 shadow-sm transition-[transform,width] duration-200 dark:bg-slate-950 dark:border-slate-800 inset-x-0 bottom-0 max-h-[92dvh] rounded-t-3xl border-t pb-[env(safe-area-inset-bottom)] ${
           isMobileOpen ? "translate-y-0" : "translate-y-full"
         } md:inset-x-auto md:bottom-auto md:top-0 md:left-0 md:h-full md:w-[var(--sidebar-w,16rem)] md:max-h-none md:rounded-none md:border-t-0 md:border-r md:pb-0 md:translate-y-0`}
       >
@@ -531,11 +610,12 @@ export default function Sidebar({ onLogout }) {
         </div>
 
         {/* Brand */}
-        <div className={`h-14 px-4 flex items-center justify-between border-b border-slate-200 shrink-0 dark:border-slate-800 ${RAIL}`}>
+        <div className={`h-14 px-4 max-md:px-5 flex items-center justify-between md:border-b border-slate-200 shrink-0 dark:border-slate-800 ${RAIL}`}>
+          <h2 className="md:hidden m-0 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">More</h2>
           <Link
             to="/"
             title={tip("PetVet")}
-            className="flex items-center gap-2 select-none active:scale-[0.98] transition-transform shrink-0"
+            className="max-md:hidden flex items-center gap-2 select-none active:scale-[0.98] transition-transform shrink-0"
           >
             <div className="h-9 w-9 flex items-center justify-center shrink-0">
               <img
@@ -578,9 +658,93 @@ export default function Sidebar({ onLogout }) {
           </div>
         )}
 
-        {/* Nav tree */}
+        {/* Phones: the "More" screen — profile card, grouped rows, account */}
         {showNav && (
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain petvet-nav-scroll px-3 md:group-data-[collapsed=true]:px-2 py-3 space-y-1">
+          <div className="md:hidden flex-1 overflow-y-auto overscroll-contain px-5 pt-2 pb-6 flex flex-col gap-5">
+            <section
+              aria-label="Signed in as"
+              className="flex items-center gap-3.5 rounded-[20px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900"
+            >
+              {avatar("w-13 h-13 text-lg font-extrabold")}
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-extrabold text-slate-900 truncate dark:text-white">
+                  {user?.name || user?.email || "User"}
+                </p>
+                {user?.email && (
+                  <p className="text-xs text-slate-500 truncate dark:text-slate-400">{user.email}</p>
+                )}
+              </div>
+              <span className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-[#10261a] dark:text-[#7ee08b] dark:border-[#1f4b2b]">
+                {userRole}
+              </span>
+            </section>
+
+            {moreGroups.map((group) => (
+              <section key={group.title} aria-label={group.title} className="flex flex-col gap-2">
+                <h2 className="mx-1 text-xs font-bold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400">
+                  {group.title}
+                </h2>
+                <div className="rounded-[18px] border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:divide-[#1f241f]">
+                  {group.items.map((m) => {
+                    const Icon = MODULE_ICONS[m.module_code] || Circle;
+                    const [desc, tint] = MORE_INFO[m.module_code] || ["", "slate"];
+                    return (
+                      <NavLink key={m.module_code} to={m.route} className={moreRowClass}>
+                        <span className={`size-9.5 shrink-0 rounded-[11px] flex items-center justify-center ${TILE[tint]}`}>
+                          <Icon size={19} />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-bold">{m.module_name}</span>
+                          {desc && (
+                            <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{desc}</span>
+                          )}
+                        </span>
+                        {m.module_code === "PAYMENTS" && paymentsBadge("shrink-0")}
+                        <ChevronRight size={18} className="shrink-0 text-slate-400 dark:text-slate-500" />
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+
+            <section aria-label="Account" className="flex flex-col gap-2">
+              <h2 className="mx-1 text-xs font-bold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400">
+                Account
+              </h2>
+              <div className="rounded-[18px] border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:divide-[#1f241f]">
+                <button type="button" onClick={() => setShowProfileModal(true)} className={moreRowClass()}>
+                  <span className={`size-9.5 shrink-0 rounded-[11px] flex items-center justify-center ${TILE.slate}`}>
+                    <User size={19} />
+                  </span>
+                  <span className="flex-1 text-sm font-bold">Profile picture</span>
+                  <ChevronRight size={18} className="shrink-0 text-slate-400 dark:text-slate-500" />
+                </button>
+                <button type="button" onClick={toggleTheme} className={moreRowClass()}>
+                  <span className={`size-9.5 shrink-0 rounded-[11px] flex items-center justify-center ${TILE.slate}`}>
+                    {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
+                  </span>
+                  <span className="flex-1 text-sm font-bold">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className={`${moreRowClass()} text-red-600! dark:text-[#ff8a8a]! disabled:opacity-50`}
+                >
+                  <span className={`size-9.5 shrink-0 rounded-[11px] flex items-center justify-center ${TILE.red}`}>
+                    <LogOut size={19} />
+                  </span>
+                  <span className="flex-1 text-sm font-bold">{isLoggingOut ? "Signing out..." : "Sign out"}</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* Nav tree (sidebar from md) */}
+        {showNav && (
+          <nav className="max-md:hidden flex-1 overflow-y-auto overflow-x-hidden overscroll-contain petvet-nav-scroll px-3 md:group-data-[collapsed=true]:px-2 py-3 space-y-1">
             {topLevel.map((module) => {
               const children = childrenMap.get(module.module_code) || [];
               const IconComponent = MODULE_ICONS[module.module_code] || Circle;

@@ -371,7 +371,7 @@ export default function DynamicGrid({
                     }`}
                   />
                 ) : col.filterType === "dateRange" ? (
-                  <div key={col.key} data-daterange className="shrink-0 max-sm:basis-full flex items-center gap-1.5">
+                  <div key={col.key} data-daterange className="sm:shrink-0 max-sm:basis-full max-sm:min-w-0 flex items-center gap-1.5">
                     <input
                       type="date"
                       value={filters[`${col.key}_from`] || ""}

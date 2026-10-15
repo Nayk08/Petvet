@@ -210,7 +210,7 @@ export function Component() {
           className="lg:w-1/4"
           onClick={() => openRevenueModal("all")}
         />
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-4">
           <Container
             title="Cash"
             value={revenueDisplay(cashRevenue)}

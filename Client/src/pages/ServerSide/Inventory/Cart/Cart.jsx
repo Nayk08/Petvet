@@ -269,7 +269,7 @@ export default function Cart() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex gap-2 overflow-x-auto min-w-0 flex-1 pb-1" style={{ scrollbarWidth: "thin" }}>
+            <div className="flex gap-2 overflow-x-auto min-w-0 flex-1 pb-1 [scrollbar-width:thin] max-md:[scrollbar-width:none]">
               <button type="button" onClick={() => setCategoryFilter("")} className={pill(!categoryFilter)}>
                 All
               </button>

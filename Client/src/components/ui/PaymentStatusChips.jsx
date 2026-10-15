@@ -33,10 +33,10 @@ export default function PaymentStatusChips({ counts = [], filters, onFiltersChan
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 min-w-0">
       {/* Phones: one line that scrolls sideways inside the page margins, with
           the app's thin scrollbar (soft thumb, transparent track). */}
-      <div className="flex gap-2 overflow-x-auto pb-2.5 sm:flex-wrap sm:overflow-visible sm:pb-0">
+      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible">
         {[{ payment_status_name: "All", count: total }, ...counts].map(({ payment_status_name: name, count }) => (
           <button
             key={name}

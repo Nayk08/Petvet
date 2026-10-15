@@ -47,7 +47,7 @@ export default function Container({
             }
           : undefined
       }
-      className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 ${isClickable ? "cursor-pointer" : ""} ${className}`}
+      className={`bg-white border border-slate-200 rounded-2xl sm:rounded-[20px] p-3 sm:p-4 shadow-sm transition-all hover:shadow-md hover:border-slate-300 dark:shadow-none dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 ${isClickable ? "cursor-pointer" : ""} ${className}`}
     >
       {isHero ? (
         <div className="flex flex-col">

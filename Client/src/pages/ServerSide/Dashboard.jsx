@@ -50,12 +50,12 @@ function HeaderClock() {
   }, []);
   const opts = { timeZone: "Asia/Manila" };
   return (
-    <div className="mb-1">
-      <p className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
-        {now.toLocaleTimeString("en-US", { ...opts, hour: "numeric", minute: "2-digit", second: "2-digit" })}
+    <div className="text-right">
+      <p className="text-[19px] sm:text-2xl font-extrabold tabular-nums leading-tight text-slate-900 dark:text-white">
+        {now.toLocaleTimeString("en-US", { ...opts, hour: "numeric", minute: "2-digit" })}
       </p>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        {now.toLocaleDateString("en-US", { ...opts, weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+      <p className="text-[11px] text-emerald-800/80 dark:text-[#a3cfa9]">
+        {now.toLocaleDateString("en-US", { ...opts, weekday: "short", month: "short", day: "numeric", year: "numeric" })}
       </p>
     </div>
   );
@@ -262,28 +262,29 @@ export function Component() {
   return (
     <div className="w-full space-y-6 sm:space-y-8 py-4 sm:py-8">
       {/* Header section */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center border-b border-slate-200 pb-4 sm:pb-6 dark:border-slate-800">
+      <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
-            Welcome Back, {currentUserData?.user?.name ?? "User"}!
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Welcome back, {currentUserData?.user?.name ?? "User"}
           </h1>
-          {currentUserData?.user?.role && (
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
-              {currentUserData.user.role}
-            </p>
-          )}
-          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
-            Here is what's happening at PetVet clinic today.
+          <p className="text-[13px] sm:text-sm text-slate-500 mt-1 dark:text-slate-400">
+            {currentUserData?.user?.role && (
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                {currentUserData.user.role} ·{" "}
+              </span>
+            )}
+            Here’s what’s happening at the clinic today.
           </p>
         </div>
-        <div className="sm:text-right">
+        <div className="flex items-center justify-between gap-6 rounded-2xl border px-3.5 py-3 lg:min-w-80 bg-emerald-50 border-emerald-200 dark:bg-[#102116] dark:border-[#1f3d27]">
+          <div className="flex items-center gap-2.5">
+            <span aria-hidden="true" className="size-2.5 rounded-full bg-emerald-600 dark:bg-[#5fd36e]" />
+            <div>
+              <p className="text-[13px] font-bold text-emerald-800 dark:text-[#c4f2c9]">Clinic open</p>
+              <p className="text-[11px] text-emerald-800/80 dark:text-[#a3cfa9]">Hours 09:00 AM – 06:00 PM</p>
+            </div>
+          </div>
           <HeaderClock />
-          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-            Clinic Status: Open
-          </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Hours: 09:00 AM - 06:00 PM
-          </p>
         </div>
       </div>
 
@@ -310,7 +311,7 @@ export function Component() {
           className="lg:w-1/4"
           onClick={() => openRevenueModal("all")}
         />
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-3 sm:gap-4">
+        <div className="flex-1 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-4">
           <Container
             title="Cash"
             value={revenueDisplay(cashRevenue)}
@@ -322,9 +323,8 @@ export function Component() {
             onClick={() => openRevenueModal("cashless")}
           />
           <Container
-            title="Today's Appointments"
+            title="Appts today"
             value={appointmentQueueCount}
-            className="col-span-2 sm:col-span-1"
           />
         </div>
       </div>

@@ -14,6 +14,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
+import ServiceTabs from "@/components/ui/ServiceTabs";
 import AddConsultationModal from "./AddConsultationModal.jsx";
 import { optimisticMutation, patchWhere, APPOINTMENT_LIST_KEYS } from "@/api/optimistic.js";
 
@@ -119,7 +120,8 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
   });
 
   return (
-    <div className="w-full space-y-4 py-6">
+    <div className="w-full space-y-4 py-6 max-md:pt-0">
+      <ServiceTabs />
       <QueryState
         isLoading={isLoading}
         isError={isError}
