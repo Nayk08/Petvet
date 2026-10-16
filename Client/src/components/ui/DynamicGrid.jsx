@@ -22,6 +22,13 @@ import {
 import { Button } from "./button.jsx";
 import { MultiSelectFilter } from "./MultiSelectFilter";
 
+// Phone card layout: which columns become the "#id", the status pill and the
+// bold title (first match wins). Pet titles also show the owner.
+const CARD_ID_KEYS = ["appointment_id", "product_id", "client_id", "control_number", "id"];
+const CARD_STATUS_KEYS = ["appointment_status_name", "payment_status_name", "status_name", "status", "is_active", "active"];
+const CARD_TITLE_KEYS = ["pets_name", "pet_name", "patient", "name", "product_name", "user_name", "appointment_services", "user_level", "tier_name", "client_name", "service_name", "total_amount"];
+const PET_KEYS = ["pets_name", "pet_name", "patient"];
+
 export default function DynamicGrid({
   data = [],
   columnsConfig = [],
@@ -121,6 +128,27 @@ export default function DynamicGrid({
     Object.values(filters).some((v) =>
       Array.isArray(v) ? v.length > 0 : Boolean(v),
     ) || Boolean(search);
+  const activeFilterCount = Object.values(filters).filter((v) =>
+    Array.isArray(v) ? v.length > 0 : Boolean(v),
+  ).length;
+
+  // Phones: filters and the rows-per-page picker sit behind a Filters
+  // button next to search (the design's toolbar); without a search box
+  // there's nothing to sit next to, so they stay visible.
+  const [showPhoneFilters, setShowPhoneFilters] = useState(false);
+  const hasPhoneFilterToggle =
+    Boolean(onSearchChange) &&
+    Boolean(
+      onLimitChange ||
+        (onFiltersChange &&
+          columnsConfig?.some(
+            (col) =>
+              col.filterType === "date" ||
+              col.filterType === "dateRange" ||
+              col.filterOptions?.length > 0,
+          )),
+    );
+  const phoneFiltersHidden = hasPhoneFilterToggle && !showPhoneFilters ? "max-sm:hidden" : "";
 
   const handleDelete = useCallback(
     (row) => {
@@ -285,14 +313,14 @@ export default function DynamicGrid({
       className={
         bare
           ? "w-full text-slate-800 dark:text-slate-100"
-          : "bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100"
+          : "bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm w-full text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 max-sm:bg-transparent max-sm:border-0 max-sm:px-0 max-sm:pb-0 max-sm:pt-3 max-sm:shadow-none max-sm:dark:bg-transparent"
       }
     >
       {/* Header Bar */}
       {!bare && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 sm:pb-6 border-b border-slate-100 gap-3 sm:gap-4 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1 sm:pb-6 sm:border-b border-slate-100 gap-3 sm:gap-4 dark:border-slate-800">
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-wide dark:text-white">
+            <h1 className="text-2xl sm:text-xl font-extrabold sm:font-bold tracking-tight sm:tracking-wide text-slate-900 dark:text-white">
               {title}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
@@ -328,22 +356,44 @@ export default function DynamicGrid({
         {/* Only when the page actually handles it — a box that does nothing
             when typed into looked like a broken search. */}
         {onSearchChange && (
-        <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search records..."
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
-          />
+        <div className="flex gap-2 w-full sm:w-64 shrink-0">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search records..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus:bg-slate-950"
+            />
+          </div>
+          {hasPhoneFilterToggle && (
+            <button
+              type="button"
+              onClick={() => setShowPhoneFilters((open) => !open)}
+              aria-expanded={showPhoneFilters}
+              aria-label={activeFilterCount ? `Filters, ${activeFilterCount} active` : "Filters"}
+              className={`sm:hidden relative size-11 shrink-0 flex items-center justify-center rounded-xl border cursor-pointer transition-colors ${
+                showPhoneFilters || activeFilterCount
+                  ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-[#163a1e] dark:text-[#9be3a4] dark:border-[#2f7d3a]"
+                  : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+              }`}
+            >
+              <Filter size={18} />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-indigo-600 text-white text-[11px] font-bold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
         )}
 
         {/* Phones: filters wrap onto as many rows as they need (a hidden-
             scrollbar strip read as cut off). From sm up the wrapper
             disappears (contents) and they join the toolbar row. */}
-        <div className="flex flex-wrap gap-2 empty:hidden sm:contents">
+        <div className={`flex flex-wrap gap-2 empty:hidden sm:contents ${phoneFiltersHidden}`}>
         {onFiltersChange && columnsConfig
               .filter(
                 (col) =>
@@ -470,7 +520,7 @@ export default function DynamicGrid({
             </div>
           )}
           {onLimitChange && (
-            <div className="shrink-0 max-sm:order-1">
+            <div className={`shrink-0 max-sm:order-1 ${phoneFiltersHidden}`}>
               <select
                 value={limit ?? 10}
                 onChange={(e) => {
@@ -548,35 +598,63 @@ export default function DynamicGrid({
         {data.length > 0 ? (
           data.map((row, index) => {
             const rowActions = resolvedActions.filter((action) => checkActionVisible(action, row));
-            const [first, ...rest] = visibleColumns;
+            // Design card: "#id" + status pill on top, the record's name as
+            // a bold title (pet records also show "· owner"), every other
+            // field as a compact two-column grid below.
+            const idCol = visibleColumns.find((c) => CARD_ID_KEYS.includes(c.key));
+            const statusCol = visibleColumns.find((c) => CARD_STATUS_KEYS.includes(c.key));
+            const titleCol =
+              CARD_TITLE_KEYS.map((k) => visibleColumns.find((c) => c.key === k)).find(Boolean) ??
+              visibleColumns.find((c) => c !== idCol && c !== statusCol);
+            const ownerCol =
+              titleCol && PET_KEYS.includes(titleCol.key)
+                ? visibleColumns.find((c) => c.key === "client_name")
+                : null;
+            const rest = visibleColumns.filter(
+              (c) => ![idCol, statusCol, titleCol, ownerCol].includes(c),
+            );
             return (
               <li
                 key={row.id || index}
-                className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2 text-sm"
+                className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3.5 flex flex-col gap-2.5 text-sm"
               >
-                {first && (
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      {first.label}
+                {(idCol || statusCol) && (
+                  <div className="flex items-center justify-between gap-2 min-h-6">
+                    <span className="text-xs font-semibold text-slate-500 tabular-nums dark:text-slate-400">
+                      {idCol && <>#{row[idCol.key]}</>}
                     </span>
-                    <span className="text-right min-w-0">{renderCell(first, row)}</span>
+                    {statusCol && <span className="shrink-0">{renderCell(statusCol, row)}</span>}
                   </div>
                 )}
-                <dl className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {rest.map((col) => (
-                    <div key={col.key} className="flex items-start justify-between gap-3 py-1.5">
-                      <dt className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{col.label}</dt>
-                      <dd className="text-right min-w-0 break-words">{renderCell(col, row)}</dd>
-                    </div>
-                  ))}
-                </dl>
+                {titleCol && (
+                  <div className="text-base font-bold leading-snug text-slate-900 dark:text-white wrap-break-word">
+                    {renderCell(titleCol, row)}
+                    {ownerCol && row[ownerCol.key] && (
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                        {" "}· {row[ownerCol.key]}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {rest.length > 0 && (
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {rest.map((col) => (
+                      <div key={col.key} className={`min-w-0 ${col.key.includes("email") || col.key === "description" ? "col-span-2" : ""}`}>
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          {col.label}
+                        </dt>
+                        <dd className="mt-0.5 text-[13px] wrap-break-word">{renderCell(col, row)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
                 {rowActions.length > 0 && (
                   // Same placement on every page: equal-width outlined buttons,
-                  // one row for 1–3 actions, a 2×2 grid for 4.
+                  // one row for 1–3 actions, two columns for 4 or more.
                   <div
-                    className="grid gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 [&>button]:w-full [&>button]:justify-center [&>button]:border [&>button]:border-slate-200 dark:[&>button]:border-slate-700"
+                    className="grid gap-2 pt-1 [&>button]:w-full [&>button]:justify-center [&>button]:rounded-xl [&>button]:font-semibold [&>button]:border [&>button]:border-slate-200 dark:[&>button]:border-[#2a302a] dark:[&>button]:bg-slate-950"
                     style={{
-                      gridTemplateColumns: `repeat(${rowActions.length === 4 ? 2 : Math.min(rowActions.length, 3)}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${rowActions.length <= 3 ? rowActions.length : 2}, minmax(0, 1fr))`,
                     }}
                   >
                     {renderActions(row, rowActions)}

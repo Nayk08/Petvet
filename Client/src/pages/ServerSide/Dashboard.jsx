@@ -38,6 +38,11 @@ const REVENUE_MODALS = {
   cashless: { method: "gcash", title: "Today's Cashless Transactions" },
 };
 
+// The Cash / Cashless / Appts tiles when they sit inside the revenue card
+// (below lg): the design's inset tile look instead of a standalone card.
+const TILE_IN_CARD =
+  "max-lg:rounded-[14px]! max-lg:shadow-none! max-lg:bg-slate-50! max-lg:px-3! max-lg:py-2.5! max-lg:dark:bg-[#0f120f]! max-lg:dark:border-[#222722]!";
+
 // Live date/time for the "Today's Live Queue" widget — makes it clear the
 // table below is scoped to appointments scheduled for THIS calendar date,
 // and ticks over automatically at midnight without needing a page refresh.
@@ -289,10 +294,12 @@ export function Component() {
       </div>
 
       {/* Analytics/Metrics Grid */}
-      <div className="flex flex-col lg:flex-row gap-4">
+      {/* Below lg: one "Today's revenue" card with the three tiles inside it
+          (the design); from lg the hero card and tiles sit side by side. */}
+      <div className="flex flex-col lg:flex-row gap-3.5 lg:gap-4 max-lg:rounded-[20px] max-lg:border max-lg:border-slate-200 max-lg:bg-white max-lg:p-4 max-lg:dark:border-slate-800 max-lg:dark:bg-slate-900">
         <Container
           variant="hero"
-          title="Revenue"
+          title="Today's revenue"
           value={revenueDisplay(totalRevenue)}
           breakdown={[
             {
@@ -308,7 +315,7 @@ export function Component() {
               barColor: "bg-teal-500",
             },
           ]}
-          className="lg:w-1/4"
+          className="lg:w-1/4 max-lg:border-0! max-lg:p-0! max-lg:shadow-none! max-lg:bg-transparent! max-lg:dark:bg-transparent!"
           onClick={() => openRevenueModal("all")}
         />
         <div className="flex-1 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-4">
@@ -316,15 +323,18 @@ export function Component() {
             title="Cash"
             value={revenueDisplay(cashRevenue)}
             onClick={() => openRevenueModal("cash")}
+            className={TILE_IN_CARD}
           />
           <Container
             title="Cashless"
             value={revenueDisplay(gcashRevenue)}
             onClick={() => openRevenueModal("cashless")}
+            className={TILE_IN_CARD}
           />
           <Container
             title="Appts today"
             value={appointmentQueueCount}
+            className={TILE_IN_CARD}
           />
         </div>
       </div>

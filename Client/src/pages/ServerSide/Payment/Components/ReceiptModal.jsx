@@ -64,7 +64,7 @@ export function Component() {
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0 px-6 py-4 border-t border-slate-200 dark:border-slate-800 print:hidden">
+        <DialogFooter className="gap-2 sm:gap-0 px-6 py-4 max-md:mx-0 max-md:mb-0 max-md:bottom-0 border-t border-slate-200 dark:border-slate-800 print:hidden">
           <Button
             type="button"
             variant="ghost"

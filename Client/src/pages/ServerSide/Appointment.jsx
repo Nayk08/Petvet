@@ -305,7 +305,7 @@ export function Component() {
                                       `${appt.appointment_id}/edit-appointment`,
                                     )
                                   }
-                                  className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 px-2 py-1 rounded-md transition-colors"
+                                  className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 px-2 py-1 max-sm:min-h-10 max-sm:px-3 rounded-md transition-colors"
                                 >
                                   <Pencil size={12} /> Edit
                                 </button>
@@ -321,7 +321,7 @@ export function Component() {
                                   onClick={() =>
                                     noShowMutation.mutate(appt.appointment_id)
                                   }
-                                  className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
+                                  className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 px-2 py-1 max-sm:min-h-10 max-sm:px-3 rounded-md transition-colors disabled:opacity-50"
                                 >
                                   <UserX size={12} /> Mark No Show
                                 </button>
@@ -333,7 +333,7 @@ export function Component() {
                                       `${appt.appointment_id}/cancel-appointment`,
                                     )
                                   }
-                                  className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-md transition-colors"
+                                  className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 max-sm:min-h-10 max-sm:px-3 rounded-md transition-colors"
                                 >
                                   <XCircle size={12} /> Cancel
                                 </button>

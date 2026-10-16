@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -142,9 +142,6 @@ export function Component() {
             Control what each role can do per module
           </p>
         </div>
-        <button className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-1">
-          <MoreHorizontal size={20} />
-        </button>
       </div>
 
       {/* Role Filter Selector */}
@@ -254,7 +251,7 @@ export function Component() {
                           <button
                             onClick={() => handleToggle(mod.id, action)}
                             disabled={isSaving}
-                            className={`mx-auto relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 ${
+                            className={`mx-auto relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full after:absolute after:-inset-3 after:content-[""] border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 ${
                               active
                                 ? "bg-indigo-600 dark:bg-indigo-500"
                                 : "bg-slate-300 dark:bg-slate-700"

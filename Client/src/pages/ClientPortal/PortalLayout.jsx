@@ -23,9 +23,9 @@ const NAV_ITEMS = [
 
 // Phone bottom tab bar: icon over a short label, thumb-reachable.
 const bottomLinkClass = ({ isActive }) =>
-  `flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+  `flex flex-col items-center justify-center gap-1 min-h-16 py-1.5 text-[11px] transition-colors ${
     isActive
-      ? "text-indigo-600 dark:text-indigo-300"
+      ? "text-indigo-600 dark:text-indigo-400"
       : "text-slate-500 dark:text-slate-400"
   }`;
 
@@ -134,7 +134,7 @@ export function Component() {
               type="button"
               onClick={handleLogout}
               aria-label="Log out"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg bg-transparent border-none cursor-pointer transition-colors dark:text-rose-400 dark:hover:bg-rose-950/40"
+              className="flex items-center gap-1.5 px-3 py-1.5 max-sm:size-11 max-sm:justify-center max-sm:p-0 text-xs text-rose-600 hover:bg-rose-50 rounded-lg bg-transparent border-none cursor-pointer transition-colors dark:text-rose-400 dark:hover:bg-rose-950/40"
             >
               <LogOut size={14} />
               <span className="hidden sm:inline">Log Out</span>
@@ -165,8 +165,14 @@ export function Component() {
       >
         {NAV_ITEMS.map(({ to, shortLabel, icon: Icon }) => (
           <NavLink key={to} to={to} className={bottomLinkClass}>
-            <Icon size={20} />
-            {shortLabel}
+            {({ isActive }) => (
+              <>
+                <span className={`flex items-center justify-center w-13 h-7 rounded-full transition-colors ${isActive ? "bg-indigo-50 dark:bg-[#163a1e]" : ""}`}>
+                  <Icon size={20} />
+                </span>
+                <span className={isActive ? "font-bold" : "font-semibold"}>{shortLabel}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

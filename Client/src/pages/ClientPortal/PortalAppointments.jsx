@@ -342,7 +342,7 @@ export function Component() {
                           <button
                             type="button"
                             onClick={() => setReceiptPaymentId(appt.payment_id)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                            className="inline-flex items-center gap-1 py-2.5 -my-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
                           >
                             <Receipt size={13} />
                             Receipt
@@ -411,7 +411,7 @@ export function Component() {
                   type="button"
                   aria-pressed={listFilter === name}
                   onClick={() => setListFilter(name)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                  className={`px-3 py-1.5 max-sm:min-h-9 rounded-full text-xs font-semibold border transition-colors ${
                     listFilter === name
                       ? "bg-indigo-600 text-white border-indigo-600"
                       : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400"
@@ -478,7 +478,7 @@ export function Component() {
                     <button
                       type="button"
                       onClick={() => setReceiptPaymentId(appt.payment_id)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                      className="inline-flex items-center gap-1 py-2.5 -my-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
                     >
                       <Receipt size={13} />
                       Receipt

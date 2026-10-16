@@ -347,7 +347,7 @@ export function Component() {
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+        <DialogFooter className="px-6 py-4 max-md:mx-0 max-md:mb-0 max-md:bottom-0 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
           <Button
             variant="secondary"
             onClick={closeModal}
@@ -390,8 +390,11 @@ function FieldCard({ label, value, icon, onCopy }) {
         </div>
         {onCopy && value && (
           <button
+            type="button"
             onClick={onCopy}
-            className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-0.5 rounded opacity-0 group-hover:opacity-100 focus:opacity-100"
+            aria-label={`Copy ${label}`}
+            // Always visible on touch screens, which have no hover.
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-2 -m-1.5 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 max-md:opacity-100"
             title="Copy value"
           >
             <Copy className="h-3 w-3" />

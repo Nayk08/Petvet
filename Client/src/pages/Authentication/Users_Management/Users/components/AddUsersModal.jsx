@@ -253,7 +253,7 @@ export function Component() {
               <button
                 type="button"
                 onClick={() => setShowPassword((show) => !show)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-2.5 rounded-lg text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
               >

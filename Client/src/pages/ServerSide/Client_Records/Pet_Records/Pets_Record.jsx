@@ -38,9 +38,9 @@ export function Component() {
   });
 
   return (
-    <div className="space-y-6 p-6 max-w-7xl mx-auto">
+    <div className="space-y-6 sm:p-6 max-w-7xl mx-auto">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors duration-200">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-2)}
@@ -57,9 +57,9 @@ export function Component() {
             {isLoading ? (
               <div className="h-7 w-48 bg-gray-200 dark:bg-gray-700 animate-pulse rounded mt-1" />
             ) : (
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1">
                 {data?.client_name ?? "Unknown Client"}
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/60">
+                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/60">
                   <PawPrint className="w-3 h-3" />
                   {data?.pagination?.total ?? 0}{" "}
                   {data?.pagination?.total === 1 ? "Pet" : "Pets"}

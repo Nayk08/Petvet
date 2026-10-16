@@ -353,7 +353,7 @@ export default function Cart() {
                               type="button"
                               onClick={() => addOne(product)}
                               disabled={soldOut}
-                              className="hidden sm:inline-flex items-center h-8 px-3.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="hidden 2xl:inline-flex items-center whitespace-nowrap h-8 px-3.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Add to Cart
                             </button>

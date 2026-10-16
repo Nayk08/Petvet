@@ -359,7 +359,7 @@ export function Component() {
       <button
         type="button"
         onClick={() => navigate("/portal/appointments")}
-        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-transparent border-none cursor-pointer"
+        className="flex items-center gap-1.5 py-2.5 -my-2.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-transparent border-none cursor-pointer"
       >
         <ArrowLeft size={16} />
         Back to my appointments
