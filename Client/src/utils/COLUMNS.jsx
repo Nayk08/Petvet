@@ -507,7 +507,11 @@ export const PetRecordsColumns = [
   { key: "weight_kg", label: "WEIGHT" },
   { key: "breed", label: "BREED" },
   { key: "microchip_number", label: "MICROCHIP NUMBER" },
-  { key: "is_spayed_neutered", label: "SPAY/NEUTERED" },
+  {
+    key: "is_spayed_neutered",
+    label: "SPAY/NEUTERED",
+    render: (value) => (value == null ? "—" : value ? "Yes" : "No"),
+  },
   { key: "species_name", label: "SPECIES" },
   { key: "gender_name", label: "GENDER" },
 ];
@@ -660,112 +664,6 @@ export const TodayQueueColumns = [
         />
       );
     },
-  },
-];
-
-// ── Maintenance (service catalog) ──────────────────────
-
-export const MaintenanceServiceColumns = [
-  // Listed per category tab in Maintenance, so no category column here.
-  { key: "appointment_services", label: "SUB-SERVICE" },
-  {
-    key: "service_price",
-    label: "PRICE",
-    render: (value, row) =>
-      // A grooming sub-service with its own weight tiers is priced by them.
-      row.category_id === 1 && row.tier_count > 0 ? (
-        <span className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">
-          By pet weight ({row.tier_count} {row.tier_count === 1 ? "tier" : "tiers"})
-        </span>
-      ) : value != null ? (
-        <span className="font-medium text-slate-900 dark:text-slate-100">
-          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-        </span>
-      ) : (
-        // No fixed price — entered by staff when the client pays.
-        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
-          Priced at clinic
-        </span>
-      ),
-  },
-  {
-    key: "duration_minutes",
-    label: "DURATION",
-    render: (value) =>
-      value ? (
-        <span className="text-slate-700 dark:text-slate-300">{value} min</span>
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
-      ),
-  },
-  {
-    key: "allowed_roles",
-    label: "ASSIGNED PERSONNEL",
-    render: (value) =>
-      Array.isArray(value) && value.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {value.map((role) => (
-            <span
-              key={role}
-              className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 whitespace-nowrap"
-            >
-              {role}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
-          Unassigned
-        </span>
-      ),
-  },
-  {
-    key: "is_active",
-    label: "STATUS",
-    filterOptions: [
-      { key: "active", value: "true", label: "Active" },
-      { key: "deleted", value: "false", label: "Deleted" },
-    ],
-    render: (value) => (
-      <StatusBadge
-        label={value ? "Active" : "Deleted"}
-        variant={value ? "active" : "inactive"}
-      />
-    ),
-  },
-  // Last: long free text, so the key facts (price, duration, staff) stay in view.
-  {
-    key: "description",
-    label: "DESCRIPTION",
-    render: (value) => (
-      <span className="text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-normal min-w-56 max-w-xs block">
-        {value ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
-      </span>
-    ),
-  },
-];
-
-export const MaintenanceGroomingTierColumns = [
-  { key: "tier_name", label: "TIER" },
-  {
-    key: "max_weight_kg",
-    label: "PET WEIGHT",
-    render: (value) =>
-      value != null ? `Up to ${Number(value)} kg` : "No upper limit",
-  },
-  {
-    key: "price",
-    label: "PRICE",
-    render: (value) => (
-      <span className="font-medium text-slate-900 dark:text-slate-100">
-        ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-      </span>
-    ),
-  },
-  {
-    key: "description",
-    label: "DESCRIPTION",
-    render: (value) => value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
   },
 ];
 

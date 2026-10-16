@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button.jsx";
 import ChartCard from "@/components/ui/ChartCard.jsx";
-import ProductSalesInsights, { RankedBarChart } from "./Inventory/components/ProductSalesInsights.jsx";
+import ProductSalesInsights from "./Inventory/components/ProductSalesInsights.jsx";
+import BarList from "@/components/ui/BarList.jsx";
+import Segmented from "@/components/ui/Segmented.jsx";
 import {
   fetchRevenueTrend,
   fetchAppointmentsBreakdown,
@@ -39,66 +41,52 @@ function daysAgoRange(days) {
   return { start_date: toDateString(start), end_date: toDateString(end) };
 }
 
-const PRESETS = [
-  { label: "Last 7 days", days: 7 },
-  { label: "Last 30 days", days: 30 },
-  { label: "Last 90 days", days: 90 },
+const RANGE_OPTIONS = [
+  { value: 7, label: "7 days" },
+  { value: 30, label: "30 days" },
+  { value: 90, label: "90 days" },
+  { value: "custom", label: "Custom" },
 ];
 
 function DateRangeControl({ range, onChange }) {
-  const [activePreset, setActivePreset] = useState(30);
-  const [showCustom, setShowCustom] = useState(false);
+  const [preset, setPreset] = useState(30);
 
-  function applyPreset(days) {
-    setActivePreset(days);
-    setShowCustom(false);
-    onChange(daysAgoRange(days));
+  function pick(value) {
+    setPreset(value);
+    if (value !== "custom") onChange(daysAgoRange(value));
   }
 
+  const dateClass =
+    "min-w-0 flex-1 sm:flex-none min-h-10 text-xs px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-800 [color-scheme:light] dark:[color-scheme:dark]";
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {PRESETS.map((p) => (
-        <button
-          key={p.days}
-          type="button"
-          onClick={() => applyPreset(p.days)}
-          className={`px-3 py-1.5 max-sm:min-h-11 text-xs font-semibold rounded-lg border transition-all ${
-            !showCustom && activePreset === p.days
-              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
-          }`}
-        >
-          {p.label}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => setShowCustom((s) => !s)}
-        className={`px-3 py-1.5 max-sm:min-h-11 text-xs font-semibold rounded-lg border transition-all ${
-          showCustom
-            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white"
-        }`}
-      >
-        Custom
-      </button>
-      {showCustom && (
-        <div className="flex items-center gap-2 pl-2 ml-1 border-l border-slate-200 dark:border-slate-800">
+    <div className="flex flex-col gap-2 w-full sm:w-auto">
+      <Segmented
+        label="Date range"
+        options={RANGE_OPTIONS}
+        value={preset}
+        onChange={pick}
+        className="w-full sm:w-96"
+      />
+      {preset === "custom" && (
+        <div className="flex items-center gap-2">
           <input
             type="date"
+            aria-label="From"
             value={range.start_date}
             max={range.end_date}
             onChange={(e) => onChange({ ...range, start_date: e.target.value })}
-            className="text-xs px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 [color-scheme:light] dark:[color-scheme:dark]"
+            className={dateClass}
           />
           <span className="text-xs text-slate-400">to</span>
           <input
             type="date"
+            aria-label="To"
             value={range.end_date}
             min={range.start_date}
             max={toDateString(new Date())}
             onChange={(e) => onChange({ ...range, end_date: e.target.value })}
-            className="text-xs px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 [color-scheme:light] dark:[color-scheme:dark]"
+            className={dateClass}
           />
         </div>
       )}
@@ -109,7 +97,7 @@ function DateRangeControl({ range, onChange }) {
 // ── Chart primitives (inline SVG, no library) ──────────────────────────
 
 const CHART_H = 220;
-const CHART_PAD = { top: 12, right: 12, bottom: 24, left: 36 };
+const CHART_PAD = { top: 12, right: 12, bottom: 24, left: 52 }; // left fits "₱16,000"
 
 function scaleLinear(domainMax, rangeMax) {
   const max = domainMax > 0 ? domainMax : 1;
@@ -363,12 +351,56 @@ const formatHourLabel = (hour) => {
 };
 const formatDayShort = (dayName) => dayName.slice(0, 3);
 
-const STATUS_COLOR_VAR = {
-  Pending: "--status-warning",
-  "In Queue": "--slot-1",
-  Completed: "--status-good",
-  Cancelled: "--status-critical",
+const formatShortDate = (day) =>
+  new Date(`${String(day).slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+
+// Status colours — easy to tell apart, and in lightness too (not hue alone).
+const STATUS_BAR = {
+  Completed: "bg-[#2f9e44]",
+  "In Queue": "bg-[#5b9cff]",
+  Pending: "bg-[#a78bfa]",
+  "No Show": "bg-[#f5b83d]",
+  Cancelled: "bg-[#e5484d]",
 };
+
+// One stacked bar (share of each status) with a legend of counts.
+function StatusBreakdown({ rows }) {
+  const items = rows
+    .map((r) => ({ name: r.appointment_status_name, count: Number(r.count) || 0 }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const total = items.reduce((sum, r) => sum + r.count, 0) || 1;
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        role="img"
+        aria-label={items.map((r) => `${r.name} ${r.count}`).join(", ")}
+        className="flex h-3.5 gap-0.5 rounded-full overflow-hidden"
+      >
+        {items.map((r) => (
+          <div
+            key={r.name}
+            className={STATUS_BAR[r.name] ?? "bg-slate-400"}
+            style={{ width: `${(r.count / total) * 100}%` }}
+          />
+        ))}
+      </div>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+        {items.map((r) => (
+          <li key={r.name} className="flex items-center gap-1.5">
+            <span aria-hidden="true" className={`size-2 rounded-[3px] ${STATUS_BAR[r.name] ?? "bg-slate-400"}`} />
+            {r.name}
+            <strong className="text-slate-900 dark:text-white">{formatCount(r.count)}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function StockStatusBadge({ status }) {
   const styles =
@@ -437,6 +469,26 @@ export function Component() {
   const expiredCount =
     criticalStockQuery.data?.filter((p) => p.is_expired).length ?? 0;
 
+  const [peakBy, setPeakBy] = useState("hours");
+  const peak = peakTimesQuery.data;
+  const peakRows =
+    peakBy === "hours"
+      ? (peak?.byHour ?? []).map((d) => ({ ...d, label: formatHourLabel(d.hour), isPeak: peak?.peakHour?.hour === d.hour }))
+      : (peak?.byDay ?? []).map((d) => ({ ...d, label: formatDayShort(d.day_name), isPeak: peak?.peakDay?.day_of_week === d.day_of_week }));
+  const peakSubtitle =
+    peakBy === "hours"
+      ? peak?.peakHour
+        ? `Busiest: ${formatHourLabel(peak.peakHour.hour)} (${formatCount(peak.peakHour.count)} bookings)`
+        : "Bookings by hour of day"
+      : peak?.peakDay
+        ? `Busiest: ${peak.peakDay.day_name} (${formatCount(peak.peakDay.count)} bookings)`
+        : "Bookings by day of week";
+
+  const newClientsTotal = (clientGrowthQuery.data ?? []).reduce(
+    (sum, d) => sum + (Number(d.new_clients) || 0),
+    0,
+  );
+
   const rqClient = useQueryClient();
   const [showPullExpired, setShowPullExpired] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
@@ -472,14 +524,14 @@ export function Component() {
   }
 
   return (
-    <div className="w-full space-y-6 py-8">
+    <div className="w-full space-y-4 sm:space-y-5 py-4 sm:py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-wide dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Analytics
           </h1>
-          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
+          <p className="text-[13px] sm:text-sm text-slate-500 mt-0.5 dark:text-slate-400">
             Revenue, appointments, sales, and client trends.
           </p>
         </div>
@@ -488,8 +540,8 @@ export function Component() {
 
       {/* Revenue trend */}
       <ChartCard
-        title="Revenue Trend"
-        subtitle="Sales (cart checkouts) vs Services (appointments)"
+        title="Revenue trend"
+        subtitle="Sales (cart checkouts) vs services (appointments)"
         isPending={revenueQuery.isPending}
         isError={revenueQuery.isError}
         error={revenueQuery.error}
@@ -506,231 +558,180 @@ export function Component() {
       </ChartCard>
 
       {/* Appointments breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 items-start">
         <ChartCard
-          title="Appointments by Service"
+          title="Appointments by service"
           isPending={appointmentsQuery.isPending}
           isError={appointmentsQuery.isError}
           error={appointmentsQuery.error}
           isEmpty={(appointmentsQuery.data?.byService?.length ?? 0) === 0}
         >
-          <BarChart
-            data={appointmentsQuery.data?.byService ?? []}
-            valueKey="count"
-            labelKey="service_name"
-            colorVar="--slot-3"
-            formatValue={formatCount}
+          <BarList
+            barClass="bg-red-600 dark:bg-[#e5484d]"
+            items={[...(appointmentsQuery.data?.byService ?? [])]
+              .sort((a, b) => b.count - a.count)
+              .map((d) => ({ label: d.service_name, value: Number(d.count) }))}
           />
         </ChartCard>
 
         <ChartCard
-          title="Appointments by Status"
+          title="Appointments by status"
           isPending={appointmentsQuery.isPending}
           isError={appointmentsQuery.isError}
           error={appointmentsQuery.error}
           isEmpty={(appointmentsQuery.data?.byStatus?.length ?? 0) === 0}
         >
+          <StatusBreakdown rows={appointmentsQuery.data?.byStatus ?? []} />
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 items-start">
+        <ChartCard
+          title="Most frequent patients"
+          subtitle="Excludes cancelled and no-show visits"
+          isPending={appointmentsQuery.isPending}
+          isError={appointmentsQuery.isError}
+          error={appointmentsQuery.error}
+          isEmpty={(appointmentsQuery.data?.topPets?.length ?? 0) === 0}
+        >
+          <BarList
+            stacked
+            items={(appointmentsQuery.data?.topPets ?? []).map((d) => ({
+              label: d.pet_label,
+              value: Number(d.count),
+              display: `${formatCount(d.count)} ${Number(d.count) === 1 ? "visit" : "visits"}`,
+            }))}
+          />
+        </ChartCard>
+
+        {/* Peak hours / days: booking demand, every non-deleted appointment
+            in range, any status (same scope as the breakdown above). */}
+        <ChartCard
+          title="Peak times"
+          subtitle={peakSubtitle}
+          action={
+            <Segmented
+              size="sm"
+              label="Peak by"
+              options={[
+                { value: "hours", label: "Hours" },
+                { value: "days", label: "Days" },
+              ]}
+              value={peakBy}
+              onChange={setPeakBy}
+            />
+          }
+          isPending={peakTimesQuery.isPending}
+          isError={peakTimesQuery.isError}
+          error={peakTimesQuery.error}
+          isEmpty={peakRows.length === 0}
+        >
           <BarChart
-            data={appointmentsQuery.data?.byStatus ?? []}
+            data={peakRows}
             valueKey="count"
-            labelKey="appointment_status_name"
-            colorVar={(d) =>
-              STATUS_COLOR_VAR[d.appointment_status_name] ?? "--slot-1"
-            }
+            labelKey="label"
+            colorVar={(d) => (d.isPeak ? "--status-good" : "--slot-1")}
             formatValue={formatCount}
           />
         </ChartCard>
       </div>
 
-      <ChartCard
-        title="Most Frequent Patients"
-        subtitle="Pets with the most visits (excludes Cancelled / No Show)"
-        isPending={appointmentsQuery.isPending}
-        isError={appointmentsQuery.isError}
-        error={appointmentsQuery.error}
-        isEmpty={(appointmentsQuery.data?.topPets?.length ?? 0) === 0}
-      >
-        <RankedBarChart
-          data={appointmentsQuery.data?.topPets ?? []}
-          valueKey="count"
-          labelKey="pet_label"
-          colorVar="--slot-1"
-          formatValue={formatCount}
-        />
-      </ChartCard>
-
-      {/* Peak hours + Peak days — booking demand, not just completed visits,
-          same scope as Appointments by Service/Status above (every
-          non-deleted appointment in range, any status). */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 items-start">
+        {/* Client growth */}
         <ChartCard
-          title="Peak Hours"
-          subtitle={
-            peakTimesQuery.data?.peakHour
-              ? `Busiest: ${formatHourLabel(peakTimesQuery.data.peakHour.hour)} (${formatCount(peakTimesQuery.data.peakHour.count)} bookings)`
-              : "Bookings by hour of day"
-          }
-          isPending={peakTimesQuery.isPending}
-          isError={peakTimesQuery.isError}
-          error={peakTimesQuery.error}
-          isEmpty={(peakTimesQuery.data?.byHour?.length ?? 0) === 0}
-        >
-          <BarChart
-            data={(peakTimesQuery.data?.byHour ?? []).map((d) => ({
-              ...d,
-              label: formatHourLabel(d.hour),
-            }))}
-            valueKey="count"
-            labelKey="label"
-            colorVar={(d) =>
-              peakTimesQuery.data?.peakHour?.hour === d.hour
-                ? "--status-good"
-                : "--slot-1"
-            }
-            formatValue={formatCount}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Peak Days"
-          subtitle={
-            peakTimesQuery.data?.peakDay
-              ? `Busiest: ${peakTimesQuery.data.peakDay.day_name} (${formatCount(peakTimesQuery.data.peakDay.count)} bookings)`
-              : "Bookings by day of week"
-          }
-          isPending={peakTimesQuery.isPending}
-          isError={peakTimesQuery.isError}
-          error={peakTimesQuery.error}
-          isEmpty={(peakTimesQuery.data?.byDay?.length ?? 0) === 0}
-        >
-          <BarChart
-            data={(peakTimesQuery.data?.byDay ?? []).map((d) => ({
-              ...d,
-              label: formatDayShort(d.day_name),
-            }))}
-            valueKey="count"
-            labelKey="label"
-            colorVar={(d) =>
-              peakTimesQuery.data?.peakDay?.day_of_week === d.day_of_week
-                ? "--status-good"
-                : "--slot-2"
-            }
-            formatValue={formatCount}
-          />
-        </ChartCard>
-      </div>
-
-      {/* Client growth */}
-      <div>
-        <ChartCard
-          title="Client Growth"
+          title="Client growth"
           subtitle="New clients registered"
+          action={
+            clientGrowthQuery.isSuccess && (
+              <div className="text-right">
+                <p className="text-2xl font-extrabold leading-none text-slate-900 dark:text-white">
+                  {formatCount(newClientsTotal)}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 dark:text-slate-400">this period</p>
+              </div>
+            )
+          }
           isPending={clientGrowthQuery.isPending}
           isError={clientGrowthQuery.isError}
           error={clientGrowthQuery.error}
-          isEmpty={(clientGrowthQuery.data?.length ?? 0) === 0}
+          isEmpty={newClientsTotal === 0}
         >
-          <LineChart
-            data={clientGrowthQuery.data ?? []}
-            series={[
-              { key: "new_clients", label: "New clients", colorVar: "--slot-1" },
-            ]}
-            formatValue={formatCount}
-          />
+          <ul className="divide-y divide-slate-100 dark:divide-[#1f241f] max-h-64 overflow-y-auto">
+            {[...(clientGrowthQuery.data ?? [])]
+              .filter((d) => Number(d.new_clients) > 0)
+              .reverse()
+              .map((d) => (
+                <li key={d.day} className="flex items-center justify-between py-2 text-[13px]">
+                  <span className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                    <span aria-hidden="true" className="size-2 rounded-full bg-teal-500 dark:bg-[#6fe0d0]" />
+                    {formatShortDate(d.day)}
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    +{formatCount(d.new_clients)} {Number(d.new_clients) === 1 ? "client" : "clients"}
+                  </span>
+                </li>
+              ))}
+          </ul>
         </ChartCard>
+
+        {/* Best sellers + fast/slow movers: same section as Inventory's Product Sales tab */}
+        <ProductSalesInsights />
       </div>
 
-      {/* Best sellers + fast/slow movers — same section as Inventory's Product Sales tab */}
-      <ProductSalesInsights />
-
       {/* Critical stock */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Critical Stock
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-              Low/out-of-stock products, plus anything expired or expiring
-              within 5 months
-            </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
+      <ChartCard
+        title="Critical stock"
+        subtitle="Low or out of stock, plus anything expired or expiring within 5 months"
+        action={
+          <Link
+            to="/inventory"
+            className="inline-flex items-center min-h-9 text-xs font-bold text-indigo-700 hover:text-indigo-800 dark:text-[#74d983] dark:hover:text-[#a3e9ab] whitespace-nowrap"
+          >
+            Inventory ›
+          </Link>
+        }
+        isPending={criticalStockQuery.isPending}
+        isError={criticalStockQuery.isError}
+        error={criticalStockQuery.error}
+        isEmpty={false}
+      >
+        {(criticalStockQuery.data?.length ?? 0) === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-400 italic dark:text-slate-500">
+            No products are low/out of stock or nearing expiry.
+          </p>
+        ) : (
+          <>
+            <ul className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1f241f] -mt-1">
+              {criticalStockQuery.data.map((p) => (
+                <li key={p.product_id} className="flex items-center gap-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-slate-900 truncate dark:text-white">{p.product_name}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Qty {p.product_quantity} · Expires {formatExpiryDate(p.product_expiry_date)}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {(p.status_name === "Low Stock" || p.status_name === "Out of Stock") && (
+                      <StockStatusBadge status={p.status_name} />
+                    )}
+                    {(p.is_expired || p.expiring_soon) && <ExpiryBadge isExpired={p.is_expired} />}
+                  </div>
+                </li>
+              ))}
+            </ul>
             <Button
               type="button"
               variant="outline"
-              size="sm"
               disabled={expiredCount === 0}
               onClick={() => setShowPullExpired(true)}
-              className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 disabled:text-slate-400 disabled:border-slate-200 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/40 dark:disabled:text-slate-600 dark:disabled:border-slate-800"
+              className="mt-3 w-full sm:w-auto flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 disabled:text-slate-400 disabled:border-slate-200 dark:text-[#ff8a8a] dark:border-[#5a2327] dark:bg-transparent dark:hover:bg-[#2b1214] dark:disabled:text-slate-600 dark:disabled:border-slate-800"
             >
               <Trash2 size={14} />
-              <span>Remove Expired{expiredCount > 0 ? ` (${expiredCount})` : ""}</span>
+              <span>Remove expired{expiredCount > 0 ? ` (${expiredCount})` : ""}</span>
             </Button>
-            <Link
-              to="/inventory"
-              className="inline-flex items-center max-sm:min-h-11 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 whitespace-nowrap"
-            >
-              View Inventory →
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          {criticalStockQuery.isPending ? (
-            <div className="h-24 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-              Loading...
-            </div>
-          ) : criticalStockQuery.isError ? (
-            <div className="h-24 flex items-center justify-center text-sm text-rose-500 dark:text-rose-400">
-              {criticalStockQuery.error?.message ?? "Failed to load"}
-            </div>
-          ) : (criticalStockQuery.data?.length ?? 0) === 0 ? (
-            <div className="h-24 flex items-center justify-center text-sm text-slate-400 italic dark:text-slate-500">
-              No products are low/out of stock or nearing expiry.
-            </div>
-          ) : (
-            <div className="max-h-80 overflow-y-auto border border-slate-100 rounded-lg dark:border-slate-800 scrollbar-thin [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#334155_transparent]">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950">
-                  <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
-                    <th className="px-3 py-2 font-semibold">Product</th>
-                    <th className="px-3 py-2 font-semibold text-right">Qty</th>
-                    <th className="px-3 py-2 font-semibold text-right">Expiry</th>
-                    <th className="px-3 py-2 font-semibold text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {criticalStockQuery.data.map((p) => (
-                    <tr key={p.product_id}>
-                      <td className="px-3 py-2 text-slate-800 dark:text-slate-200">
-                        {p.product_name}
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
-                        {p.product_quantity}
-                      </td>
-                      <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
-                        {formatExpiryDate(p.product_expiry_date)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex flex-wrap justify-end gap-1.5">
-                          {(p.status_name === "Low Stock" ||
-                            p.status_name === "Out of Stock") && (
-                            <StockStatusBadge status={p.status_name} />
-                          )}
-                          {(p.is_expired || p.expiring_soon) && (
-                            <ExpiryBadge isExpired={p.is_expired} />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+          </>
+        )}
+      </ChartCard>
 
       <Dialog
         open={showPullExpired}
