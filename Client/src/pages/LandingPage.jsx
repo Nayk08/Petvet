@@ -4,6 +4,7 @@ import { fetchNavbar } from "@/api/http";
 import { resolveLandingPath } from "@/utils/resolveLandingPath.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import Chatbot from "@/components/ui/Chatbot.jsx";
 import {
   ArrowRight,
   CalendarRange,
@@ -549,6 +550,7 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+      <Chatbot />
     </div>
   );
 }

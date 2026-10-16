@@ -6,6 +6,7 @@ import { fetchMyProfile, logoutClient, updateMyClientPicture } from "@/api/clien
 import ProfilePictureModal from "@/components/layout/ProfilePictureModal.jsx";
 import { queryClient } from "@/api/http.js";
 import petvetLogo from "@/assets/petvet_icon.svg";
+import Chatbot from "@/components/ui/Chatbot.jsx";
 
 const initials = (name) =>
   (name || "")
@@ -176,6 +177,7 @@ export function Component() {
           </NavLink>
         ))}
       </nav>
+      <Chatbot />
     </div>
   );
 }
