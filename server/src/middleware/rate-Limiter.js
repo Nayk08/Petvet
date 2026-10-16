@@ -19,6 +19,12 @@ const authLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000,
   max: 100,
+  // Only the sign-in / sign-up / logout POSTs. GET /api/auth/me is the
+  // session check the app runs on almost every navigation; counting it
+  // here locked a whole clinic IP out of every page after ~100 page
+  // changes in 15 min (all route guards fail on its 429). apiLimiter
+  // still caps it as part of the general /api flood limit.
+  skip: (req) => req.method === "GET",
   message: { message: "Too many attempts, please try again later." },
 });
 
