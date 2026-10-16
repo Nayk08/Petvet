@@ -433,7 +433,7 @@ export default function Sidebar({ onLogout }) {
       `}</style>
 
       {/* Phone top bar: back (on nested pages) or logo, page title, user menu */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-40 pt-[env(safe-area-inset-top)] bg-white/85 backdrop-blur-md border-b border-slate-200 dark:bg-slate-950/85 dark:border-slate-800">
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-white/85 backdrop-blur-md border-b border-slate-200 dark:bg-slate-950/85 dark:border-slate-800">
         <div className="h-14 px-1.5 flex items-center gap-1">
           {nestedPage ? (
             <button
@@ -522,7 +522,7 @@ export default function Sidebar({ onLogout }) {
       {showNav && (
         <nav
           aria-label="Main"
-          className="md:hidden fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)] bg-white/95 backdrop-blur-md border-t border-slate-200 dark:bg-[#0d100d]/95 dark:border-slate-800"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-white/95 backdrop-blur-md border-t border-slate-200 dark:bg-[#0d100d]/95 dark:border-slate-800"
         >
           <ul
             className="grid h-16 px-1.5"

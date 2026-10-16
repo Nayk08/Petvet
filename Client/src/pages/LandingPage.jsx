@@ -93,7 +93,7 @@ export default function LandingPage() {
   }, [activeImage, menuOpen]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
+    <div className="flex flex-col min-h-screen pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white transition-colors duration-200 antialiased">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-zinc-200 dark:border-zinc-800/50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-950/60">
         <div className="container max-w-6xl mx-auto flex h-16 items-center justify-between px-4 md:px-6">
@@ -526,13 +526,13 @@ export default function LandingPage() {
           </button>
 
           <div
-            className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-lg shadow-2xl border border-white/5 bg-zinc-900"
+            className="relative max-w-4xl max-h-[85dvh] overflow-hidden rounded-lg shadow-2xl border border-white/5 bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
             <img
               src={activeImage.src}
               alt={activeImage.alt}
-              className="w-full h-auto max-h-[85vh] object-contain object-center"
+              className="w-full h-auto max-h-[85dvh] object-contain object-center"
             />
           </div>
           <p className="text-zinc-300 text-xs mt-3 bg-zinc-900/50 py-1 px-3 rounded-full backdrop-blur">

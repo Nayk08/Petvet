@@ -19,6 +19,45 @@
   }
 }
 
+/* Phones (iOS Safari / Android Chrome): 100vh is the height with the
+   browser toolbar hidden, so a min-h-screen page ran under the toolbar.
+   dvh is the height actually visible right now. */
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+/* No grey/blue flash over whatever is tapped (iOS + Android); buttons
+   have their own pressed (active:) styles. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari draws date/time fields with its own rounded, centred,
+   oddly sized control; make them look like the app's other inputs. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* Autofilled fields (Chrome/Android, Safari) get a bright yellow/blue
+   fill that ignores dark mode; keep the field colour, recolour the text. */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f2f4f1;
+  caret-color: #f2f4f1;
+  box-shadow: 0 0 0 1000px #141714 inset;
+  transition: background-color 9999s;
+}
+
 /* Phones: 16px form fields (iOS Safari zooms the whole page when a field
    under 16px is focused) and 44px tap height. Deliberately NOT in a layer,
    so it beats every field's own text-sm/text-xs utility in one place.

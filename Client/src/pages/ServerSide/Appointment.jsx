@@ -111,7 +111,7 @@ export function Component() {
 
   return (
     <div className="w-full py-6 space-y-4">
-      <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-wide">
             Appointments
@@ -124,14 +124,14 @@ export function Component() {
           <Button
             disabled
             title="Can't book an appointment in the past"
-            className="flex items-center gap-1.5 font-medium"
+            className="flex items-center justify-center gap-1.5 font-medium max-sm:w-full"
           >
             <Plus size={16} />
             <span>Book Appointment</span>
           </Button>
         ) : (
           <Button asChild>
-            <Link to={bookLink} className="flex items-center gap-1.5 font-medium">
+            <Link to={bookLink} className="flex items-center justify-center gap-1.5 font-medium max-sm:w-full">
               <Plus size={16} />
               <span>Book Appointment</span>
             </Link>

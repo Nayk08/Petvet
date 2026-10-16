@@ -79,7 +79,7 @@ export function Component() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 dark:bg-slate-950/85 dark:border-slate-800 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 shrink-0">
@@ -154,14 +154,14 @@ export function Component() {
       )}
 
       {/* Bottom padding on phones keeps content clear of the tab bar. */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 max-sm:pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8">
         <Outlet />
       </main>
 
       {/* Phones: fixed bottom tab bar instead of cramped top tabs. */}
       <nav
         aria-label="Portal sections"
-        className="sm:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-3 border-t border-slate-200 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] dark:border-slate-800 dark:bg-slate-950/95"
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] grid grid-cols-3 border-t border-slate-200 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] dark:border-slate-800 dark:bg-slate-950/95"
       >
         {NAV_ITEMS.map(({ to, shortLabel, icon: Icon }) => (
           <NavLink key={to} to={to} className={bottomLinkClass}>
