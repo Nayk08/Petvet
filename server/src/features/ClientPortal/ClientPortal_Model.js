@@ -52,6 +52,24 @@ export default class ClientPortalModel {
     }
   }
 
+  // One-time OTP: atomically stamps consumption. Succeeds (returns true)
+  // only the first time a code issued at `tokenIssuedAtSec` is used — a
+  // replay, or an older code after a newer sign-in, finds otp_consumed_at
+  // already at/after its issue time and gets no row back. The WHERE clause
+  // does the check and the write in one statement, so two concurrent
+  // verifies can't both win. See migration 017.
+  async consumeOtp(client_id, tokenIssuedAtSec) {
+    const res = await pool.query(
+      `UPDATE tbl_clients
+       SET otp_consumed_at = NOW()
+       WHERE client_id = $1 AND is_deleted IS NOT TRUE
+         AND (otp_consumed_at IS NULL OR otp_consumed_at < to_timestamp($2))
+       RETURNING client_id`,
+      [client_id, tokenIssuedAtSec],
+    );
+    return res.rowCount > 0;
+  }
+
   // The client's own profile picture (Cloudinary URL).
   async updateClientPicture(client_id, client_picture) {
     const res = await pool.query(

@@ -156,6 +156,13 @@ export default class ClientPortalService {
     if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
       throw httpError(400, "That code is incorrect. Check your email and try again.");
     }
+    // Burn the code on its first correct use — only now, so a mistyped code
+    // never consumes it. A replay (or an older code after a newer sign-in)
+    // is refused even while still unexpired.
+    const firstUse = await clientPortalModel.consumeOtp(t.client_id, t.iat);
+    if (!firstUse) {
+      throw httpError(400, "That code was already used. Please sign in with Google again to get a new one.");
+    }
     const client = await clientPortalModel.getClientById(t.client_id);
     if (!client) throw httpError(401, "This account is no longer active. Please contact the clinic.");
     return this.#signIn(client, t.sub);
