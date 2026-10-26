@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { History, PlusCircle, Pencil, Trash2, Receipt } from "lucide-react";
+import { History, PlusCircle, Pencil, Trash2, Receipt, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +8,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Pagination } from "@/components/ui/Pagination";
 import { fetchProductHistory, fetchProductSalesHistory } from "@/api/http";
 import { formatDateTime } from "@/utils/COLUMNS";
+
+const SALES_PAGE_SIZE = 5;
 
 // One line of the audit trail: what happened, when, and by whom.
 function AuditLine({ icon: Icon, label, date, by, tone }) {
@@ -46,6 +50,26 @@ export default function ProductHistoryModal({ productName, productId, onClose })
     queryFn: ({ signal }) => fetchProductSalesHistory({ product_name: productName, signal }),
     enabled: Boolean(productName),
   });
+
+  const [salesSearch, setSalesSearch] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+
+  const filteredSales = useMemo(() => {
+    const term = salesSearch.trim().toLowerCase();
+    if (!term) return sales ?? [];
+    return (sales ?? []).filter((s) => s.control_number.toLowerCase().includes(term));
+  }, [sales, salesSearch]);
+
+  const salesTotalPages = Math.max(1, Math.ceil(filteredSales.length / SALES_PAGE_SIZE));
+  const pagedSales = filteredSales.slice(
+    (salesPage - 1) * SALES_PAGE_SIZE,
+    salesPage * SALES_PAGE_SIZE,
+  );
+
+  function handleSalesSearchChange(value) {
+    setSalesSearch(value);
+    setSalesPage(1);
+  }
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -114,16 +138,32 @@ export default function ProductHistoryModal({ productName, productId, onClose })
             Sales Transactions
           </h3>
 
+          {!salesPending && sales?.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={salesSearch}
+                onChange={(e) => handleSalesSearchChange(e.target.value)}
+                placeholder="Search invoice number..."
+                className="w-full pl-8 pr-3 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white dark:bg-slate-950 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          )}
+
           {salesPending && (
             <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">Loading transactions...</p>
           )}
           {!salesPending && sales?.length === 0 && (
             <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">No sales for this product yet.</p>
           )}
+          {!salesPending && sales?.length > 0 && filteredSales.length === 0 && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">No transactions match "{salesSearch}".</p>
+          )}
 
-          {sales?.length > 0 && (
+          {pagedSales.length > 0 && (
             <div className="space-y-2">
-              {sales.map((s) => (
+              {pagedSales.map((s) => (
                 <div
                   key={`${s.payment_id}-${s.control_number}`}
                   className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 p-3 text-[13px]"
@@ -143,6 +183,14 @@ export default function ProductHistoryModal({ productName, productId, onClose })
               ))}
             </div>
           )}
+
+          <Pagination
+            page={salesPage}
+            totalPages={salesTotalPages}
+            onPageChange={setSalesPage}
+            total={filteredSales.length}
+            limit={SALES_PAGE_SIZE}
+          />
         </div>
       </DialogContent>
     </Dialog>
