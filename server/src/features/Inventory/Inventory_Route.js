@@ -44,6 +44,12 @@ router.get(
   (req, res) => inventoryController.getProductSalesHistory(req, res),
 );
 
+router.get(
+  "/inventory/history/:product_name/restocks",
+  hasPermission("INVENTORY", "can_view"),
+  (req, res) => inventoryController.getRestockHistory(req, res),
+);
+
 // Same ordering reason as /inventory/batches above — "categories" would
 // otherwise be captured by /inventory/:product_id.
 router.get(

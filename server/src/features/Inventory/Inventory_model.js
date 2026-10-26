@@ -548,12 +548,35 @@ export default class InventoryModel {
         }
       }
 
+      await client.query(
+        `INSERT INTO tbl_product_restock_log
+           (product_id, quantity_added, product_price, product_expiry_date, created_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [result.product_id, quantity, product_price, newExpiry, updated_by],
+      );
+
       await client.query("COMMIT");
       return result;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     }
+  }
+
+  // Every past restock ("Add Quantity") for a product, across all its
+  // batches — tbl_product_restock_log rows don't move when a batch merges
+  // or is replaced, so this joins by product_name like getProductSalesHistory.
+  async getRestockHistory(product_name) {
+    const res = await pool.query(
+      `SELECT r.restock_id, r.product_id, r.quantity_added, r.product_price,
+              r.product_expiry_date, r.created_by, r.date_created
+       FROM tbl_product_restock_log r
+       JOIN tbl_products p ON p.product_id = r.product_id
+       WHERE p.product_name = $1
+       ORDER BY r.date_created DESC`,
+      [product_name],
+    );
+    return res.rows;
   }
 
   // Archive tab — the soft-deleted counterpart to getProducts. Queries

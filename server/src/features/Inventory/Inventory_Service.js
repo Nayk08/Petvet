@@ -35,6 +35,10 @@ export default class InventoryService {
     return inventoryModel.getProductSalesHistory(product_name);
   }
 
+  async getRestockHistory(product_name) {
+    return inventoryModel.getRestockHistory(product_name);
+  }
+
   async getProductBatches(product_name) {
     try {
       return await inventoryModel.getProductBatches(product_name);

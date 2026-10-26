@@ -2,7 +2,7 @@ import { patchCachedRows } from "@/api/optimistic.js";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, PackagePlus } from "lucide-react";
+import { CheckCircle2, XCircle, PackagePlus, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,9 @@ import {
   queryClient,
   fetchInventoryById,
   addProductQuantity,
+  fetchProductRestockHistory,
 } from "@/api/http";
+import { formatDateTime } from "@/utils/COLUMNS";
 
 export function Component() {
   const submit = useSubmit();
@@ -48,6 +50,13 @@ export function Component() {
     queryKey: ["product", params.product_id],
     queryFn: ({ signal }) =>
       fetchInventoryById({ product_id: params.product_id, signal }),
+  });
+
+  const { data: restocks, isPending: restocksPending } = useQuery({
+    queryKey: ["inventory-restock-history", data?.product_name],
+    queryFn: ({ signal }) =>
+      fetchProductRestockHistory({ product_name: data.product_name, signal }),
+    enabled: Boolean(data?.product_name),
   });
 
   const currentExpiry = data?.product_expiry_date
@@ -218,6 +227,47 @@ export function Component() {
             </DialogFooter>
           </form>
         )}
+
+        {!isPending && (
+          <div className="pt-4 mt-1 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <h3 className="flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+              <History className="w-3.5 h-3.5" />
+              Past Restocks
+            </h3>
+
+            {restocksPending && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
+                Loading...
+              </p>
+            )}
+            {!restocksPending && restocks?.length === 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
+                No restocks yet.
+              </p>
+            )}
+            {restocks?.length > 0 && (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {restocks.map((r) => (
+                  <div
+                    key={r.restock_id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-xs"
+                  >
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {formatDateTime(r.date_created) || "date not recorded"}
+                      {" · by "}
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        {r.created_by || "unknown"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-medium text-slate-900 dark:text-slate-100">
+                      +{r.quantity_added} · ₱{Number(r.product_price).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -273,6 +323,9 @@ export async function action({ request, params }) {
   await queryClient.invalidateQueries({ queryKey: ["inventory-batches"] });
   await queryClient.invalidateQueries({
     queryKey: ["product", params.product_id],
+  });
+  await queryClient.invalidateQueries({
+    queryKey: ["inventory-restock-history"],
   });
 
   // The affected row can differ from the batch this modal was opened on —

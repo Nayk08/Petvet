@@ -62,6 +62,15 @@ export default class InventoryController {
     }
   }
 
+  async getRestockHistory(req, res) {
+    try {
+      const restocks = await inventoryService.getRestockHistory(req.params.product_name);
+      return res.status(200).json(restocks);
+    } catch (error) {
+      return sendError(res, error, "Failed to fetch restock history.");
+    }
+  }
+
   async getProductBatches(req, res) {
     try {
       const { product_name } = req.params;

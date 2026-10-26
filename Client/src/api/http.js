@@ -585,6 +585,15 @@ export async function fetchProductSalesHistory({ product_name, signal } = {}) {
   return handleResponse(response, "Failed to fetch product sales history");
 }
 
+// Every past "Add Quantity" restock of this product.
+export async function fetchProductRestockHistory({ product_name, signal } = {}) {
+  const response = await fetchWithTimeout(
+    `${baseUrl}/inventory/history/${encodeURIComponent(product_name)}/restocks`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch restock history");
+}
+
 export async function fetchProductCategories({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/inventory/categories`, {
     signal,
