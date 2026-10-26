@@ -61,11 +61,12 @@ export default function BatchesModal({ productName, onClose }) {
   // list instead of showing an empty row (still reachable to restock via
   // the main Inventory row's own "Add Quantity" action). The row grid's
   // own "×N batches" badge counts the same way (in_stock_batch_count in
-  // GROUPED_PRODUCTS_QUERY), so the two numbers always agree. But if
-  // EVERY batch is out of stock, there'd be nothing to show and no way
-  // to restock — in that case show them all instead of a dead end.
-  const inStockBatches = data?.filter((b) => b.status_name !== "Out of Stock") ?? [];
-  const batches = inStockBatches.length > 0 ? inStockBatches : (data ?? []);
+  // GROUPED_PRODUCTS_QUERY), so the two numbers always agree. This modal
+  // is only ever opened for a row with batch_count > 1 AND some stock
+  // left (Inventory.jsx routes a fully out-of-stock product straight to
+  // the row's own actions instead), so there's always at least one
+  // in-stock batch to show here.
+  const batches = data?.filter((b) => b.status_name !== "Out of Stock") ?? [];
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>

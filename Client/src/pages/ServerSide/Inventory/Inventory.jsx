@@ -162,9 +162,13 @@ export default function Inventory() {
                 // A grouped row (same product name, different batch) has no
                 // single product_id to edit/delete directly — send those
                 // through the batches modal instead, where each batch is its
-                // own row with its own edit/delete.
-                canEdit={(row) => row.batch_count === 1}
-                canDelete={(row) => row.batch_count === 1}
+                // own row with its own edit/delete. Once the whole product
+                // is out of stock there's nothing left to show in that
+                // modal (out-of-stock batches are hidden there), so fall
+                // back to acting directly on the row's own product_id
+                // (the newest batch) instead of a dead-end "View Batches".
+                canEdit={(row) => row.batch_count === 1 || row.status_name === "Out of Stock"}
+                canDelete={(row) => row.batch_count === 1 || row.status_name === "Out of Stock"}
                 actions={[
                   {
                     label: "Add Quantity",
@@ -172,10 +176,10 @@ export default function Inventory() {
                     className:
                       "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50",
                     onClick: (row) => navigate(`add-quantity/${row.product_id}`),
-                    // Only unambiguous for a single batch — for a grouped row,
-                    // restock a specific batch from inside the batches modal
-                    // instead.
-                    show: (row) => row.batch_count === 1,
+                    // Only unambiguous for a single batch — for a grouped row
+                    // with stock, restock a specific batch from inside the
+                    // batches modal instead.
+                    show: (row) => row.batch_count === 1 || row.status_name === "Out of Stock",
                   },
                   {
                     label: "View Batches",
@@ -183,10 +187,13 @@ export default function Inventory() {
                     className:
                       "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
                     onClick: (row) => setBatchesFor(row.product_name),
-                    show: (row) => row.batch_count > 1,
+                    show: (row) => row.batch_count > 1 && row.status_name !== "Out of Stock",
                   },
                   // Several batches: each has its own History inside View Batches.
-                  { ...historyAction, show: (row) => row.batch_count === 1 },
+                  {
+                    ...historyAction,
+                    show: (row) => row.batch_count === 1 || row.status_name === "Out of Stock",
+                  },
                 ]}
                 limit={limit}
                 search={search}
