@@ -60,11 +60,10 @@ export default function BatchesModal({ productName, onClose }) {
   // An out-of-stock batch has nothing left to sell — drop it from this
   // list instead of showing an empty row (still reachable to restock via
   // the main Inventory row's own "Add Quantity" action). The row grid's
-  // own "×N batches" badge counts every batch regardless of stock, so say
-  // so here too instead of silently showing a smaller, mismatched number.
-  const totalBatches = data?.length ?? 0;
+  // own "×N batches" badge counts the same way (batch_count in
+  // GROUPED_PRODUCTS_QUERY excludes product_quantity = 0), so the two
+  // numbers always agree.
   const batches = data?.filter((b) => b.status_name !== "Out of Stock") ?? [];
-  const hiddenCount = totalBatches - batches.length;
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -74,10 +73,8 @@ export default function BatchesModal({ productName, onClose }) {
             {productName}
           </DialogTitle>
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
-            {batches.length} of {totalBatches} batches, each with its own
-            quantity, price, and expiry date.
-            {hiddenCount > 0 &&
-              ` (${hiddenCount} out of stock, hidden)`}
+            {batches.length} separate batches, each with its own quantity,
+            price, and expiry date.
           </DialogDescription>
         </DialogHeader>
 

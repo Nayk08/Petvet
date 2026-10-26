@@ -23,7 +23,7 @@ export const GROUPED_PRODUCTS_QUERY = `
     COALESCE(SUM(p.product_quantity) FILTER (
       WHERE p.product_expiry_date IS NULL OR p.product_expiry_date > CURRENT_TIMESTAMP
     ), 0)::int AS sellable_quantity,
-    COUNT(*)::int AS batch_count,
+    COUNT(*) FILTER (WHERE p.product_quantity > 0)::int AS batch_count,
     MIN(p.product_price) AS min_price,
     MAX(p.product_price) AS max_price,
     (array_agg(p.product_image ORDER BY p.date_created DESC)
