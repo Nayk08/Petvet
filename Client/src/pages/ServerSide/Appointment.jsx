@@ -174,6 +174,15 @@ export function Component() {
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+              {Object.entries(SERVICE_DOT).map(([service, dotClass]) => (
+                <span key={service} className="flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+                  {service}
+                </span>
+              ))}
+            </div>
+
             <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                 <div key={d}>{d}</div>

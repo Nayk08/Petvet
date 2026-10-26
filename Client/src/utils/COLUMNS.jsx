@@ -166,20 +166,29 @@ export function getInventoryColumns(categories = []) {
     ),
   },
   {
-    key: "product_image",
-    label: "PRODUCT IMAGE",
-    render: (value) =>
-      value ? (
-        <img
-          src={value}
-          alt="Product"
-          className="w-10 h-10 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm"
+    key: "status_name",
+    label: "Status",
+    multiSelect: true,
+    filterOptions: [
+      { key: "high", value: "High Stock", label: "High Stock" },
+      { key: "average", value: "Average Stock", label: "Average Stock" },
+      { key: "low", value: "Low Stock", label: "Low Stock" },
+      { key: "out", value: "Out of Stock", label: "Out of Stock" },
+    ],
+    render: (value) => {
+      const variantMap = {
+        "High Stock": "high",
+        "Average Stock": "average",
+        "Low Stock": "low",
+        "Out of Stock": "out",
+      };
+      return (
+        <StatusBadge
+          label={value ?? "Unknown"}
+          variant={variantMap[value] || "default"}
         />
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
-          No image
-        </span>
-      ),
+      );
+    },
   },
   { key: "product_quantity", label: "PRODUCT QUANTITY" },
   {
@@ -222,29 +231,20 @@ export function getInventoryColumns(categories = []) {
       ),
   },
   {
-    key: "status_name",
-    label: "Status",
-    multiSelect: true,
-    filterOptions: [
-      { key: "high", value: "High Stock", label: "High Stock" },
-      { key: "average", value: "Average Stock", label: "Average Stock" },
-      { key: "low", value: "Low Stock", label: "Low Stock" },
-      { key: "out", value: "Out of Stock", label: "Out of Stock" },
-    ],
-    render: (value) => {
-      const variantMap = {
-        "High Stock": "high",
-        "Average Stock": "average",
-        "Low Stock": "low",
-        "Out of Stock": "out",
-      };
-      return (
-        <StatusBadge
-          label={value ?? "Unknown"}
-          variant={variantMap[value] || "default"}
+    key: "product_image",
+    label: "PRODUCT IMAGE",
+    render: (value) =>
+      value ? (
+        <img
+          src={value}
+          alt="Product"
+          className="w-10 h-10 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm"
         />
-      );
-    },
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">
+          No image
+        </span>
+      ),
   },
   {
     key: "is_expired",
