@@ -50,12 +50,17 @@ export default function BatchesModal({ productName, onClose }) {
   const navigate = useNavigate();
   const [historyFor, setHistoryFor] = useState(null); // batch product_id
 
-  const { data: batches, isPending, isError, error } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["inventory-batches", productName],
     queryFn: ({ signal }) =>
       fetchProductBatches({ product_name: productName, signal }),
     enabled: Boolean(productName),
   });
+
+  // An out-of-stock batch has nothing left to sell — drop it from this
+  // list instead of showing an empty row (still reachable to restock via
+  // the main Inventory row's own "Add Quantity" action).
+  const batches = data?.filter((b) => b.status_name !== "Out of Stock");
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -80,6 +85,10 @@ export default function BatchesModal({ productName, onClose }) {
         ) : isError ? (
           <p className="py-6 text-center text-sm text-rose-500 dark:text-rose-400">
             {error?.message ?? "Failed to load batches"}
+          </p>
+        ) : batches.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+            All batches of this product are out of stock.
           </p>
         ) : (
           <div className="max-h-96 overflow-y-auto -mx-1 px-1 space-y-2 scrollbar-thin [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#334155_transparent]">
