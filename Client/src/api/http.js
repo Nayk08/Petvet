@@ -576,6 +576,15 @@ export async function fetchProductHistory({ product_name, signal } = {}) {
   return handleResponse(response, "Failed to fetch product history");
 }
 
+// Every sale transaction (invoice) that included this product.
+export async function fetchProductSalesHistory({ product_name, signal } = {}) {
+  const response = await fetchWithTimeout(
+    `${baseUrl}/inventory/history/${encodeURIComponent(product_name)}/sales`,
+    { signal, credentials: "include" },
+  );
+  return handleResponse(response, "Failed to fetch product sales history");
+}
+
 export async function fetchProductCategories({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/inventory/categories`, {
     signal,

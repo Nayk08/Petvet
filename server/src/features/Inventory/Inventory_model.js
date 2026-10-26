@@ -175,6 +175,23 @@ export default class InventoryModel {
     return res.rows;
   }
 
+  // Every sale transaction that included this product, across all its
+  // batches (batches share a product_name but have separate product_ids).
+  async getProductSalesHistory(product_name) {
+    const res = await pool.query(
+      `SELECT p.payment_id, p.control_number, p.date_created AS payment_date,
+              i.quantity, i.item_price, i.subtotal
+       FROM v_payment_cart_items i
+       JOIN v_payments p ON p.payment_id = i.payment_id
+       WHERE i.product_id IN (
+         SELECT product_id FROM tbl_products WHERE product_name = $1
+       )
+       ORDER BY p.date_created DESC`,
+      [product_name],
+    );
+    return res.rows;
+  }
+
   async getProductsById(product_id) {
     const client = await pool.connect();
     try {

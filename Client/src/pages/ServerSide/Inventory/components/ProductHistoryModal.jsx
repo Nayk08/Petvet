@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { History, PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { History, PlusCircle, Pencil, Trash2, Receipt } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { fetchProductHistory } from "@/api/http";
+import { fetchProductHistory, fetchProductSalesHistory } from "@/api/http";
 import { formatDateTime } from "@/utils/COLUMNS";
 
 // One line of the audit trail: what happened, when, and by whom.
@@ -40,6 +40,12 @@ export default function ProductHistoryModal({ productName, productId, onClose })
   const history = productId
     ? data?.filter((b) => String(b.product_id) === String(productId))
     : data;
+
+  const { data: sales, isPending: salesPending } = useQuery({
+    queryKey: ["inventory-sales-history", productName],
+    queryFn: ({ signal }) => fetchProductSalesHistory({ product_name: productName, signal }),
+    enabled: Boolean(productName),
+  });
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -100,6 +106,43 @@ export default function ProductHistoryModal({ productName, productId, onClose })
               )}
             </div>
           ))}
+        </div>
+
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+            <Receipt className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            Sales Transactions
+          </h3>
+
+          {salesPending && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">Loading transactions...</p>
+          )}
+          {!salesPending && sales?.length === 0 && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">No sales for this product yet.</p>
+          )}
+
+          {sales?.length > 0 && (
+            <div className="space-y-2">
+              {sales.map((s) => (
+                <div
+                  key={`${s.payment_id}-${s.control_number}`}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 p-3 text-[13px]"
+                >
+                  <div className="min-w-0">
+                    <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                      {s.control_number}
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {" · "}{formatDateTime(s.payment_date) || "date not recorded"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 font-medium text-slate-900 dark:text-slate-100">
+                    Qty {s.quantity} · ₱{Number(s.subtotal).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
