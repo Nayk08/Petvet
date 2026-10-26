@@ -38,6 +38,30 @@ export default class PermissionModel {
     return rows[0]?.module_code;
   }
 
+  async getParentModuleId(userModuleId) {
+    const { rows } = await pool.query(
+      `SELECT parent_module_id FROM tbl_user_module WHERE user_module_id = $1`,
+      [userModuleId],
+    );
+    return rows[0]?.parent_module_id ?? null;
+  }
+
+  async getCanView(userLevelId, userModuleId) {
+    const { rows } = await pool.query(
+      `SELECT can_view FROM tbl_module_access WHERE user_level_id = $1 AND user_module_id = $2`,
+      [userLevelId, userModuleId],
+    );
+    return rows[0]?.can_view ?? false;
+  }
+
+  async getChildModuleIds(parentModuleId) {
+    const { rows } = await pool.query(
+      `SELECT user_module_id FROM tbl_user_module WHERE parent_module_id = $1`,
+      [parentModuleId],
+    );
+    return rows.map((r) => r.user_module_id);
+  }
+
   async getUserLevels() {
     const query = `
       SELECT user_level_id, user_level, description

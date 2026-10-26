@@ -246,12 +246,17 @@ export function Component() {
                     {ACTIONS.map((action) => {
                       const field = ACTION_FIELD_MAP[action];
                       const active = !!mod[field];
+                      // Create/Edit/Delete/Export are meaningless without
+                      // View, so lock them off until View is on (matches the
+                      // server-side guard in Permission_Service).
+                      const locked = action !== "VIEW" && !mod.can_view;
                       return (
                         <td key={action} className="p-3.5 max-sm:px-1.5 text-center">
                           <button
                             onClick={() => handleToggle(mod.id, action)}
-                            disabled={isSaving}
-                            className={`mx-auto relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full after:absolute after:-inset-3 after:content-[""] border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 ${
+                            disabled={isSaving || locked}
+                            title={locked ? "Enable View first" : undefined}
+                            className={`mx-auto relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full after:absolute after:-inset-3 after:content-[""] border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
                               active
                                 ? "bg-indigo-600 dark:bg-indigo-500"
                                 : "bg-slate-300 dark:bg-slate-700"

@@ -57,12 +57,19 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
   });
   const isAdmin = currentUserData?.user?.role?.trim() === "Admin";
 
+  // Grooming only ever assigns Groomers, Consultation/Operation only ever
+  // assign Veterinarians (see tbl_appointment_services.allowed_roles) — so
+  // the filter should only list the role that's actually eligible here,
+  // not every staff member clinic-wide.
+  const staffRole = name === "Grooming" ? "Groomer" : "Veterinarian";
   const columnsConfig = useMemo(() => {
-    const staffFilterOptions = (staff ?? []).map((s) => ({
-      key: s.users_id,
-      value: String(s.users_id),
-      label: `${s.user_name} (${s.user_level?.trim()})`,
-    }));
+    const staffFilterOptions = (staff ?? [])
+      .filter((s) => s.user_level?.trim() === staffRole)
+      .map((s) => ({
+        key: s.users_id,
+        value: String(s.users_id),
+        label: s.user_name,
+      }));
     return [
       ...READ_ONLY_COLUMNS,
       ...(isAdmin
@@ -83,7 +90,7 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
         filterType: "date",
       },
     ];
-  }, [staff, isAdmin]);
+  }, [staff, isAdmin, staffRole]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: [
