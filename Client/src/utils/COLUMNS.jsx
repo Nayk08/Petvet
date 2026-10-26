@@ -143,7 +143,7 @@ export function getInventoryColumns(categories = []) {
     render: (value, row) =>
       row.batch_count > 1 ? (
         <span className="text-slate-400 dark:text-slate-500 italic text-xs">
-          {row.batch_count} batches
+          {row.in_stock_batch_count} batches
         </span>
       ) : (
         <span className="font-mono text-xs text-slate-500 font-semibold dark:text-slate-400">
@@ -159,7 +159,7 @@ export function getInventoryColumns(categories = []) {
         <span>{value}</span>
         {row.batch_count > 1 && (
           <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap">
-            ×{row.batch_count} batches
+            ×{row.in_stock_batch_count} batches
           </span>
         )}
       </span>

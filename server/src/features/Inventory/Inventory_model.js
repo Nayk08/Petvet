@@ -23,7 +23,14 @@ export const GROUPED_PRODUCTS_QUERY = `
     COALESCE(SUM(p.product_quantity) FILTER (
       WHERE p.product_expiry_date IS NULL OR p.product_expiry_date > CURRENT_TIMESTAMP
     ), 0)::int AS sellable_quantity,
-    COUNT(*) FILTER (WHERE p.product_quantity > 0)::int AS batch_count,
+    -- True count of physical batch rows: the Inventory page's single-batch
+    -- vs. multi-batch row actions route on this, so it must count every
+    -- batch regardless of stock (a lone out-of-stock batch is still 1 row
+    -- to Edit/Delete/Restock directly, not 0 rows with no actions at all).
+    COUNT(*)::int AS batch_count,
+    -- In-stock-only count, for the "xN batches" badge and the View
+    -- Batches list — an out-of-stock batch is excluded from both.
+    COUNT(*) FILTER (WHERE p.product_quantity > 0)::int AS in_stock_batch_count,
     MIN(p.product_price) AS min_price,
     MAX(p.product_price) AS max_price,
     (array_agg(p.product_image ORDER BY p.date_created DESC)
