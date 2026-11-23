@@ -4,6 +4,48 @@ import { staffRoleSql } from "../Appointment/Appointment_Model.js";
 import { GROUPED_PRODUCTS_QUERY } from "../Inventory/Inventory_model.js";
 
 export default class ClientPortalModel {
+  // A client's rating of one completed visit. The UNIQUE appointment_id
+  // makes a second rating fail with 23505 (the service turns that into 409).
+  async addFeedback({ appointment_id, client_id, staff_id, service_rating, staff_rating, comment, show_on_website, feedback_image }) {
+    const res = await pool.query(
+      `INSERT INTO tbl_service_feedback
+         (appointment_id, client_id, staff_id, service_rating, staff_rating, comment, show_on_website, feedback_image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [appointment_id, client_id, staff_id, service_rating, staff_rating, comment, show_on_website, feedback_image ?? null],
+    );
+    return res.rows[0];
+  }
+
+  // Landing page: every rating clients agreed to show (comment optional),
+  // newest first. Only the client's first name — no surname, email or phone.
+  // ponytail: capped at 200 rows; paginate if reviews ever outgrow that.
+  async getPublicFeedback(limit = 200) {
+    const [list, summary] = await Promise.all([
+      pool.query(
+        `SELECT f.feedback_id, f.service_rating, f.staff_rating, f.comment, f.feedback_image, f.date_created,
+                split_part(trim(c.name), ' ', 1) AS client_first_name,
+                p.pets_name, s.appointment_services AS service_name,
+                u.user_name AS staff_name, ${staffRoleSql("f.staff_id")} AS staff_role
+         FROM tbl_service_feedback f
+         JOIN tbl_clients c ON c.client_id = f.client_id
+         JOIN tbl_appointments a ON a.appointment_id = f.appointment_id
+         JOIN tbl_pets p ON p.pets_id = a.pets_id
+         JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+         LEFT JOIN tbl_users u ON u.users_id = f.staff_id
+         WHERE f.show_on_website
+         ORDER BY f.date_created DESC
+         LIMIT $1`,
+        [limit],
+      ),
+      pool.query(
+        `SELECT ROUND(AVG(service_rating), 1)::float AS average_rating, COUNT(*)::int AS total
+         FROM tbl_service_feedback`,
+      ),
+    ]);
+    return { ...summary.rows[0], reviews: list.rows };
+  }
+
   // Landing page catalog: products that can actually be bought (unexpired
   // stock), one row per product, display fields only — no stock counts or
   // audit names.
@@ -141,8 +183,15 @@ export default class ClientPortalModel {
 
       return await paginateQuery(client, {
         // Plus the visit's bill, so My Appointments can open its receipt.
-        baseQuery: `SELECT v_appointments.*, bill.payment_id, bill.payment_status_name
+        // And the client's rating, if they've left one (Rate button).
+        baseQuery: `SELECT v_appointments.*, bill.payment_id, bill.payment_status_name,
+                 fb.feedback_id, fb.service_rating, fb.staff_rating
           FROM v_appointments
+          LEFT JOIN LATERAL (
+            SELECT f.feedback_id, f.service_rating, f.staff_rating
+            FROM tbl_service_feedback f
+            WHERE f.appointment_id = v_appointments.appointment_id
+          ) fb ON true
           LEFT JOIN LATERAL (
             SELECT p.payment_id, ps.payment_status_name
             FROM tbl_payments p

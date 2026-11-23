@@ -110,6 +110,7 @@ export default class AppointmentService {
     appointment_date,
     start_time,
     notes,
+    walk_in = false,
     created_by,
   }) {
     const pendingStatusId =
@@ -131,6 +132,7 @@ export default class AppointmentService {
       start_time,
       appointment_status_id: pendingStatusId,
       notes,
+      walk_in,
       created_by,
     });
   }
@@ -446,8 +448,26 @@ export default class AppointmentService {
     return appointmentModel.expireUnpaidOnlineBookings();
   }
 
+  // Staff list for the booking forms, with each one's photo and client rating.
   async selectStaff() {
-    return appointmentModel.selectStaff();
+    const [staff, ratings] = await Promise.all([
+      appointmentModel.selectStaff(),
+      appointmentModel.getStaffRatingSummary(),
+    ]);
+    const byId = new Map(ratings.map((r) => [String(r.users_id), r]));
+    return staff.map((s) => {
+      const r = byId.get(String(s.users_id));
+      return {
+        ...s,
+        user_picture: r?.user_picture ?? null,
+        avg_rating: r?.avg_rating ?? null,
+        rating_count: r?.rating_count ?? 0,
+      };
+    });
+  }
+
+  async getStaffReviews(staff_id, { publicOnly = true } = {}) {
+    return appointmentModel.getStaffReviews(staff_id, { publicOnly });
   }
 
   async getAppointmentHistoryForPet(pets_id) {

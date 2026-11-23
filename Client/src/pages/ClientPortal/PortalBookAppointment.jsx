@@ -14,6 +14,7 @@ import {
   cancelMyUnpaidAppointment,
   bookMyAppointmentGroup,
   cancelMyUnpaidGroup,
+  fetchPortalStaffReviews,
 } from "@/api/clientPortal.js";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import PortalPaySubmitModal from "./components/PortalPaySubmitModal.jsx";
+import StaffPreview from "@/components/ui/StaffPreview.jsx";
 import { priceForPet } from "@/utils/groomingTier.js";
 import {
   CLINIC_CLOSE_MINUTE,
@@ -370,7 +372,7 @@ export function Component() {
           Book an Appointment
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          After booking, pay the reservation fee (50%) or the full amount by
+          After booking, pay the reservation fee (10%) or the full amount by
           GCash within 10 minutes to confirm your slot. The reservation fee is
           non-refundable if you don't show up.
         </p>
@@ -422,7 +424,7 @@ export function Component() {
           </ul>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Add more below, or press Book to book everything together. You'll pay
-            once by GCash: the 50% reservation fee for all, or the full amount.
+            once by GCash: the 10% reservation fee for all, or the full amount.
           </p>
         </section>
       )}
@@ -573,10 +575,23 @@ export function Component() {
               {filteredStaff.map((s) => (
                 <option key={s.users_id} value={s.users_id}>
                   {s.user_name} ({s.user_level?.trim()})
+                  {s.rating_count > 0 ? ` ★ ${s.avg_rating.toFixed(1)} (${s.rating_count})` : " · New"}
                 </option>
               ))}
             </select>
           </div>
+          {/* Who the client picked: photo, rating and recent reviews. */}
+          {(() => {
+            const picked = filteredStaff.find((s) => String(s.users_id) === selectedStaffId);
+            return picked ? (
+              <StaffPreview
+                key={picked.users_id}
+                staff={picked}
+                fetchReviews={fetchPortalStaffReviews}
+                queryScope="clientPortal"
+              />
+            ) : null;
+          })()}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -739,7 +754,7 @@ export function Component() {
           setAskKeepOrCancel(false);
         }}
         title="Cancel this booking?"
-        description="A booking is only confirmed once you pay the reservation fee (50%) or the full amount. If you leave now, this booking is cancelled and the time slot is released."
+        description="A booking is only confirmed once you pay the reservation fee (10%) or the full amount. If you leave now, this booking is cancelled and the time slot is released."
         cancelLabel="Go back to payment"
         confirmLabel="Cancel booking"
         confirmingLabel="Cancelling..."

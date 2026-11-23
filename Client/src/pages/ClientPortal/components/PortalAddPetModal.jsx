@@ -29,6 +29,7 @@ export default function PortalAddPetModal({ petId, onClose }) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [pickedSpecies, setPickedSpecies] = useState(null);
 
   const { data: species } = useQuery({
     queryKey: ["clientPortal", "species"],
@@ -96,6 +97,8 @@ export default function PortalAddPetModal({ petId, onClose }) {
   // gender can be pre-selected) before rendering the uncontrolled form.
   const isLoading = isEdit && (isPetPending || !species || !gender);
   const v = pet ?? {};
+  // Breed stays locked until a species is chosen (edit starts from the saved one).
+  const speciesId = pickedSpecies ?? v.species_id ?? "";
 
   return (
     <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -130,14 +133,35 @@ export default function PortalAddPetModal({ petId, onClose }) {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className={labelClass}>Breed</label>
-              <Input
-                name="breed"
-                placeholder="e.g. Golden Retriever"
-                autoComplete="off"
-                defaultValue={v.breed ?? ""}
-              />
+            {/* Species first, then Breed (locked until a species is picked) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Species</label>
+                <select
+                  name="species_id"
+                  required
+                  value={speciesId}
+                  onChange={(e) => setPickedSpecies(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">Select</option>
+                  {species?.map((s) => (
+                    <option key={s.species_id} value={s.species_id}>
+                      {s.species}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Breed</label>
+                <Input
+                  name="breed"
+                  placeholder={speciesId ? "e.g. Golden Retriever" : "Select species first"}
+                  autoComplete="off"
+                  disabled={!speciesId}
+                  defaultValue={v.breed ?? ""}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -185,23 +209,7 @@ export default function PortalAddPetModal({ petId, onClose }) {
               </label>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className={labelClass}>Species</label>
-                <select
-                  name="species_id"
-                  required
-                  defaultValue={v.species_id ?? ""}
-                  className={selectClass}
-                >
-                  <option value="">Select</option>
-                  {species?.map((s) => (
-                    <option key={s.species_id} value={s.species_id}>
-                      {s.species}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <label className={labelClass}>Gender</label>
                 <select

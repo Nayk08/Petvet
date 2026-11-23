@@ -179,27 +179,27 @@ export default class PaymentService {
 
   // Balance of a Partially Paid bill (GCash deposit already received), paid
   // at the clinic in cash or by a second GCash transfer. Completes the bill.
+  // Collect what's left after a verified online deposit. A group booking
+  // (several appointments paid together, one control number) is settled as
+  // ONE transaction: every Partially Paid bill of the group is completed
+  // together, with the same method and (for GCash) one balance reference.
   async collectBalance(payment, updated_by, { payment_method, gcash_reference_number }) {
-    const deposit = Number(payment.gcash_amount ?? 0);
-    const balance = balanceDue(payment.total_amount, deposit);
-    if (!(balance > 0)) {
+    const bills = payment.booking_group
+      ? (await paymentModel.getGroupPayments(payment.booking_group)).filter(
+          (p) => p.payment_status_name === "Partially Paid",
+        )
+      : [payment];
+
+    const balances = bills.map((p) => balanceDue(p.total_amount, Number(p.gcash_amount ?? 0)));
+    if (!bills.length || balances.some((bal) => !(bal > 0))) {
       const err = new Error("This bill has no balance left to collect.");
       err.statusCode = 409;
       throw err;
     }
 
-    let fields;
-    if (payment_method === "Cash") {
-      // Cash balance + GCash deposit: recorded like a split payment.
-      fields = {
-        payment_method: "Split",
-        cash_amount: balance,
-        gcash_amount: deposit,
-        balance_gcash_reference: null,
-      };
-    } else if (payment_method === "GCash") {
+    if (payment_method === "GCash") {
       validatePaymentMethod({ payment_method: "GCash", gcash_reference_number });
-      if (gcash_reference_number === payment.gcash_reference_number) {
+      if (bills.some((p) => gcash_reference_number === p.gcash_reference_number)) {
         const err = new Error("That's the deposit's reference number — enter the reference of the balance transfer.");
         err.statusCode = 400;
         throw err;
@@ -208,35 +208,46 @@ export default class PaymentService {
         await paymentModel.isGcashReferenceInUse({
           gcash_reference_number,
           excludePaymentId: payment.payment_id,
+          excludeGroup: payment.booking_group ?? null,
         })
       ) {
         const err = new Error("This GCash reference number has already been used for another payment.");
         err.statusCode = 409;
         throw err;
       }
-      fields = {
-        payment_method: "GCash",
-        cash_amount: 0,
-        gcash_amount: Number(payment.total_amount),
-        balance_gcash_reference: gcash_reference_number,
-      };
-    } else {
+    } else if (payment_method !== "Cash") {
       const err = new Error("The balance can be paid in cash or by GCash.");
       err.statusCode = 400;
       throw err;
     }
 
-    const completed = await paymentModel.completeBalance({
-      payment_id: payment.payment_id,
-      updated_by,
-      ...fields,
-    });
+    const updates = bills.map((p, i) =>
+      payment_method === "Cash"
+        ? // Cash balance + GCash deposit: recorded like a split payment.
+          {
+            payment_id: p.payment_id,
+            payment_method: "Split",
+            cash_amount: balances[i],
+            gcash_amount: Number(p.gcash_amount ?? 0),
+            balance_gcash_reference: null,
+          }
+        : {
+            payment_id: p.payment_id,
+            payment_method: "GCash",
+            cash_amount: 0,
+            gcash_amount: Number(p.total_amount),
+            balance_gcash_reference: gcash_reference_number,
+          },
+    );
+
+    const completed = await paymentModel.completeBalances(updates, updated_by);
     if (!completed) {
       const err = new Error("This balance was just collected by someone else — refresh.");
       err.statusCode = 409;
       throw err;
     }
-    return completed;
+    // The bill the cashier opened (callers expect one payment back).
+    return completed.find((p) => p.payment_id === payment.payment_id) ?? completed[0];
   }
 
   async countAwaitingVerification() {
@@ -384,7 +395,7 @@ export default class PaymentService {
 
   // One GCash payment for a whole multi-item booking: the same reference and
   // screenshot go on every unpaid bill in the group, each recording its own
-  // share (its 50% reservation fee, or its full price).
+  // share (its DEPOSIT_PERCENT% reservation fee, or its full price).
   async submitGroupOnlinePaymentProof({
     booking_group,
     gcash_reference_number,

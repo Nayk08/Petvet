@@ -15,11 +15,30 @@ export const REAL_PAYMENT_ACTIVITY_SQL = `NOT (payment_status_name = 'Cancelled'
 
 // How many payments are in each status (every status, even at 0) within
 // `scopeSql` — powers the status chips above the payment lists.
-export async function paymentStatusCounts(scopeSql) {
+// mergeGroups: count a group booking's bills as one, matching the Payments
+// list, which shows them as one row (see getPayments).
+// List row key: a group booking's bills share one row (migrations/020 gives
+// them one control number) — but only in statuses whose row actions work on
+// the whole group (Verify, group receipt, Process collecting a Partially Paid
+// group's balance — Payment_Service.collectBalance). Pending / Refund Needed
+// bills stay one row each, since Process (full payment) / Delete / Mark
+// Refunded act on a single bill. Same status within the group is part of the
+// key too.
+const MERGED_STATUSES_SQL = `('Completed', 'Awaiting Verification', 'Cancelled', 'Partially Paid')`;
+const LIST_ROW_KEY_SQL = `COALESCE(
+  CASE WHEN payment_status_name IN ${MERGED_STATUSES_SQL} THEN booking_group::text END,
+  'p' || payment_id
+)`;
+
+export async function paymentStatusCounts(scopeSql, { mergeGroups = false } = {}) {
   const { rows } = await pool.query(
-    `SELECT s.payment_status_name, COUNT(p.payment_status_name)::int AS count
+    `SELECT s.payment_status_name, COUNT(DISTINCT p.row_key)::int AS count
      FROM tbl_payment_status s
-     LEFT JOIN (SELECT payment_status_name FROM v_payments WHERE ${scopeSql}) p
+     LEFT JOIN (
+       SELECT payment_status_name,
+              ${mergeGroups ? LIST_ROW_KEY_SQL : "payment_id::text"} AS row_key
+       FROM v_payments WHERE ${scopeSql}
+     ) p
        USING (payment_status_name)
      GROUP BY s.payment_status_name, s.payment_status_id
      ORDER BY s.payment_status_id`,
@@ -80,6 +99,48 @@ export function revenueTransactionsQuery({ type, method, search, extraWhere }) {
   };
 }
 
+// v_payments plus who/what each bill is for (appointment bills only; a
+// cart sale has no client): client name, service type (category) and
+// sub-service. Aliased back as v_payments by the caller so existing WHERE
+// clauses keep working unqualified.
+const PAYMENTS_WITH_VISIT_SQL = `(
+  SELECT vp.*, a.client_name, a.category_name, a.service_name
+  FROM v_payments vp
+  LEFT JOIN v_appointments a ON a.appointment_id = vp.appointment_id
+)`;
+
+const uniqueJoin = (list) => [...new Set((list ?? []).filter(Boolean))].join(", ") || null;
+
+// One list row for a group booking: the group's sums replace the first
+// bill's own amounts, and its service types / sub-services are listed
+// together; the helper columns are dropped.
+function mergeGroupRow(row) {
+  const {
+    group_categories,
+    group_services,
+    group_rn,
+    group_total_amount,
+    group_amount_sent,
+    group_cash_amount,
+    group_gcash_amount,
+    group_original_total,
+    ...rest
+  } = row;
+  const group_size = Number(row.group_size);
+  if (group_size <= 1) return { ...rest, group_size: 1 };
+  return {
+    ...rest,
+    group_size,
+    category_name: uniqueJoin(group_categories),
+    service_name: uniqueJoin(group_services),
+    total_amount: group_total_amount,
+    amount_sent: group_amount_sent,
+    cash_amount: group_cash_amount,
+    gcash_amount: group_gcash_amount,
+    original_total: group_original_total,
+  };
+}
+
 export default class PaymentModel {
   async getPayments({ page = 1, limit = 10, search = "", filters = {} } = {}) {
     const client = await pool.connect();
@@ -132,21 +193,48 @@ export default class PaymentModel {
 
       if (search && search.trim()) {
         values.push(`%${search.trim()}%`);
-        conditions.push(`control_number ILIKE $${values.length}`);
+        conditions.push(
+          `(control_number ILIKE $${values.length} OR client_name ILIKE $${values.length})`,
+        );
       }
 
       const whereClause = conditions.length
         ? `WHERE ${conditions.join(" AND ")}`
         : "";
 
+      // A group booking's bills (one per appointment, paid together) show as
+      // ONE row with amounts summed — see LIST_ROW_KEY_SQL for which statuses
+      // merge. Bills of the group whose status differs (e.g. one visit
+      // cancelled) stay a separate row, so a row's status is true for all it
+      // covers. The row keeps the group's first bill's payment_id, which is
+      // what Verify / Print Receipt open (both are group-aware).
+      const groupKey = `${LIST_ROW_KEY_SQL}, payment_status_name`;
       const result = await paginateQuery(client, {
-        baseQuery: `SELECT * FROM v_payments ${whereClause} ORDER BY payment_id DESC`,
-        countQuery: `SELECT COUNT(*) AS total FROM v_payments ${whereClause}`,
+        baseQuery: `SELECT * FROM (
+            SELECT v_payments.*,
+                   array_agg(category_name) OVER w AS group_categories,
+                   array_agg(service_name) OVER w AS group_services,
+                   COUNT(*) OVER w AS group_size,
+                   ROW_NUMBER() OVER (w ORDER BY payment_id) AS group_rn,
+                   SUM(total_amount) OVER w AS group_total_amount,
+                   SUM(amount_sent) OVER w AS group_amount_sent,
+                   SUM(cash_amount) OVER w AS group_cash_amount,
+                   SUM(gcash_amount) OVER w AS group_gcash_amount,
+                   SUM(original_total) OVER w AS group_original_total
+            FROM ${PAYMENTS_WITH_VISIT_SQL} v_payments ${whereClause}
+            WINDOW w AS (PARTITION BY ${groupKey})
+          ) grouped
+          WHERE group_rn = 1
+          ORDER BY payment_id DESC`,
+        countQuery: `SELECT COUNT(*) AS total FROM (
+            SELECT 1 FROM ${PAYMENTS_WITH_VISIT_SQL} v_payments ${whereClause} GROUP BY ${groupKey}
+          ) g`,
         values,
         page,
         limit,
       });
-      return { ...result, status_counts: await paymentStatusCounts(REAL_PAYMENT_ACTIVITY_SQL) };
+      result.rows = result.rows.map(mergeGroupRow);
+      return { ...result, status_counts: await paymentStatusCounts(REAL_PAYMENT_ACTIVITY_SQL, { mergeGroups: true }) };
     } catch (error) {
       console.log("Error on Model getPayments function");
       throw error;
@@ -503,28 +591,46 @@ export default class PaymentModel {
 
   // The balance of a "Partially Paid" bill, collected at the clinic. The
   // status guard stops a double submit from recording it twice.
-  async completeBalance({
-    payment_id,
-    updated_by,
-    payment_method,
-    cash_amount,
-    gcash_amount,
-    balance_gcash_reference,
-  }) {
-    const res = await pool.query(
-      `UPDATE tbl_payments SET
-         payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
-                              WHERE payment_status_name = 'Completed'),
-         payment_method = $2, cash_amount = $3, gcash_amount = $4,
-         balance_gcash_reference = $5,
-         updated_by = $6, date_updated = NOW()
-       WHERE payment_id = $1 AND is_deleted = false
-         AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
-                                  WHERE payment_status_name = 'Partially Paid')
-       RETURNING *`,
-      [payment_id, payment_method, cash_amount, gcash_amount, balance_gcash_reference, updated_by],
-    );
-    return res.rows[0];
+  // Completes one or more Partially Paid bills (a group booking's balance
+  // is collected for all its bills at once) in ONE transaction. Each UPDATE
+  // re-checks "still Partially Paid", so if any bill was already collected
+  // by someone else, nothing is changed and this returns null.
+  async completeBalances(updates, updated_by) {
+    const client = await pool.connect();
+    let queryError = null;
+    try {
+      await client.query("BEGIN");
+      const done = [];
+      for (const u of updates) {
+        const res = await client.query(
+          `UPDATE tbl_payments SET
+             payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                  WHERE payment_status_name = 'Completed'),
+             payment_method = $2, cash_amount = $3, gcash_amount = $4,
+             balance_gcash_reference = $5,
+             updated_by = $6, date_updated = NOW()
+           WHERE payment_id = $1 AND is_deleted = false
+             AND payment_status_id = (SELECT payment_status_id FROM tbl_payment_status
+                                      WHERE payment_status_name = 'Partially Paid')
+           RETURNING *`,
+          [u.payment_id, u.payment_method, u.cash_amount, u.gcash_amount, u.balance_gcash_reference, updated_by],
+        );
+        if (!res.rows[0]) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+        done.push(res.rows[0]);
+      }
+      await client.query("COMMIT");
+      return done;
+    } catch (error) {
+      queryError = error;
+      await client.query("ROLLBACK");
+      console.log("Error on Model completeBalances function");
+      throw error;
+    } finally {
+      client.release(queryError);
+    }
   }
 
   // Closes out a "Refund Needed" payment once staff have actually returned

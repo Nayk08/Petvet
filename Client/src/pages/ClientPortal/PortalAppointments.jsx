@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Plus, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Receipt, Star } from "lucide-react";
 import PortalReceiptModal from "./components/PortalReceiptModal.jsx";
+import PortalFeedbackModal from "./components/PortalFeedbackModal.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { fetchMyAppointments, fetchClinicSchedule } from "@/api/clientPortal.js";
 
@@ -66,6 +67,7 @@ export function Component() {
   const [currentMonthDate, setCurrentMonthDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [receiptPaymentId, setReceiptPaymentId] = useState(null);
+  const [feedbackFor, setFeedbackFor] = useState(null);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["clientPortal", "appointments", "calendar"],
@@ -474,6 +476,25 @@ export function Component() {
                       {appt.appointment_status_name}
                     </span>
                   </button>
+                  {appt.appointment_status_name === "Completed" &&
+                    (appt.feedback_id ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400"
+                        title="Your rating"
+                      >
+                        <Star size={13} className="fill-current" />
+                        {appt.service_rating}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setFeedbackFor(appt)}
+                        className="inline-flex items-center gap-1 py-2.5 -my-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+                      >
+                        <Star size={13} />
+                        Rate
+                      </button>
+                    ))}
                   {hasReceipt(appt) && (
                     <button
                       type="button"
@@ -489,6 +510,9 @@ export function Component() {
             </ul>
           )}
         </section>
+      )}
+      {feedbackFor && (
+        <PortalFeedbackModal appointment={feedbackFor} onClose={() => setFeedbackFor(null)} />
       )}
       {receiptPaymentId && (
         <PortalReceiptModal paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />

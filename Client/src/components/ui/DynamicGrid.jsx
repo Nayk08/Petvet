@@ -682,12 +682,6 @@ export default function DynamicGrid({
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                {resolvedActions.length > 0 && (
-                  <TableHead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-left text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
-                    Actions
-                  </TableHead>
-                )}
-
                 {visibleColumns.map((col) => (
                   <TableHead
                     key={col.key}
@@ -698,6 +692,12 @@ export default function DynamicGrid({
                     {col.label}
                   </TableHead>
                 ))}
+
+                {resolvedActions.length > 0 && (
+                  <TableHead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--color-slate-200)] dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] py-4 px-4 text-[11px] font-bold text-right text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 min-w-[120px] dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800">
+                    Actions
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
@@ -712,20 +712,6 @@ export default function DynamicGrid({
                       key={row.id || index}
                       className="hover:bg-slate-50/80 transition-colors group dark:hover:bg-slate-800/60"
                     >
-                      {resolvedActions.length > 0 && (
-                        <TableCell className="py-3.5 px-4">
-                          <div className="flex items-center justify-start gap-1.5">
-                            {rowActions.length > 0 ? (
-                              renderActions(row, rowActions)
-                            ) : (
-                              <span className="text-xs text-slate-400 dark:text-slate-600">
-                                —
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
-
                       {visibleColumns.map((col) => (
                         <TableCell
                           key={col.key}
@@ -736,6 +722,20 @@ export default function DynamicGrid({
                           {renderCell(col, row)}
                         </TableCell>
                       ))}
+
+                      {resolvedActions.length > 0 && (
+                        <TableCell className="py-3.5 px-4">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {rowActions.length > 0 ? (
+                              renderActions(row, rowActions)
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-600">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })

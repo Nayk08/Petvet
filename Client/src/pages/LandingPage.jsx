@@ -45,6 +45,7 @@ import {
   fetchPublicProducts,
   fetchPublicAnnouncements,
   fetchPublicClinicInfo,
+  fetchPublicFeedback,
 } from "@/api/clientPortal.js";
 import ClinicMap from "@/components/ui/ClinicMap.jsx";
 import ProductDetailsModal from "@/components/ui/ProductDetailsModal.jsx";
@@ -509,6 +510,8 @@ export default function LandingPage() {
               author="— David & Coco"
             />
           </div>
+
+          <ClientReviews />
         </section>
       </main>
 
@@ -1300,6 +1303,116 @@ function AnnouncementCard({
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+// Every rating clients agreed to show (portal "Rate" button), first name
+// only, in one horizontally scrolling row so the page doesn't grow with the
+// number of reviews. Renders nothing until there's at least one.
+function ClientReviews() {
+  const [data, setData] = useState(null);
+  const scrollerRef = useRef(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublicFeedback({ signal: controller.signal })
+      .then(setData)
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  if (!data?.reviews?.length) return null;
+
+  const scrollBy = (dir) => {
+    const el = scrollerRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" });
+  };
+
+  return (
+    <div className="mt-16">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
+        <div>
+          <h3 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+            What our clients say
+          </h3>
+          {data.average_rating != null && (
+            <p className="flex flex-wrap items-center gap-2 mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <StarRow value={Math.round(data.average_rating)} />
+              <span>
+                <strong className="text-zinc-900 dark:text-white">{data.average_rating.toFixed(1)}</strong>{" "}
+                out of 5 · {data.total} {data.total === 1 ? "rating" : "ratings"}
+              </span>
+            </p>
+          )}
+        </div>
+        {data.reviews.length > 1 && (
+          <div className="flex gap-2 self-end">
+            <Button variant="outline" size="icon" onClick={() => scrollBy(-1)} aria-label="Previous reviews">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => scrollBy(1)} aria-label="Next reviews">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={scrollerRef}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:thin]"
+        tabIndex={0}
+        role="region"
+        aria-label="Client reviews"
+      >
+        {data.reviews.map((r) => (
+          <Card
+            key={r.feedback_id}
+            className="snap-start shrink-0 w-[85%] sm:w-72 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white overflow-hidden flex flex-col"
+          >
+            {r.feedback_image && (
+              <div className="aspect-[4/3] bg-zinc-100 dark:bg-zinc-900 w-full overflow-hidden">
+                <img
+                  src={r.feedback_image}
+                  alt={`${r.pets_name} after ${r.service_name}`}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <CardContent className="pt-5 flex flex-col gap-2 flex-1">
+              <StarRow value={r.service_rating} />
+              {r.comment && (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 italic line-clamp-5">"{r.comment}"</p>
+              )}
+              <div className="mt-auto pt-2 text-xs">
+                <span className="font-bold block">
+                  — {r.client_first_name} & {r.pets_name}
+                </span>
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {r.service_name}
+                  {r.staff_name ? ` with ${r.staff_name}` : ""}
+                </span>
+                {r.staff_name && r.staff_rating != null && (
+                  <span className="flex items-center gap-1 mt-1 text-zinc-500 dark:text-zinc-400">
+                    {r.staff_role || "Staff"}: <StarRow value={r.staff_rating} size="h-3 w-3" />
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StarRow({ value, size = "h-4 w-4" }) {
+  return (
+    <span className="inline-flex text-amber-400 gap-0.5" role="img" aria-label={`${value} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} className={`${size} ${n <= value ? "fill-current" : "text-zinc-300 dark:text-zinc-700"}`} />
+      ))}
+    </span>
   );
 }
 

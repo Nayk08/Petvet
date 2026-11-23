@@ -3,7 +3,7 @@ import ClientPortalController from "./ClientPortal_Controller.js";
 import AnnouncementsController from "../Announcements/Announcements_Controller.js";
 import isClientAuth from "../../middleware/is-client-auth.js";
 import authLimiter, { loginLimiter } from "../../middleware/rate-Limiter.js";
-import { uploadPaymentProof, uploadProfilePicture } from "../../middleware/upload.js";
+import { uploadPaymentProof, uploadProfilePicture, uploadFeedbackImage } from "../../middleware/upload.js";
 import { validateBody, validateParams } from "../../middleware/validate.js";
 import {
   clientPortalBookAppointmentSchema,
@@ -17,6 +17,7 @@ import {
   clientPortalVerifyOtpSchema,
   clientPortalResendOtpSchema,
 } from "../../validators/clientSchema.js";
+import { clientPortalFeedbackSchema } from "../../validators/feedbackSchema.js";
 import { doubleCsrfProtection } from "../../config/csrf.js";
 
 const router = express.Router();
@@ -84,6 +85,10 @@ router.get("/public/clinic-info", (req, res) =>
 router.get("/public/products", (req, res) =>
   clientPortalController.getPublicProducts(req, res),
 );
+// Landing page reviews — only feedback the client agreed to show, first name only.
+router.get("/public/feedback", (req, res) =>
+  clientPortalController.getPublicFeedback(req, res),
+);
 // Landing page service list — same catalog as booking, display fields only.
 router.get("/public/services", (req, res) =>
   clientPortalController.getPublicServices(req, res),
@@ -137,6 +142,16 @@ router.patch(
   doubleCsrfProtection,
   validateParams(bookingGroupParamSchema),
   (req, res) => clientPortalController.cancelMyUnpaidGroup(req, res),
+);
+// Rate a completed visit: the service and the groomer/vet (see the service).
+router.post(
+  "/appointments/:appointment_id/feedback",
+  isClientAuth,
+  doubleCsrfProtection,
+  uploadFeedbackImage.single("feedback_image"), // optional photo
+  validateParams(appointmentIdParamSchema),
+  validateBody(clientPortalFeedbackSchema),
+  (req, res) => clientPortalController.submitFeedback(req, res),
 );
 // Back out of a booking that hasn't been paid yet (see the service).
 router.patch(
@@ -208,6 +223,10 @@ router.get("/gender", isClientAuth, (req, res) =>
 );
 router.get("/appointment-services", isClientAuth, (req, res) =>
   clientPortalController.selectAppointmentServices(req, res),
+);
+// Staff preview while booking: their latest public reviews.
+router.get("/appointment-staff/:users_id/reviews", isClientAuth, (req, res) =>
+  clientPortalController.getStaffReviews(req, res),
 );
 router.get("/appointment-staff", isClientAuth, (req, res) =>
   clientPortalController.selectStaff(req, res),

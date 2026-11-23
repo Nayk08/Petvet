@@ -16,12 +16,21 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import QueryState from "@/components/ui/QueryState";
 import ServiceTabs from "@/components/ui/ServiceTabs";
 import AddConsultationModal from "./AddConsultationModal.jsx";
+import ServiceCalendar from "./ServiceCalendar.jsx";
+import Segmented from "@/components/ui/Segmented.jsx";
 import { optimisticMutation, patchWhere, APPOINTMENT_LIST_KEYS } from "@/api/optimistic.js";
 
 // Shared page for the per-service appointment queues (Consultation,
 // Grooming, Operation). Booking/rescheduling still only happens from the
 // general Appointments page — the assigned staff member only gets "Mark
 // Completed" here, plus "Add Medical Record" on the vet-facing queues.
+// Same colors as the main Appointments calendar legend.
+const CALENDAR_COLOR = {
+  Grooming: "bg-indigo-500",
+  Consultation: "bg-emerald-600",
+  Operation: "bg-rose-500",
+};
+
 const READ_ONLY_COLUMNS = AppointmentColumns.filter(
   (col) => col.key !== "category_name", // each page is one category already
 );
@@ -35,6 +44,23 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
   const [filters, setFilters] = useState({});
   const debouncedSearch = useDebouncedValue(search, 400);
   const [consultationAppointment, setConsultationAppointment] = useState(null);
+  // Table or calendar; remembered per queue in this browser.
+  const viewStorageKey = `${queryKey}-view`;
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem(viewStorageKey) === "calendar" ? "calendar" : "table";
+    } catch {
+      return "table";
+    }
+  });
+  function changeView(next) {
+    setView(next);
+    try {
+      localStorage.setItem(viewStorageKey, next);
+    } catch {
+      // storage blocked: the choice just isn't remembered
+    }
+  }
 
   useEffect(() => {
     setPage(1);
@@ -93,6 +119,7 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
   }, [staff, isAdmin, staffRole]);
 
   const { data, isLoading, isError, error } = useQuery({
+    enabled: view === "table",
     queryKey: [
       queryKey,
       page,
@@ -112,6 +139,17 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
     gcTime: 1000 * 60 * 10,
   });
 
+  // Calendar view needs every appointment of this queue, not one page. Same
+  // server rules (non-admins only get their own). Shares the queryKey prefix,
+  // so the optimistic updates below patch it too.
+  const calendarQuery = useQuery({
+    queryKey: [queryKey, "calendar"],
+    queryFn: ({ signal }) => fetchAppointments({ limit: "all", signal }),
+    enabled: view === "calendar",
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+  });
+
   // Optimistic: shows Completed at once; undone if the server refuses (e.g.
   // a deposit's balance isn't collected yet — its message explains).
   const completeMutation = useMutation({
@@ -126,64 +164,88 @@ export default function ServiceAppointments({ name, queryKey, fetchAppointments,
     }),
   });
 
+  // Shared by the table's action column and the calendar's day panel.
+  const rowActions = [
+    {
+      label: "Mark Completed",
+      icon: CheckCircle2,
+      className:
+        "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
+      onClick: (row) => completeMutation.mutate(row.appointment_id),
+      // Only on your own appointments (the server enforces it too),
+      // and only once the bill is fully paid.
+      show: (row) =>
+        row.appointment_status_name === "In Queue" &&
+        row.payment_status_name !== "Partially Paid" &&
+        String(row.assigned_staff_id) === String(currentUserData?.user?.id),
+    },
+    {
+      // Reservation fee paid online, balance still owed: it must be
+      // collected before the visit can be completed (else it becomes
+      // a No Show when the slot ends). Opens Process Payment.
+      label: (row) =>
+        `Collect ₱${Number(row?.balance_due ?? 0).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} balance`,
+      icon: Wallet,
+      className:
+        "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/50",
+      onClick: (row) => navigate(`/payments/process-payment/${row.payment_id}`),
+      show: (row) =>
+        row.appointment_status_name === "In Queue" &&
+        row.payment_status_name === "Partially Paid",
+    },
+    {
+      label: "Add Medical Record",
+      icon: Stethoscope,
+      className:
+        "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50",
+      onClick: (row) => setConsultationAppointment(row),
+      // Only while the visit is happening (In Queue).
+      show: (row) => allowMedicalRecord && row.appointment_status_name === "In Queue",
+    },
+  ];
+
+  const active = view === "calendar" ? calendarQuery : { isLoading, isError, error };
+
   return (
     <div className="w-full space-y-4 py-6 max-md:pt-0">
       <ServiceTabs />
+      <div className="flex justify-end">
+        <Segmented
+          size="sm"
+          label="View as"
+          className="w-48"
+          options={[
+            { value: "table", label: "Table" },
+            { value: "calendar", label: "Calendar" },
+          ]}
+          value={view}
+          onChange={changeView}
+        />
+      </div>
       <QueryState
-        isLoading={isLoading}
-        isError={isError}
-        error={error}
+        isLoading={active.isLoading}
+        isError={active.isError}
+        error={active.error}
         loadingLabel={`Loading ${name.toLowerCase()} appointments...`}
         errorLabel={`Error loading ${name.toLowerCase()} appointments`}
       />
-      {!isLoading && !isError && (
+      {view === "calendar" && !calendarQuery.isLoading && !calendarQuery.isError && (
+        <ServiceCalendar
+          appointments={calendarQuery.data?.rows ?? []}
+          actions={rowActions}
+          dotClass={CALENDAR_COLOR[name]}
+        />
+      )}
+      {view === "table" && !isLoading && !isError && (
         <>
           <DynamicGrid
             data={data?.rows ?? []}
             columnsConfig={columnsConfig}
             title={`${name} Appointments`}
-            actions={[
-              {
-                label: "Mark Completed",
-                icon: CheckCircle2,
-                className:
-                  "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50",
-                onClick: (row) => completeMutation.mutate(row.appointment_id),
-                // Only on your own appointments (the server enforces it too),
-                // and only once the bill is fully paid.
-                show: (row) =>
-                  row.appointment_status_name === "In Queue" &&
-                  row.payment_status_name !== "Partially Paid" &&
-                  String(row.assigned_staff_id) === String(currentUserData?.user?.id),
-              },
-              {
-                // Reservation fee paid online, balance still owed: it must be
-                // collected before the visit can be completed (else it becomes
-                // a No Show when the slot ends). Opens Process Payment.
-                label: (row) =>
-                  `Collect ₱${Number(row?.balance_due ?? 0).toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })} balance`,
-                icon: Wallet,
-                className:
-                  "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/50",
-                onClick: (row) => navigate(`/payments/process-payment/${row.payment_id}`),
-                show: (row) =>
-                  row.appointment_status_name === "In Queue" &&
-                  row.payment_status_name === "Partially Paid",
-              },
-              {
-                label: "Add Medical Record",
-                icon: Stethoscope,
-                className:
-                  "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50",
-                onClick: (row) => setConsultationAppointment(row),
-                show: (row) =>
-                  allowMedicalRecord &&
-                  ["In Queue", "Completed"].includes(row.appointment_status_name),
-              },
-            ]}
+            actions={rowActions}
             limit={limit}
             search={search}
             onSearchChange={setSearch}

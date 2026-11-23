@@ -19,6 +19,9 @@ import {
 
 const GCASH_REFERENCE_PATTERN = /^\d{13}$/;
 
+// Must match DEPOSIT_PERCENT in server/utils/deposit.js.
+const DEPOSIT_PERCENT = 10;
+
 // "YYYY-MM-DD HH:mm:ss" Manila wall-clock -> "9:30 AM" (plain string
 // parsing; new Date() would shift it into the browser's timezone).
 function formatClock(value) {
@@ -29,12 +32,15 @@ function formatClock(value) {
 
 function formatVisitDate(value) {
   if (!value) return "";
-  return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString(
+    "en-US",
+    {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    },
+  );
 }
 
 // onClose(submitted): true once the proof was sent, false if the client
@@ -50,7 +56,9 @@ function formatVisitDate(value) {
 const UNPAID_HOLD_MINUTES = 10;
 
 function useSecondsLeft(createdAt) {
-  const deadline = createdAt ? new Date(createdAt).getTime() + UNPAID_HOLD_MINUTES * 60_000 : null;
+  const deadline = createdAt
+    ? new Date(createdAt).getTime() + UNPAID_HOLD_MINUTES * 60_000
+    : null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!deadline) return undefined;
@@ -73,7 +81,7 @@ export default function PortalPaySubmitModal({
   const isExpired = secondsLeft === 0;
   const queryClient = useQueryClient();
   const [referenceNumber, setReferenceNumber] = useState("");
-  // "reservation" (50%) or "full" — fixed amounts, nothing to type.
+  // "reservation" (DEPOSIT_PERCENT%) or "full" — fixed amounts, nothing to type.
   const [payOption, setPayOption] = useState("reservation");
   const [proofFile, setProofFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,17 +95,19 @@ export default function PortalPaySubmitModal({
   });
 
   const isReferenceValid = GCASH_REFERENCE_PATTERN.test(referenceNumber);
-  // Reservation fee = 50% rounded up to the centavo, or the full bill.
-  // Mirrors server/utils/deposit.js, which accepts only these two amounts.
-  // A group's fee is each item's 50% added up (computed by the server).
+  // Reservation fee = DEPOSIT_PERCENT% rounded up to the centavo, or the full
+  // bill. Mirrors server/utils/deposit.js, which accepts only these two
+  // amounts. A group's fee is each item's share added up (computed by the
+  // server). Integer math (cents * percent / 100) avoids float drift.
   const toCents = (v) => Math.round(Number(v) * 100);
   const reservationFee = group
     ? Number(group.reservationFee)
-    : Math.ceil(toCents(amount ?? 0) * 0.5) / 100;
+    : Math.ceil((toCents(amount ?? 0) * DEPOSIT_PERCENT) / 100) / 100;
   const fullAmount = Number(amount ?? 0);
   const amountToPay = payOption === "full" ? fullAmount : reservationFee;
   const balanceLeft = Math.round((fullAmount - amountToPay) * 100) / 100;
-  const canSubmit = isReferenceValid && amount != null && Boolean(proofFile) && !isExpired;
+  const canSubmit =
+    isReferenceValid && amount != null && Boolean(proofFile) && !isExpired;
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -112,7 +122,9 @@ export default function PortalPaySubmitModal({
       formData.append("payment_proof_image", proofFile);
       if (group) await submitGroupPaymentProof(group.bookingGroup, formData);
       else await submitPaymentProof(paymentId, formData);
-      await queryClient.invalidateQueries({ queryKey: ["clientPortal", "payments"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["clientPortal", "payments"],
+      });
       setSubmitted(true);
     } catch (err) {
       setError(err.message || "Failed to submit payment proof.");
@@ -131,7 +143,7 @@ export default function PortalPaySubmitModal({
           <DialogDescription>
             {submitted
               ? "Your payment is now awaiting staff verification."
-              : "Pay the reservation fee (50%) or the full amount to confirm your booking. Scan the QR code, then submit your reference number and a screenshot."}
+              : `Pay the reservation fee (${DEPOSIT_PERCENT}%) or the full amount to confirm your booking. Scan the QR code, then submit your reference number and a screenshot.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,7 +185,8 @@ export default function PortalPaySubmitModal({
                       {item.pets_name} · {item.service_name}
                     </span>
                     <span className="block text-xs text-slate-500 dark:text-slate-400">
-                      {formatVisitDate(item.appointment_date)}, {formatClock(item.start_time)} –{" "}
+                      {formatVisitDate(item.appointment_date)},{" "}
+                      {formatClock(item.start_time)} –{" "}
                       {formatClock(item.end_time)}
                       {item.staff_name ? ` · ${item.staff_name}` : ""}
                     </span>
@@ -183,26 +196,29 @@ export default function PortalPaySubmitModal({
                   </span>
                 </div>
               ))}
-              {!group && [
-                ["Pet", details?.pets_name],
-                ["Service", details?.service_name],
-                ["Staff", details?.staff_name],
-                ["Date", formatVisitDate(details?.appointment_date)],
+              {!group &&
                 [
-                  "Time",
-                  details?.start_time &&
-                    `${formatClock(details.start_time)} – ${formatClock(details.end_time)}`,
-                ],
-              ]
-                .filter(([, value]) => value)
-                .map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3">
-                    <span className="text-slate-500 dark:text-slate-400">{label}</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100 text-right">
-                      {value}
-                    </span>
-                  </div>
-                ))}
+                  ["Pet", details?.pets_name],
+                  ["Service", details?.service_name],
+                  ["Staff", details?.staff_name],
+                  ["Date", formatVisitDate(details?.appointment_date)],
+                  [
+                    "Time",
+                    details?.start_time &&
+                      `${formatClock(details.start_time)} – ${formatClock(details.end_time)}`,
+                  ],
+                ]
+                  .filter(([, value]) => value)
+                  .map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {label}
+                      </span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100 text-right">
+                        {value}
+                      </span>
+                    </div>
+                  ))}
               {amount != null && (
                 <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-200 dark:border-slate-800">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">
@@ -223,7 +239,11 @@ export default function PortalPaySubmitModal({
                 </p>
                 <div role="radiogroup" className="grid grid-cols-2 gap-2">
                   {[
-                    ["reservation", "Reservation fee (50%)", reservationFee],
+                    [
+                      "reservation",
+                      `Reservation fee (${DEPOSIT_PERCENT}%)`,
+                      reservationFee,
+                    ],
                     ["full", "Full payment", fullAmount],
                   ].map(([value, label, price]) => (
                     <button
@@ -239,16 +259,21 @@ export default function PortalPaySubmitModal({
                       }`}
                     >
                       <span className="block text-xs">{label}</span>
-                      <span className="block text-base font-bold">₱{price.toFixed(2)}</span>
+                      <span className="block text-base font-bold">
+                        ₱{price.toFixed(2)}
+                      </span>
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Send exactly <strong>₱{amountToPay.toFixed(2)}</strong> to the QR code below.
-                  {balanceLeft > 0 && ` The remaining ₱${balanceLeft.toFixed(2)} is paid at the clinic.`}
+                  Send exactly <strong>₱{amountToPay.toFixed(2)}</strong> to the
+                  QR code below.
+                  {balanceLeft > 0 &&
+                    ` The remaining ₱${balanceLeft.toFixed(2)} is paid at the clinic.`}
                 </p>
                 <p className="text-xs font-medium rounded-md px-2.5 py-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                  The reservation fee is non-refundable if you don't show up for your appointment.
+                  The reservation fee is non-refundable if you don't show up for
+                  your appointment.
                 </p>
               </div>
             )}
@@ -279,7 +304,11 @@ export default function PortalPaySubmitModal({
                 value={referenceNumber}
                 // Digits only: letters, spaces and dashes (e.g. from a pasted
                 // "1234 567 890123") are dropped as they're typed.
-                onChange={(e) => setReferenceNumber(e.target.value.replace(/\D/g, "").slice(0, 13))}
+                onChange={(e) =>
+                  setReferenceNumber(
+                    e.target.value.replace(/\D/g, "").slice(0, 13),
+                  )
+                }
                 placeholder="13-digit reference number"
                 maxLength={13}
                 inputMode="numeric"
@@ -314,7 +343,11 @@ export default function PortalPaySubmitModal({
             )}
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onClose(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onClose(false)}
+              >
                 {closeLabel}
               </Button>
               <Button type="submit" disabled={!canSubmit || isSubmitting}>

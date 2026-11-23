@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { fetchPaymentById, fetchAppointmentById } from "@/api/http";
+import { useGroupBill } from "./useGroupBill.js";
 import ReceiptContent from "./ReceiptContent.jsx";
 
 // The Payment module's "Print Receipt" row action — fetches the payment
@@ -35,6 +36,9 @@ export function Component() {
     enabled: Boolean(payment?.appointment_id),
   });
 
+  // Group booking: one receipt for every appointment on this row.
+  const { visits, bill: receiptPayment, isLoading: isGroupPending } = useGroupBill(payment);
+
   function closeModal() {
     navigate(`..${location.search}`);
   }
@@ -51,7 +55,7 @@ export function Component() {
           </DialogDescription>
         </DialogHeader>
 
-        {isPending ? (
+        {isPending || isGroupPending ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3 print:hidden">
             <div className="h-6 w-6 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -60,7 +64,11 @@ export function Component() {
           </div>
         ) : (
           <div className="md:max-h-[60vh] md:overflow-y-auto">
-            <ReceiptContent payment={payment} appointment={appointment} />
+            <ReceiptContent
+              payment={receiptPayment}
+              appointment={appointment}
+              visits={visits.length ? visits : undefined}
+            />
           </div>
         )}
 

@@ -31,6 +31,7 @@ import {
   estimatePaymentSplit,
 } from "@/api/http";
 import PaymentMethodPicker from "@/components/ui/PaymentMethodPicker.jsx";
+import { useGroupBill } from "./useGroupBill.js";
 import {
   evaluatePaymentAmount,
   requiresExactAmount,
@@ -82,14 +83,19 @@ export function Component() {
   }
 
   const {
-    data: payment,
-    isPending,
+    data: billOnly,
+    isPending: isBillPending,
     isError,
     error,
   } = useQuery({
     queryKey: ["Payment", paymentId],
     queryFn: ({ signal }) => fetchPaymentById(paymentId, { signal }),
   });
+  // Group booking (one control number): the balance of every appointment
+  // in the group is collected here in one transaction, so show the
+  // group's combined amounts and each visit.
+  const { visits, bill: payment, isLoading: isGroupPending } = useGroupBill(billOnly);
+  const isPending = isBillPending || isGroupPending;
 
   const { data: appointment } = useQuery({
     queryKey: ["appointment", payment?.appointment_id],
@@ -169,7 +175,37 @@ export function Component() {
           <form onSubmit={handleSubmit}>
             <input type="hidden" name="payment_id" value={paymentId ?? ""} />
 
-            {payment?.appointment_id ? (
+            {visits.length > 0 ? (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 space-y-2 text-sm my-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Client</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                    {visits[0].client_name ?? "—"}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 pt-1">
+                  {visits.length} appointments · {payment.control_number}
+                </p>
+                <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {visits.map((v) => (
+                    <li key={v.payment_id} className="flex justify-between gap-3 py-1.5">
+                      <span className="min-w-0">
+                        <span className="block font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {v.pets_name} · {v.service_name}
+                        </span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                          {formatDateLabel(v.appointment_date)}, {formatTimeLabel(v.start_time)}
+                          {v.staff_name ? ` · ${v.staff_name}` : ""}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right text-slate-700 dark:text-slate-300">
+                        ₱{Number(v.total_amount).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : payment?.appointment_id ? (
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 space-y-1.5 text-sm my-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Client</span>
@@ -441,7 +477,19 @@ export async function action({ params, request }) {
   // The cached ["Payment", id] entry (prefetched by this route's own
   // loader) already has total_amount/appointment_id — enough to estimate
   // the revenue bump without waiting on the server's response.
-  const cachedPayment = queryClient.getQueryData(["Payment", params.payment_id]);
+  const cachedBill = queryClient.getQueryData(["Payment", params.payment_id]);
+  // Group booking balance: the whole group is collected at once, so the
+  // optimistic revenue bump uses the group's combined amounts.
+  const groupPartial = (queryClient.getQueryData(["booking-group", cachedBill?.booking_group]) ?? [])
+    .filter((r) => r.payment_status_name === "Partially Paid");
+  const cachedPayment =
+    cachedBill?.payment_status_name === "Partially Paid" && groupPartial.length > 1
+      ? {
+          ...cachedBill,
+          total_amount: groupPartial.reduce((t, r) => t + Number(r.total_amount ?? 0), 0),
+          gcash_amount: groupPartial.reduce((t, r) => t + Number(r.gcash_amount ?? 0), 0),
+        }
+      : cachedBill;
   let { cashAmount, gcashAmount } = estimatePaymentSplit({
     paymentMethod: payment_method,
     totalAmount: cachedPayment?.total_amount,

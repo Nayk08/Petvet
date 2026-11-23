@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { fetchPaymentById, fetchAppointmentById } from "@/api/http";
 import AppointmentPaymentDetails from "@/components/ui/AppointmentPaymentDetails.jsx";
+import { useGroupBill } from "./useGroupBill.js";
 import { formatDate, formatDateTime } from "@/utils/COLUMNS";
 
 export function Component() {
@@ -34,8 +35,8 @@ export function Component() {
   const paymentId = params.payment_id;
 
   const {
-    data: payment,
-    isLoading,
+    data: billOnly,
+    isLoading: isBillLoading,
     isError,
   } = useQuery({
     queryKey: ["Payment", paymentId],
@@ -43,11 +44,15 @@ export function Component() {
     enabled: !!paymentId,
   });
 
+  // Group booking row: every appointment on it, amounts summed.
+  const { visits, bill: payment, isLoading: isGroupLoading } = useGroupBill(billOnly);
+  const isLoading = isBillLoading || isGroupLoading;
+
   // Appointment bills: what was done, when, and by which vet/groomer.
   const { data: appointment } = useQuery({
     queryKey: ["appointment", payment?.appointment_id],
     queryFn: ({ signal }) => fetchAppointmentById(payment.appointment_id, { signal }),
-    enabled: Boolean(payment?.appointment_id),
+    enabled: Boolean(payment?.appointment_id) && visits.length === 0,
   });
 
   function closeModal() {
@@ -140,7 +145,7 @@ export function Component() {
                   </span>
                   <span className="text-2xl font-bold text-slate-950 dark:text-slate-100 tracking-tight">
                     {payment.total_amount
-                      ? `₱${payment.total_amount}`
+                      ? `₱${Number(payment.total_amount).toFixed(2)}`
                       : "₱0.00"}
                   </span>
                 </div>
@@ -155,13 +160,30 @@ export function Component() {
                 </div>
               </div>
 
-              {appointment && (
+              {visits.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
-                    Appointment Details
+                    {visits.length} Appointments (booked together)
                   </p>
-                  <AppointmentPaymentDetails appt={appointment} payment={payment} showClient />
+                  {visits.map((v, i) => (
+                    <AppointmentPaymentDetails
+                      key={v.appointment_id}
+                      appt={v}
+                      // paid in one go: the bill record has the cashier
+                      payment={payment}
+                      showClient={i === 0}
+                    />
+                  ))}
                 </div>
+              ) : (
+                appointment && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+                      Appointment Details
+                    </p>
+                    <AppointmentPaymentDetails appt={appointment} payment={payment} showClient />
+                  </div>
+                )
               )}
 
               {/* Grid Metadata */}

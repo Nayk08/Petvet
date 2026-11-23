@@ -14,7 +14,7 @@ const SERVICE_DOT = {
   Operation: "bg-rose-500",
 };
 
-const STATUS_BADGE = {
+export const STATUS_BADGE = {
   Pending: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
   "In Queue": "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800",
   Completed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
@@ -22,7 +22,7 @@ const STATUS_BADGE = {
   "No Show": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
 };
 
-function formatTime(value) {
+export function formatTime(value) {
   return value
     ? new Date(value).toLocaleTimeString("en-US", {
         hour: "2-digit",
@@ -31,7 +31,7 @@ function formatTime(value) {
     : "";
 }
 
-function dateKey(value) {
+export function dateKey(value) {
   const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),

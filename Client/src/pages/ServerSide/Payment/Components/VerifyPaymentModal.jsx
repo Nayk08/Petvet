@@ -145,6 +145,7 @@ export function Component() {
                       <div className="min-w-0">
                         <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
                           {r.pets_name} · {r.service_name}
+                          {r.staff_name ? ` · ${r.staff_name}` : ""}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           {formatDateLabel(r.appointment_date)} · {formatClock(r.start_time)}
@@ -167,6 +168,7 @@ export function Component() {
                     {[
                       ["Pet", appointment?.pets_name],
                       ["Service", appointment?.service_name],
+                      ["Staff", appointment?.staff_name],
                       ["Date", formatDateLabel(appointment?.appointment_date)],
                     ].map(([label, value]) => (
                       <div key={label} className="flex justify-between gap-3">

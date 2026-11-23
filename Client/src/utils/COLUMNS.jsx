@@ -190,6 +190,42 @@ export function getInventoryColumns(categories = []) {
       );
     },
   },
+  {
+    key: "is_expired",
+    label: "Expired",
+    filterOptions: [
+      { key: "expired", value: "true", label: "Expired" },
+      { key: "not_expired", value: "false", label: "Not Expired" },
+    ],
+    render: (value) => {
+      const isExpired = value === true || value === "true";
+      return (
+        <StatusBadge
+          label={isExpired ? "Expired" : "Not Expired"}
+          variant={isExpired ? "out" : "active"}
+        />
+      );
+    },
+  },
+  {
+    key: "expiring_soon",
+    label: "Expiring Soon",
+    filterOptions: [
+      { key: "expiring_soon", value: "true", label: "Expiring Soon" },
+      { key: "not_expiring_soon", value: "false", label: "Not Expiring Soon" },
+    ],
+    // Only ever true for a batch that ISN'T already expired (within 5
+    // months of its expiry date) — a product that's already expired shows
+    // that via the Expired column instead, not both at once.
+    render: (value) => {
+      const isExpiringSoon = value === true || value === "true";
+      return isExpiringSoon ? (
+        <StatusBadge label="Expiring Soon" variant="average" />
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500">—</span>
+      );
+    },
+  },
   { key: "product_quantity", label: "PRODUCT QUANTITY" },
   {
     key: "product_price",
@@ -246,42 +282,6 @@ export function getInventoryColumns(categories = []) {
         </span>
       ),
   },
-  {
-    key: "is_expired",
-    label: "Expired",
-    filterOptions: [
-      { key: "expired", value: "true", label: "Expired" },
-      { key: "not_expired", value: "false", label: "Not Expired" },
-    ],
-    render: (value) => {
-      const isExpired = value === true || value === "true";
-      return (
-        <StatusBadge
-          label={isExpired ? "Expired" : "Not Expired"}
-          variant={isExpired ? "out" : "active"}
-        />
-      );
-    },
-  },
-  {
-    key: "expiring_soon",
-    label: "Expiring Soon",
-    filterOptions: [
-      { key: "expiring_soon", value: "true", label: "Expiring Soon" },
-      { key: "not_expiring_soon", value: "false", label: "Not Expiring Soon" },
-    ],
-    // Only ever true for a batch that ISN'T already expired (within 5
-    // months of its expiry date) — a product that's already expired shows
-    // that via the Expired column instead, not both at once.
-    render: (value) => {
-      const isExpiringSoon = value === true || value === "true";
-      return isExpiringSoon ? (
-        <StatusBadge label="Expiring Soon" variant="average" />
-      ) : (
-        <span className="text-slate-400 dark:text-slate-500">—</span>
-      );
-    },
-  },
   ];
 }
 
@@ -310,9 +310,18 @@ export const PaymentColumns = [
   {
     key: "control_number",
     label: "CONTROL NO.",
-    render: (value) => (
-      <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
-        {value ?? "—"}
+    // group_size > 1: several appointments booked and paid together,
+    // merged into this one row (server: Payment_Model getPayments).
+    render: (value, row) => (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
+          {value ?? "—"}
+        </span>
+        {row?.group_size > 1 && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap">
+            {row.group_size} appointments
+          </span>
+        )}
       </span>
     ),
   },
@@ -453,6 +462,42 @@ export const paymentTransactionColumnsFor = (method) => {
     };
   });
 };
+
+// Payments page: who and what each bill is for, right after the control
+// number. Only the Payments list query returns these fields (client_name,
+// category_name, service_name); a cart sale has no client or service.
+const dash = <span className="text-slate-400 dark:text-slate-500">—</span>;
+export const PaymentListColumns = [
+  PaymentColumns[0],
+  {
+    key: "client_name",
+    label: "CLIENT",
+    render: (value, row) =>
+      row?.appointment_id ? (
+        value ?? dash
+      ) : (
+        <span className="text-slate-400 dark:text-slate-500 italic text-xs">Walk-in</span>
+      ),
+  },
+  {
+    key: "category_name",
+    label: "SERVICE TYPE",
+    render: (value, row) =>
+      row?.appointment_id ? (
+        value ?? dash
+      ) : (
+        <span className="text-slate-500 dark:text-slate-400 text-xs">Product sale</span>
+      ),
+  },
+  {
+    key: "service_name",
+    label: "SUB-SERVICE",
+    // A merged group row lists every sub-service, comma-separated.
+    render: (value) =>
+      value ? <span className="text-xs text-slate-700 dark:text-slate-300">{value}</span> : dash,
+  },
+  ...PaymentColumns.slice(1),
+];
 
 export const PaymentTransactionModalColumns = PaymentColumns.filter(
   (col) => col.key !== "payment_date",
@@ -620,6 +665,12 @@ export const TodayQueueColumns = [
     ],
   },
   { key: "service_name", label: "SERVICE TYPE" },
+  {
+    key: "staff_name",
+    label: "STAFF",
+    render: (value) =>
+      value ?? <span className="text-slate-400 dark:text-slate-500">—</span>,
+  },
   {
     key: "start_time",
     label: "APPOINTMENT TIME",

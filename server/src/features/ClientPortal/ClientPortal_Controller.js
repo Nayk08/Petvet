@@ -275,6 +275,28 @@ export default class ClientPortalController {
     }
   }
 
+  async getPublicFeedback(req, res) {
+    try {
+      res.json(await clientPortalService.getPublicFeedback());
+    } catch (error) {
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async submitFeedback(req, res) {
+    try {
+      const feedback = await clientPortalService.submitFeedback({
+        ...req.body,
+        feedback_image: req.file?.path ?? null,
+        appointment_id: req.params.appointment_id,
+        client_id: req.clientUser.client_id,
+      });
+      res.status(201).json(feedback);
+    } catch (error) {
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
   async getPublicServices(req, res) {
     try {
       const services = await clientPortalService.selectAppointmentServices();
@@ -360,6 +382,18 @@ export default class ClientPortalController {
       res.json(staff);
     } catch (error) {
       console.log("Error on Controller selectStaff function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async getStaffReviews(req, res) {
+    try {
+      const staff_id = Number(req.params.users_id);
+      if (!Number.isInteger(staff_id) || staff_id <= 0) {
+        return res.status(400).json({ message: "Invalid staff ID" });
+      }
+      res.json(await clientPortalService.getStaffReviews(staff_id));
+    } catch (error) {
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }

@@ -92,4 +92,23 @@ export default class AnalyticsController {
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }
+
+  async getStaffRatings(req, res) {
+    try {
+      const { start_date, end_date } = req.query;
+      res.json(await analyticsService.getStaffRatings({ start_date, end_date }));
+    } catch (error) {
+      console.log("Error on Controller getStaffRatings function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  async getStockAlerts(req, res) {
+    try {
+      res.json(await analyticsService.getStockAlerts());
+    } catch (error) {
+      console.log("Error on Controller getStockAlerts function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
 }

@@ -33,9 +33,11 @@ import {
   fetchPetRecordsByClientId,
   selectAppointmentServices,
   selectAppointmentStaff,
+  fetchStaffReviews,
 } from "@/api/http";
 import { formatDate } from "@/utils/COLUMNS";
 import { priceForPet } from "@/utils/groomingTier.js";
+import StaffPreview from "@/components/ui/StaffPreview.jsx";
 import {
   CLINIC_CLOSE_MINUTE,
   buildServiceSlots,
@@ -91,7 +93,15 @@ function buildAppointmentPayload(formData) {
     appointment_date,
     start_time,
     notes: formData.get("notes"),
+    // Walk-in: client already here, starts at any minute (server checks it).
+    walk_in: formData.get("walk_in") === "true",
   };
+}
+
+// Current time as "HH:mm" (the clinic's wall clock = this computer's).
+function nowTimeValue() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 // The earliest date still worth showing in the picker: today, unless every
@@ -220,6 +230,19 @@ export function Component() {
     extractTimeOfDay(appointmentData?.start_time),
   );
 
+  // Walk-in: the client is at the clinic now — book today at the actual
+  // arrival time (e.g. 10:21) instead of a fixed slot. New single bookings only.
+  const [isWalkIn, setIsWalkIn] = useState(false);
+  function toggleWalkIn(on) {
+    setIsWalkIn(on);
+    if (on) {
+      setSelectedDate(todayDateString());
+      setSelectedSlot(nowTimeValue());
+    } else {
+      setSelectedSlot("");
+    }
+  }
+
   // Once the appointment loads in edit mode, default the pickers to its
   // current values.
   useEffect(() => {
@@ -322,6 +345,24 @@ export function Component() {
       )
       .map((c) => ({ start: c.startMinute, end: c.endMinute })),
   ];
+
+  // Walk-in: its own start..end range (from the sub-service's duration), for
+  // the overlap / closing-time hints under the time field.
+  const walkInStart = isWalkIn ? timeToMinutes(selectedSlot) : null;
+  const walkInRange =
+    walkInStart != null && selectedService
+      ? { startMinute: walkInStart, endMinute: walkInStart + Number(selectedService.duration_minutes) }
+      : null;
+  const walkInClose = Number(selectedService?.category_id) === 2 ? 17 * 60 : CLINIC_CLOSE_MINUTE;
+  const walkInWarning = !walkInRange
+    ? null
+    : closedReason
+      ? closedReason
+      : walkInRange.startMinute < 9 * 60 || walkInRange.endMinute > walkInClose
+        ? `${selectedServiceName} takes ${selectedService.duration_minutes} minutes — it would end at ${formatClockMinutes(walkInRange.endMinute)}, after the ${formatClockMinutes(walkInClose)} cutoff.`
+        : overlapsBooked(walkInRange, bookedRanges)
+          ? "This staff member already has an appointment during that time."
+          : null;
 
   const { data: pets, isPending: isPetsPending } = useQuery({
     queryKey: ["pets-for-client", selectedClientId],
@@ -490,6 +531,27 @@ export function Component() {
           </div>
         ) : (
           <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+            {/* Walk-in: start at the arrival time instead of a fixed slot */}
+            {!isEditMode && !cart.length && (
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="walk_in"
+                  value="true"
+                  checked={isWalkIn}
+                  onChange={(e) => toggleWalkIn(e.target.checked)}
+                  className="h-4 w-4 mt-0.5 rounded border-slate-300 dark:border-slate-700"
+                />
+                <span className="text-sm">
+                  <span className="font-semibold text-slate-900 dark:text-white">Walk-in</span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                    The client is here now. Book today at their arrival time (any minute, e.g. 10:21)
+                    instead of a fixed slot.
+                  </span>
+                </span>
+              </label>
+            )}
+
             {/* Items waiting to be booked together (one payment). */}
             {!isEditMode && cart.length > 0 && (
               <section className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 space-y-2">
@@ -763,9 +825,19 @@ export function Component() {
                   {filteredStaff.map((s) => (
                     <option key={s.users_id} value={s.users_id}>
                       {s.user_name} ({s.user_level?.trim()})
+                      {s.rating_count > 0 ? ` ★ ${s.avg_rating.toFixed(1)} (${s.rating_count})` : " · New"}
                     </option>
                   ))}
                 </select>
+                {/* Picked staff member's rating and recent client reviews */}
+                {(() => {
+                  const picked = filteredStaff.find((s) => String(s.users_id) === String(selectedStaffId));
+                  return picked ? (
+                    <div className="pt-1">
+                      <StaffPreview key={picked.users_id} staff={picked} fetchReviews={fetchStaffReviews} />
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
@@ -775,7 +847,9 @@ export function Component() {
                   name="appointment_date"
                   type="date"
                   required={!cart.length}
-                  min={earliestBookableDateString()}
+                  min={isWalkIn ? undefined : earliestBookableDateString()}
+                  readOnly={isWalkIn}
+                  title={isWalkIn ? "Walk-ins are booked for today" : undefined}
                   value={selectedDate}
                   onChange={(e) => {
                     setSelectedDate(e.target.value);
@@ -794,8 +868,39 @@ export function Component() {
             <div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Start Time
+                  {isWalkIn ? "Arrival / Start Time" : "Start Time"}
                 </label>
+                {isWalkIn ? (
+                  <>
+                    <div className="flex gap-2">
+                      <Input
+                        type="time"
+                        name="time_slot"
+                        required
+                        step={60}
+                        value={selectedSlot}
+                        onChange={(e) => setSelectedSlot(e.target.value)}
+                        className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 h-10 rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSelectedSlot(nowTimeValue())}
+                        className="h-10 rounded-lg shrink-0"
+                      >
+                        Now
+                      </Button>
+                    </div>
+                    {walkInRange && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {formatClockMinutes(walkInRange.startMinute)} – {formatClockMinutes(walkInRange.endMinute)}
+                      </p>
+                    )}
+                    {walkInWarning && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">{walkInWarning}</p>
+                    )}
+                  </>
+                ) : (
                 <select
                   name="time_slot"
                   required={!cart.length}
@@ -824,6 +929,7 @@ export function Component() {
                     );
                   })}
                 </select>
+                )}
               </div>
             </div>
             <p className="text-[11px] -mt-2 text-slate-500 dark:text-slate-400">
@@ -888,7 +994,7 @@ export function Component() {
                 </Button>
               )}
 
-              {!isEditMode && (
+              {!isEditMode && !isWalkIn && (
                 <Button
                   type="button"
                   variant="outline"

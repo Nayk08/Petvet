@@ -1480,6 +1480,15 @@ export async function selectAppointmentServices({ signal } = {}) {
   return handleResponse(response, "Failed to fetch appointment services");
 }
 
+// Book Appointment staff preview: a groomer/vet's latest client reviews.
+export async function fetchStaffReviews(users_id, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-staff/${users_id}/reviews`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch staff reviews");
+}
+
 export async function selectAppointmentStaff({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/appointment-staff`, {
     signal,
@@ -1711,12 +1720,31 @@ export async function fetchProductMovers({ month, signal } = {}) {
   return handleResponse(response, "Failed to fetch product movers");
 }
 
+// Header bell: expiring/expired batches and low/out-of-stock products.
+export async function fetchStockAlerts({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/analytics/stock-alerts`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch stock alerts");
+}
+
 export async function fetchCriticalStock({ signal } = {}) {
   const response = await fetchWithTimeout(`${baseUrl}/analytics/critical-stock`, {
     signal,
     credentials: "include",
   });
   return handleResponse(response, "Failed to fetch critical stock");
+}
+
+// Client ratings per groomer/vet, best first.
+export async function fetchStaffRatings({ start_date, end_date, signal } = {}) {
+  const params = buildDateRangeParams({ start_date, end_date });
+  const response = await fetchWithTimeout(`${baseUrl}/analytics/staff-ratings?${params}`, {
+    signal,
+    credentials: "include",
+  });
+  return handleResponse(response, "Failed to fetch staff ratings");
 }
 
 export async function fetchPeakTimes({ start_date, end_date, signal } = {}) {

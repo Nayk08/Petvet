@@ -126,6 +126,8 @@ const effectivePriceSql = (svc, petIdSql) => `CASE WHEN ${svc}.category_id = ${G
 // simultaneous booking (always staff first, then pet: no deadlock cycle).
 // `skipGridCheck`: an edit that keeps its existing time is fine even if the
 // duration has since changed in Maintenance.
+// `walkIn`: a client who just arrived starts at any minute (e.g. 10:21),
+// not on the grid — clinic rules, closing time and overlaps still apply.
 async function resolveSlot(
   client,
   {
@@ -136,6 +138,7 @@ async function resolveSlot(
     start_time,
     exclude_appointment_id = null,
     skipGridCheck = false,
+    walkIn = false,
     checkRules = !skipGridCheck,
     keep_end_time_full = null,
   },
@@ -173,7 +176,7 @@ async function resolveSlot(
     if (ruleError) throw httpError(400, ruleError);
   }
   if (!skipGridCheck) {
-    if ((startMinute - CLINIC_OPEN_MINUTE) % duration !== 0) {
+    if (!walkIn && (startMinute - CLINIC_OPEN_MINUTE) % duration !== 0) {
       throw httpError(
         400,
         `${service.appointment_services} takes ${duration} minutes — pick one of its listed start times.`,
@@ -259,6 +262,7 @@ async function insertBookingTx(
     notes,
     created_by,
     booking_group = null,
+    walk_in = false,
   },
 ) {
   await assertPetBelongsToClient(client, pets_id, client_id);
@@ -271,6 +275,7 @@ async function insertBookingTx(
     pets_id,
     appointment_date,
     start_time,
+    walkIn: walk_in,
   });
 
   const apptRes = await client.query(
@@ -604,6 +609,7 @@ export default class AppointmentModel {
     start_time,
     appointment_status_id,
     notes,
+    walk_in = false,
     created_by,
   }) {
     // Free slots held by abandoned online bookings before checking overlap.
@@ -621,6 +627,7 @@ export default class AppointmentModel {
         start_time,
         appointment_status_id,
         notes,
+        walk_in,
         created_by,
       });
       await client.query("COMMIT");
@@ -1019,6 +1026,43 @@ export default class AppointmentModel {
     }
   }
 
+  // Booking forms (staff + client portal): each staff member's photo and
+  // client rating summary (tbl_service_feedback, migrations/019).
+  async getStaffRatingSummary() {
+    const res = await pool.query(
+      `SELECT u.users_id, u.user_picture,
+              ROUND(AVG(f.staff_rating), 1)::float AS avg_rating,
+              COUNT(f.staff_rating)::int AS rating_count
+       FROM v_users u
+       LEFT JOIN tbl_service_feedback f ON f.staff_id = u.users_id AND f.staff_rating IS NOT NULL
+       WHERE u.user_level <> 'Client'
+       GROUP BY u.users_id, u.user_picture`,
+    );
+    return res.rows;
+  }
+
+  // Staff preview in the booking forms: one groomer/vet's latest reviews.
+  // publicOnly: the client portal only shows reviews the client agreed to
+  // make public; staff see every review. Client first name only either way.
+  async getStaffReviews(staff_id, { limit = 3, publicOnly = true } = {}) {
+    const res = await pool.query(
+      `SELECT f.feedback_id, f.staff_rating, f.comment, f.date_created,
+              split_part(trim(c.name), ' ', 1) AS client_first_name,
+              p.pets_name, s.appointment_services AS service_name
+       FROM tbl_service_feedback f
+       JOIN tbl_clients c ON c.client_id = f.client_id
+       JOIN tbl_appointments a ON a.appointment_id = f.appointment_id
+       JOIN tbl_pets p ON p.pets_id = a.pets_id
+       JOIN tbl_appointment_services s ON s.appointment_services_id = a.appointment_services_id
+       WHERE f.staff_id = $1 AND f.staff_rating IS NOT NULL
+         AND (f.show_on_website OR NOT $3)
+       ORDER BY f.date_created DESC
+       LIMIT $2`,
+      [staff_id, limit, publicOnly],
+    );
+    return res.rows;
+  }
+
   async selectStaff() {
     const client = await pool.connect();
     try {
@@ -1293,6 +1337,8 @@ export default class AppointmentModel {
     const { rows } = await pool.query(
       `SELECT p.payment_id, p.total_amount, p.payment_status_name, p.control_number,
               p.amount_sent, p.gcash_reference_number, p.booking_group, p.created_by AS payment_created_by,
+              p.payment_method, p.cash_amount, p.gcash_amount, p.original_total,
+              p.additional_fee_label, p.additional_fee_amount, p.balance_gcash_reference,
               a.*
        FROM v_payments p
        JOIN v_appointments a ON a.appointment_id = p.appointment_id

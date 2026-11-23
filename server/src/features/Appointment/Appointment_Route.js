@@ -129,6 +129,12 @@ router.get(
 );
 
 router.get(
+  "/appointment-staff/:users_id/reviews",
+  hasPermission("APPOINTMENT", "can_view"),
+  (req, res) => appointmentController.getStaffReviews(req, res),
+);
+
+router.get(
   "/appointment-staff",
   hasPermission("APPOINTMENT", "can_view"),
   (req, res) => appointmentController.selectStaff(req, res),

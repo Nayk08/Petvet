@@ -150,4 +150,13 @@ export default class AnalyticsService {
       peakDay: peakDay.count > 0 ? peakDay : null,
     };
   }
+
+  async getStaffRatings({ start_date, end_date }) {
+    const { startDate, endDate } = resolveDateRange({ start_date, end_date });
+    return analyticsModel.getStaffRatings({ startDate, endDate });
+  }
+
+  async getStockAlerts() {
+    return analyticsModel.getStockAlerts();
+  }
 }

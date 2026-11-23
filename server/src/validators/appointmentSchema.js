@@ -36,10 +36,16 @@ export function parseTimeString(value) {
   return { hour: Number(match[1]), minute: Number(match[2]) };
 }
 
+// How far from "now" a walk-in's start may be: the client arrived at 10:21,
+// staff finish typing the booking a few minutes later.
+export const WALK_IN_GRACE_MINUTES = 30;
+
 // allowPast: an edit may keep a slot that has already started (e.g. adding
 // notes to an in-progress visit) — the service only rejects a past slot when
 // the edit actually MOVES the appointment there.
-function validateSlot(data, ctx, { allowPast = false } = {}) {
+// walkIn (staff only): any start minute close to now, instead of a future
+// slot — the client is already at the clinic.
+function validateSlot(data, ctx, { allowPast = false, walkIn = false } = {}) {
   const { appointment_date, start_time } = data;
 
   // end_time is never taken from the client: the model computes it from
@@ -68,6 +74,17 @@ function validateSlot(data, ctx, { allowPast = false } = {}) {
   // to) let anyone book a slot up to 8 hours in the past — e.g. 10 AM at
   // 3 PM the same day.
   const slotInstant = manilaInstant(new Date(appointment_date), start.hour, start.minute);
+  if (walkIn) {
+    const graceMs = WALK_IN_GRACE_MINUTES * 60 * 1000;
+    if (Math.abs(slotInstant - Date.now()) > graceMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `A walk-in starts now — use today's date and a time within ${WALK_IN_GRACE_MINUTES} minutes of the current time.`,
+        path: ["start_time"],
+      });
+    }
+    return;
+  }
   if (!allowPast && slotInstant < Date.now()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -128,6 +145,9 @@ const baseAppointmentSlotFields = {
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
 };
 
+// walk_in: staff booking for a client who just arrived — any start minute
+// (e.g. 10:21) instead of the sub-service's fixed grid. Staff route only; the
+// client-portal schemas don't declare it, so zod strips it there.
 export const addAppointmentSchema = z
   .object({
     client_id: z.coerce
@@ -135,8 +155,9 @@ export const addAppointmentSchema = z
       .int()
       .positive("Please select a client"),
     ...baseAppointmentSlotFields,
+    walk_in: z.boolean().optional().default(false),
   })
-  .superRefine(validateSlot);
+  .superRefine((data, ctx) => validateSlot(data, ctx, { walkIn: data.walk_in }));
 
 // Client-portal equivalent of addAppointmentSchema — same slot/business-hour
 // rules, just without client_id (the controller injects that from the

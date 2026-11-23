@@ -45,6 +45,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import ProfilePictureModal from "./ProfilePictureModal.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 
 const MODULE_ICONS = {
   DASHBOARD: LayoutDashboard,
@@ -194,6 +195,8 @@ export default function Sidebar({ onLogout }) {
   const modules = data?.modules || [];
   // Red badge on Payments: client GCash proofs waiting to be verified.
   const canSeePayments = modules.some((m) => m.module_code === "PAYMENTS");
+  // Stock alert bell: anyone who can open Inventory or Analytics.
+  const canSeeStockAlerts = modules.some((m) => ["INVENTORY", "ANALYTICS"].includes(m.module_code));
   const { data: awaitingData } = useQuery({
     queryKey: ["awaiting-payments-count"],
     queryFn: ({ signal }) => fetchAwaitingPaymentsCount({ signal }),
@@ -456,6 +459,7 @@ export default function Sidebar({ onLogout }) {
           <h1 className="flex-1 min-w-0 truncate text-[17px] font-bold text-slate-900 dark:text-white">
             {pageTitle}
           </h1>
+          {showNav && canSeeStockAlerts && <NotificationBell buttonClass="size-11" />}
           {showNav && (
             <button
               type="button"
@@ -628,6 +632,12 @@ export default function Sidebar({ onLogout }) {
               Pet<span className="text-emerald-600 dark:text-emerald-500">Vet</span>
             </p>
           </Link>
+          {/* Desktop stock alerts; hidden on the collapsed rail (no room) */}
+          {showNav && canSeeStockAlerts && (
+            <div className={`max-md:hidden ${HIDE}`}>
+              <NotificationBell panelClass="left-0 top-full mt-2" />
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setIsMobileOpen(false)}

@@ -1,3 +1,5 @@
+import { DEPOSIT_PERCENT } from "./deposit.js";
+
 // Plain inline-styled HTML, not Tailwind classes — most email clients
 // strip <style> blocks and utility classes entirely, so every rule here
 // has to live directly on the element's style attribute to render
@@ -64,7 +66,7 @@ function formatBookingDate(dateString) {
 // Sent right after a client books in the portal (ClientPortal_Service.js):
 // every appointment in the booking (one, or several booked together) and
 // what to pay next. items: [{ appointment, payment }] (rows of v_appointments
-// / v_payments); reservationFee: the 50% fee for all of them together.
+// / v_payments); reservationFee: the DEPOSIT_PERCENT% fee for all of them together.
 export function bookingReceiptEmail({ items, reservationFee, holdMinutes }) {
   const e = (v) => escapeHtml(v ?? "");
   const first = items[0].appointment;
@@ -94,7 +96,7 @@ export function bookingReceiptEmail({ items, reservationFee, holdMinutes }) {
   const nextStep = total > 0
     ? `To keep ${items.length === 1 ? "this time slot" : "these time slots"}, pay through GCash in
        the PetVet client portal within <strong>${holdMinutes} minutes</strong> of booking: either
-       the reservation fee of <strong>${peso(reservationFee)}</strong> (50%) or the full
+       the reservation fee of <strong>${peso(reservationFee)}</strong> (${DEPOSIT_PERCENT}%) or the full
        <strong>${peso(total)}</strong>${items.length > 1 ? ", in one payment for everything" : ""}.
        Unpaid bookings are cancelled automatically. The reservation fee is non-refundable, and
        any balance is paid at the clinic.`

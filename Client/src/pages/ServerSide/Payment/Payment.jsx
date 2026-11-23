@@ -11,7 +11,7 @@ import {
   fetchRevenueTransactions,
   markPaymentRefunded,
 } from "@/api/http";
-import { PaymentColumns, paymentTransactionColumnsFor } from "@/utils/COLUMNS";
+import { PaymentListColumns, paymentTransactionColumnsFor } from "@/utils/COLUMNS";
 import { usePagination } from "@/hooks/usePagination";
 import { useState, useEffect } from "react";
 import { Pagination } from "@/components/ui/Pagination";
@@ -89,7 +89,7 @@ export function Component() {
         toast.info("No payments match the current filters");
         return;
       }
-      generatePaymentsReport(allMatching.rows, {
+      await generatePaymentsReport(allMatching.rows, {
         search: debouncedSearch,
         filters,
       });
@@ -298,7 +298,7 @@ export function Component() {
           />
           <DynamicGrid
             data={data?.rows ?? []}
-            columnsConfig={PaymentColumns}
+            columnsConfig={PaymentListColumns}
             title="Payment"
             onView={(row) => navigate(`view-payment/${row.payment_id}`)}
             onProcess={(row) =>
@@ -319,7 +319,8 @@ export function Component() {
               row.payment_status_name === "Pending" ||
               row.payment_status_name === "Partially Paid"
             }
-            // Only show "View" when money has moved (or the bill is closed)
+            // Only show "View" when money has moved (or the bill is closed).
+            // A merged group row's View covers all its appointments.
             canView={(row) =>
               row.payment_status_name === "Completed" ||
               row.payment_status_name === "Cancelled" ||

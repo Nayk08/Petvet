@@ -142,6 +142,7 @@ export default class AppointmentController {
         appointment_date,
         start_time,
         notes,
+        walk_in,
       } = req.body;
 
       const appointment = await appointmentService.addAppointment({
@@ -152,6 +153,7 @@ export default class AppointmentController {
         appointment_date,
         start_time,
         notes,
+        walk_in,
         created_by: req.session.user.name,
       });
       res.status(201).json(appointment);
@@ -279,6 +281,21 @@ export default class AppointmentController {
       res.json(services);
     } catch (error) {
       console.log("Error on Controller selectAppointmentServices function");
+      sendError(res, error, "Something went wrong. Please try again.");
+    }
+  }
+
+  // Staff preview in Book Appointment: a groomer/vet's latest reviews
+  // (all of them — staff aren't limited to public ones).
+  async getStaffReviews(req, res) {
+    try {
+      const staff_id = Number(req.params.users_id);
+      if (!Number.isInteger(staff_id) || staff_id <= 0) {
+        return res.status(400).json({ message: "Invalid staff ID" });
+      }
+      res.json(await appointmentService.getStaffReviews(staff_id, { publicOnly: false }));
+    } catch (error) {
+      console.log("Error on Controller getStaffReviews function");
       sendError(res, error, "Something went wrong. Please try again.");
     }
   }

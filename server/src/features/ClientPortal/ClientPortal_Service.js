@@ -42,12 +42,17 @@ function httpError(statusCode, message) {
 
 function readOtpToken(otp_token, { ignoreExpiration = false } = {}) {
   try {
-    const t = jwt.verify(otp_token, process.env.CLIENT_JWT_SECRET, { ignoreExpiration });
+    const t = jwt.verify(otp_token, process.env.CLIENT_JWT_SECRET, {
+      ignoreExpiration,
+    });
     if (t.purpose === "otp") return t;
   } catch {
     // fall through
   }
-  throw httpError(401, "Your sign-in code expired. Please sign in with Google again.");
+  throw httpError(
+    401,
+    "Your sign-in code expired. Please sign in with Google again.",
+  );
 }
 
 export default class ClientPortalService {
@@ -77,7 +82,12 @@ export default class ClientPortalService {
       // browser — signing them here stops a client registering someone
       // else's email in step two.
       const registration_token = jwt.sign(
-        { purpose: "register", email: payload.email, name: payload.name, sub: payload.sub },
+        {
+          purpose: "register",
+          email: payload.email,
+          name: payload.name,
+          sub: payload.sub,
+        },
         process.env.CLIENT_JWT_SECRET,
         { expiresIn: "15m" },
       );
@@ -101,7 +111,9 @@ export default class ClientPortalService {
       reg = null;
     }
     if (reg?.purpose !== "register") {
-      const err = new Error("Registration expired. Please sign in with Google again.");
+      const err = new Error(
+        "Registration expired. Please sign in with Google again.",
+      );
       err.statusCode = 401;
       throw err;
     }
@@ -123,7 +135,12 @@ export default class ClientPortalService {
   async #startOtp(clientRow, google_sub) {
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
     const otp_token = jwt.sign(
-      { purpose: "otp", client_id: clientRow.client_id, sub: google_sub, h: otpHash(clientRow.client_id, code) },
+      {
+        purpose: "otp",
+        client_id: clientRow.client_id,
+        sub: google_sub,
+        h: otpHash(clientRow.client_id, code),
+      },
       process.env.CLIENT_JWT_SECRET,
       { expiresIn: `${OTP_MINUTES}m` },
     );
@@ -141,7 +158,10 @@ export default class ClientPortalService {
       // No email set up: a dev machine can read the code from the server
       // log; production can't sign anyone in without it, so say so.
       if (process.env.NODE_ENV === "production") {
-        throw httpError(503, "We couldn't send your sign-in code right now. Please try again later.");
+        throw httpError(
+          503,
+          "We couldn't send your sign-in code right now. Please try again later.",
+        );
       }
       console.log(`[dev] PetVet sign-in code for ${clientRow.email}: ${code}`);
     }
@@ -153,18 +173,31 @@ export default class ClientPortalService {
     const t = readOtpToken(otp_token);
     const expected = Buffer.from(t.h);
     const given = Buffer.from(otpHash(t.client_id, code));
-    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
-      throw httpError(400, "That code is incorrect. Check your email and try again.");
+    if (
+      expected.length !== given.length ||
+      !crypto.timingSafeEqual(expected, given)
+    ) {
+      throw httpError(
+        400,
+        "That code is incorrect. Check your email and try again.",
+      );
     }
     // Burn the code on its first correct use — only now, so a mistyped code
     // never consumes it. A replay (or an older code after a newer sign-in)
     // is refused even while still unexpired.
     const firstUse = await clientPortalModel.consumeOtp(t.client_id, t.iat);
     if (!firstUse) {
-      throw httpError(400, "That code was already used. Please sign in with Google again to get a new one.");
+      throw httpError(
+        400,
+        "That code was already used. Please sign in with Google again to get a new one.",
+      );
     }
     const client = await clientPortalModel.getClientById(t.client_id);
-    if (!client) throw httpError(401, "This account is no longer active. Please contact the clinic.");
+    if (!client)
+      throw httpError(
+        401,
+        "This account is no longer active. Please contact the clinic.",
+      );
     return this.#signIn(client, t.sub);
   }
 
@@ -172,10 +205,17 @@ export default class ClientPortalService {
   async resendOtp({ otp_token }) {
     const t = readOtpToken(otp_token, { ignoreExpiration: true });
     if (Date.now() / 1000 - t.iat > 60 * 60) {
-      throw httpError(401, "Your sign-in code expired. Please sign in with Google again.");
+      throw httpError(
+        401,
+        "Your sign-in code expired. Please sign in with Google again.",
+      );
     }
     const client = await clientPortalModel.getClientById(t.client_id);
-    if (!client) throw httpError(401, "This account is no longer active. Please contact the clinic.");
+    if (!client)
+      throw httpError(
+        401,
+        "This account is no longer active. Please contact the clinic.",
+      );
     return this.#startOtp(client, t.sub);
   }
 
@@ -257,7 +297,9 @@ export default class ClientPortalService {
 
     // Completed, or Partially Paid (reservation fee verified; the receipt
     // shows the balance still due at the clinic).
-    if (!["Completed", "Partially Paid"].includes(payment.payment_status_name)) {
+    if (
+      !["Completed", "Partially Paid"].includes(payment.payment_status_name)
+    ) {
       const err = new Error(
         "A receipt is available once your payment has been verified by the clinic.",
       );
@@ -290,7 +332,9 @@ export default class ClientPortalService {
   async getMyPetMedicalRecords({ pets_id, client_id }) {
     const pet = await clientRecordsService.getPetById(pets_id); // throws if missing
     if (String(pet.client_id) !== String(client_id)) {
-      const err = new Error("You don't have access to this pet's medical records.");
+      const err = new Error(
+        "You don't have access to this pet's medical records.",
+      );
       err.statusCode = 403;
       throw err;
     }
@@ -349,7 +393,9 @@ export default class ClientPortalService {
   }) {
     const pet_status_id = await clientPortalModel.getDefaultPetStatusId();
     if (!pet_status_id) {
-      const err = new Error("Pet status is not configured. Please contact the clinic.");
+      const err = new Error(
+        "Pet status is not configured. Please contact the clinic.",
+      );
       err.statusCode = 500;
       throw err;
     }
@@ -401,12 +447,56 @@ export default class ClientPortalService {
     return clientPortalModel.getPublicProducts();
   }
 
+  async getPublicFeedback() {
+    return clientPortalModel.getPublicFeedback();
+  }
+
+  // Rate a visit: only the client's own, only once it's Completed, once.
+  // The staff rated is whoever was assigned to the visit, read from the DB —
+  // never from the request.
+  async submitFeedback({ appointment_id, client_id, service_rating, staff_rating, comment, show_on_website, feedback_image }) {
+    const appointment = await appointmentService.getAppointmentById(appointment_id);
+    const fail = (statusCode, message) => {
+      const err = new Error(message);
+      err.statusCode = statusCode;
+      throw err;
+    };
+    if (String(appointment.client_id) !== String(client_id))
+      fail(403, "You can only rate your own appointments.");
+    if (appointment.appointment_status_name !== "Completed")
+      fail(400, "You can rate a visit once it's completed.");
+    const staff_id = appointment.assigned_staff_id ?? null;
+    if (staff_id && !staff_rating) fail(400, "Please rate the groomer or vet too.");
+
+    try {
+      return await clientPortalModel.addFeedback({
+        appointment_id,
+        client_id,
+        staff_id,
+        service_rating,
+        staff_rating: staff_id ? staff_rating : null,
+        comment,
+        show_on_website,
+        feedback_image,
+      });
+    } catch (error) {
+      if (error.code === "23505") fail(409, "You've already rated this visit.");
+      throw error;
+    }
+  }
+
   async selectAppointmentServices() {
     return appointmentService.selectAppointmentServices();
   }
 
+  // Staff list with photo + rating (see AppointmentService.selectStaff).
   async selectStaff() {
     return appointmentService.selectStaff();
+  }
+
+  // Clients only see reviews the reviewer agreed to make public.
+  async getStaffReviews(staff_id) {
+    return appointmentService.getStaffReviews(staff_id, { publicOnly: true });
   }
 
   // client_id is always taken from the authenticated JWT (passed in here
@@ -427,7 +517,9 @@ export default class ClientPortalService {
   }) {
     const pet = await clientRecordsService.getPetById(pets_id);
     if (String(pet.client_id) !== String(client_id)) {
-      const err = new Error("You can only book appointments for your own pets.");
+      const err = new Error(
+        "You can only book appointments for your own pets.",
+      );
       err.statusCode = 403;
       throw err;
     }
@@ -472,7 +564,10 @@ export default class ClientPortalService {
     // The group is paid online in one go, so every item needs a price; a
     // service priced at the clinic is booked on its own.
     for (const [index, item] of items.entries()) {
-      const price = await appointmentService.getEffectivePrice(item.appointment_services_id, item.pets_id);
+      const price = await appointmentService.getEffectivePrice(
+        item.appointment_services_id,
+        item.pets_id,
+      );
       if (price == null) {
         const err = new Error(
           `Item ${index + 1}: this service is priced at the clinic, so it can't be paid online with other appointments. Book it on its own.`,
@@ -493,7 +588,9 @@ export default class ClientPortalService {
       booking_group: result.booking_group,
       items: groupItems(rows),
       total_amount: centsSum(rows.map((r) => Number(r.total_amount))),
-      reservation_fee: centsSum(rows.map((r) => minDeposit(Number(r.total_amount)))),
+      reservation_fee: centsSum(
+        rows.map((r) => minDeposit(Number(r.total_amount))),
+      ),
       unpriced: rows.some((r) => !(Number(r.total_amount) > 0)),
     };
   }
@@ -510,7 +607,13 @@ export default class ClientPortalService {
   }
 
   // One GCash payment (reservation fee or full) for a whole group booking.
-  async submitGroupPaymentProof({ booking_group, client_id, gcash_reference_number, amount_paid, payment_proof_image }) {
+  async submitGroupPaymentProof({
+    booking_group,
+    client_id,
+    gcash_reference_number,
+    amount_paid,
+    payment_proof_image,
+  }) {
     // Apply the 10-minute hold first, so a late proof is refused consistently.
     await appointmentService.expireUnpaidOnlineBookings();
     const rows = await this.#getOwnGroup(booking_group, client_id);
@@ -532,9 +635,17 @@ export default class ClientPortalService {
   // Backs out of a whole unpaid group booking (same rules as one booking).
   async cancelMyUnpaidGroup({ booking_group, client_id }) {
     const rows = await this.#getOwnGroup(booking_group, client_id);
-    const open = rows.filter((r) => !["Cancelled", "No Show", "Completed"].includes(r.appointment_status_name));
+    const open = rows.filter(
+      (r) =>
+        !["Cancelled", "No Show", "Completed"].includes(
+          r.appointment_status_name,
+        ),
+    );
     for (const r of open) {
-      await this.cancelMyUnpaidAppointment({ appointment_id: r.appointment_id, client_id });
+      await this.cancelMyUnpaidAppointment({
+        appointment_id: r.appointment_id,
+        client_id,
+      });
     }
     return { cancelled: open.length };
   }
@@ -547,12 +658,16 @@ export default class ClientPortalService {
       .then((items) => {
         const { subject, html } = bookingReceiptEmail({
           items,
-          reservationFee: centsSum(items.map((i) => minDeposit(Number(i.payment?.total_amount) || 0))),
+          reservationFee: centsSum(
+            items.map((i) => minDeposit(Number(i.payment?.total_amount) || 0)),
+          ),
           holdMinutes: UNPAID_HOLD_MINUTES,
         });
         return sendMail({ to: items[0].appointment.email, subject, html });
       })
-      .catch((error) => console.log("Booking receipt email failed:", error.message));
+      .catch((error) =>
+        console.log("Booking receipt email failed:", error.message),
+      );
   }
 
   // A client backing out of a booking they haven't paid for. Only their own,
@@ -561,14 +676,21 @@ export default class ClientPortalService {
   // so the 2-hour rule applies, the unpaid bill is cancelled and the time
   // slot is released.
   async cancelMyUnpaidAppointment({ appointment_id, client_id }) {
-    const appointment = await appointmentService.getAppointmentById(appointment_id);
+    const appointment =
+      await appointmentService.getAppointmentById(appointment_id);
     if (String(appointment.client_id) !== String(client_id)) {
       const err = new Error("You can only cancel your own appointments.");
       err.statusCode = 403;
       throw err;
     }
-    if (["Cancelled", "No Show", "Completed"].includes(appointment.appointment_status_name)) {
-      const err = new Error(`This booking is already ${appointment.appointment_status_name}.`);
+    if (
+      ["Cancelled", "No Show", "Completed"].includes(
+        appointment.appointment_status_name,
+      )
+    ) {
+      const err = new Error(
+        `This booking is already ${appointment.appointment_status_name}.`,
+      );
       err.statusCode = 409;
       throw err;
     }
@@ -630,7 +752,7 @@ export default class ClientPortalService {
       throw err;
     }
 
-    // At least 50% online, up to the full bill; the rest is paid at the
+    // At least the DEPOSIT_PERCENT% reservation fee online, up to the full bill; the rest is paid at the
     // clinic. Staff verify this amount against the screenshot.
     const amountError = depositError(payment.total_amount, amount_paid);
     if (amountError) {
@@ -668,4 +790,5 @@ function groupItems(rows) {
 }
 
 // Adds peso amounts without floating-point drift (to the centavo).
-const centsSum = (amounts) => amounts.reduce((sum, a) => sum + Math.round(a * 100), 0) / 100;
+const centsSum = (amounts) =>
+  amounts.reduce((sum, a) => sum + Math.round(a * 100), 0) / 100;

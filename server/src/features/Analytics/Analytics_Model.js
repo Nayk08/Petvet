@@ -1,4 +1,6 @@
 import pool from "../../config/db.js";
+import { staffRoleSql } from "../Appointment/Appointment_Model.js";
+import { GROUPED_PRODUCTS_QUERY } from "../Inventory/Inventory_model.js";
 
 export default class AnalyticsModel {
   // Daily revenue split Sales (cart checkout, INV) vs Services (appointment
@@ -231,5 +233,65 @@ export default class AnalyticsModel {
     } finally {
       client.release();
     }
+  }
+
+  // Client ratings per groomer/vet for feedback left in the range, best
+  // first (ties: more ratings first). low_ratings = 1-2 star ratings.
+  async getStaffRatings({ startDate, endDate }) {
+    const res = await pool.query(
+      `SELECT u.users_id, u.user_name AS staff_name, ${staffRoleSql("u.users_id")} AS staff_role,
+              ROUND(AVG(f.staff_rating), 2)::float AS avg_staff_rating,
+              ROUND(AVG(f.service_rating), 2)::float AS avg_service_rating,
+              COUNT(*)::int AS ratings,
+              COUNT(*) FILTER (WHERE f.staff_rating <= 2)::int AS low_ratings
+       FROM tbl_service_feedback f
+       JOIN tbl_users u ON u.users_id = f.staff_id
+       WHERE f.staff_rating IS NOT NULL
+         AND f.date_created::date BETWEEN $1 AND $2
+       GROUP BY u.users_id, u.user_name
+       ORDER BY avg_staff_rating DESC, ratings DESC, staff_name`,
+      [startDate, endDate],
+    );
+    return res.rows;
+  }
+
+  // Notification bell. Stock is judged per product (all batches summed, same
+  // tiers as the Inventory page) so an old empty batch doesn't raise a false
+  // "out of stock". Expiry is per batch, and only batches that still have
+  // units — an emptied expired batch needs no action.
+  async getStockAlerts() {
+    const [stock, expiry] = await Promise.all([
+      pool.query(
+        `SELECT product_name, product_quantity, status_name
+         FROM (${GROUPED_PRODUCTS_QUERY}) g
+         WHERE status_name IN ('Low Stock', 'Out of Stock')
+         ORDER BY product_quantity ASC, product_name`,
+      ),
+      pool.query(
+        `SELECT product_id, product_name, product_quantity, product_expiry_date,
+                (product_expiry_date <= CURRENT_TIMESTAMP) AS is_expired
+         FROM tbl_products
+         WHERE is_deleted = false
+           AND product_quantity > 0
+           AND product_expiry_date IS NOT NULL
+           AND product_expiry_date <= CURRENT_TIMESTAMP + INTERVAL '5 months'
+         ORDER BY product_expiry_date ASC, product_name`,
+      ),
+    ]);
+    return [
+      ...expiry.rows.map((r) => ({
+        key: `${r.is_expired ? "expired" : "expiring"}:${r.product_id}`,
+        kind: r.is_expired ? "expired" : "expiring",
+        product_name: r.product_name,
+        product_quantity: r.product_quantity,
+        product_expiry_date: r.product_expiry_date,
+      })),
+      ...stock.rows.map((r) => ({
+        key: `${r.status_name === "Out of Stock" ? "out" : "low"}:${r.product_name}`,
+        kind: r.status_name === "Out of Stock" ? "out" : "low",
+        product_name: r.product_name,
+        product_quantity: r.product_quantity,
+      })),
+    ];
   }
 }

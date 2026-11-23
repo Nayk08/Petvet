@@ -7,7 +7,7 @@ const STATUS_DESCRIPTIONS = {
   "Awaiting Verification":
     "The client paid online through GCash. Check the reference number and proof, then verify or reject it.",
   "Partially Paid":
-    "The online reservation fee (50%) is verified. The balance is paid at the clinic; if it isn't paid by the end of the appointment, it becomes a No Show and the non-refundable fee is kept.",
+    "The online reservation fee (10%) is verified. The balance is paid at the clinic; if it isn't paid by the end of the appointment, it becomes a No Show and the non-refundable fee is kept.",
   Completed: "Fully paid. Counted in revenue.",
   Cancelled:
     "Voided: the appointment was cancelled, the unpaid online booking expired, or the payment was refunded.",

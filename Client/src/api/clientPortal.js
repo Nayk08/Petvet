@@ -152,6 +152,26 @@ export async function cancelMyUnpaidAppointment(appointment_id) {
   return handlePortalResponse(response, "Failed to cancel the booking");
 }
 
+// Rate a completed visit: service + groomer/vet (1-5), an optional comment
+// and an optional photo. formData: FormData (browser sets the multipart header).
+export async function submitMyFeedback(appointment_id, formData) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetchWithTimeout(`${baseUrl}/appointments/${appointment_id}/feedback`, {
+    method: "POST",
+    headers: { "x-csrf-token": csrfToken },
+    credentials: "include",
+    body: formData,
+  });
+  return handlePortalResponse(response, "Failed to send your feedback");
+}
+
+// Landing page reviews (public).
+export async function fetchPublicFeedback({ signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/public/feedback`, { signal });
+  if (!response.ok) throw new Error("Failed to load reviews");
+  return response.json();
+}
+
 export async function bookMyAppointment(payload) {
   const csrfToken = await getCsrfToken();
   const response = await fetchWithTimeout(`${baseUrl}/appointments`, {
@@ -404,6 +424,15 @@ export async function fetchPortalAppointmentServices({ signal } = {}) {
     signal,
   });
   return handlePortalResponse(response, "Failed to fetch services");
+}
+
+// One groomer/vet's latest public reviews (booking page staff preview).
+export async function fetchPortalStaffReviews(users_id, { signal } = {}) {
+  const response = await fetchWithTimeout(`${baseUrl}/appointment-staff/${users_id}/reviews`, {
+    credentials: "include",
+    signal,
+  });
+  return handlePortalResponse(response, "Failed to fetch reviews");
 }
 
 export async function fetchPortalAppointmentStaff({ signal } = {}) {

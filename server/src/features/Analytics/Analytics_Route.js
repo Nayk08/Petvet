@@ -49,4 +49,19 @@ router.get(
   (req, res) => analyticsController.getCriticalStock(req, res),
 );
 
+// Client ratings per groomer/vet: top and low performers.
+router.get(
+  "/analytics/staff-ratings",
+  hasPermission("ANALYTICS", "can_view"),
+  (req, res) => analyticsController.getStaffRatings(req, res),
+);
+
+// Header notification bell: expiring/expired batches and low/out-of-stock
+// products. Inventory or Analytics access is enough.
+router.get(
+  "/analytics/stock-alerts",
+  hasPermission(["INVENTORY", "ANALYTICS"], "can_view"),
+  (req, res) => analyticsController.getStockAlerts(req, res),
+);
+
 export default router;

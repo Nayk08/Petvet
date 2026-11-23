@@ -3,7 +3,7 @@ import useBoxWidth from "@/hooks/useBoxWidth.jsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Trash2, XCircle, CheckCircle2 } from "lucide-react";
+import { Trash2, XCircle, CheckCircle2, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import {
   fetchClientGrowth,
   fetchCriticalStock,
   fetchPeakTimes,
+  fetchStaffRatings,
   pullExpiredProducts,
   queryClient,
 } from "@/api/http.js";
@@ -438,6 +439,45 @@ function formatExpiryDate(dateString) {
   });
 }
 
+// ── Staff ratings ───────────────────────────────────────────────────────
+
+const TOP_RATING = 4.0; // average stars at or above = top performing
+const LOW_RATING = 3.7; // average stars at or below = low performing
+
+// One groomer/vet's client rating: average stars, how many ratings, and how
+// many were 1-2 stars.
+function StaffRatingList({ rows, emptyText }) {
+  if (rows.length === 0) {
+    return <p className="text-[13px] text-slate-500 dark:text-slate-400 py-2">{emptyText}</p>;
+  }
+  return (
+    <ol className="divide-y divide-slate-100 dark:divide-[#1f241f]">
+      {rows.map((r) => (
+        <li key={r.users_id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-900 dark:text-white truncate">{r.staff_name}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {r.staff_role || "Staff"} · {formatCount(r.ratings)} {r.ratings === 1 ? "rating" : "ratings"}
+              {r.low_ratings > 0 && (
+                <span className="text-red-600 dark:text-[#ff8a8a]"> · {formatCount(r.low_ratings)} low</span>
+              )}
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="inline-flex items-center gap-1 font-bold text-slate-900 dark:text-white">
+              <Star className="size-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+              {r.avg_staff_rating.toFixed(2)}
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Service {r.avg_service_rating.toFixed(2)}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function Component() {
   const [range, setRange] = useState(() => daysAgoRange(30));
 
@@ -460,6 +500,17 @@ export function Component() {
     queryKey: ["AnalyticsClientGrowth", range.start_date, range.end_date],
     queryFn: ({ signal }) => fetchClientGrowth({ ...range, signal }),
   });
+
+  const staffRatingsQuery = useQuery({
+    queryKey: ["AnalyticsStaffRatings", range.start_date, range.end_date],
+    queryFn: ({ signal }) => fetchStaffRatings({ ...range, signal }),
+  });
+  // Ranked best first by the server. Fixed thresholds: 4.0+ stars is top
+  // performing, 3.7 or below is low performing (worst first); in between
+  // shows in neither list.
+  const staffRanked = staffRatingsQuery.data ?? [];
+  const topStaff = staffRanked.filter((r) => r.avg_staff_rating >= TOP_RATING);
+  const lowStaff = staffRanked.filter((r) => r.avg_staff_rating <= LOW_RATING).reverse();
 
   const criticalStockQuery = useQuery({
     queryKey: ["AnalyticsCriticalStock"],
@@ -582,6 +633,33 @@ export function Component() {
           isEmpty={(appointmentsQuery.data?.byStatus?.length ?? 0) === 0}
         >
           <StatusBreakdown rows={appointmentsQuery.data?.byStatus ?? []} />
+        </ChartCard>
+      </div>
+
+      {/* Staff performance from client ratings (portal feedback) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 items-start">
+        <ChartCard
+          title="Top performing staff"
+          subtitle="Groomers and vets averaging 4.0 stars or higher"
+          isPending={staffRatingsQuery.isPending}
+          isError={staffRatingsQuery.isError}
+          error={staffRatingsQuery.error}
+          isEmpty={staffRanked.length === 0}
+        >
+          <StaffRatingList rows={topStaff} emptyText="No staff at 4.0 stars or higher yet." />
+        </ChartCard>
+        <ChartCard
+          title="Low performing staff"
+          subtitle="Groomers and vets averaging 3.7 stars or lower, worst first"
+          isPending={staffRatingsQuery.isPending}
+          isError={staffRatingsQuery.isError}
+          error={staffRatingsQuery.error}
+          isEmpty={staffRanked.length === 0}
+        >
+          <StaffRatingList
+            rows={lowStaff}
+            emptyText="No staff at 3.7 stars or lower."
+          />
         </ChartCard>
       </div>
 

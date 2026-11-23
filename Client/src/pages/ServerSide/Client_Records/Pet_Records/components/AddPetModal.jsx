@@ -76,6 +76,10 @@ export function Component() {
     enabled: isEditMode,
   });
 
+  // Breed stays locked until a species is chosen (edit mode starts from the saved one).
+  const [pickedSpecies, setPickedSpecies] = useState(null);
+  const speciesId = pickedSpecies ?? petData?.species_id ?? "";
+
   useEffect(() => {
     if (petData?.pet_image) {
       setImagePreview(petData.pet_image);
@@ -171,18 +175,41 @@ export function Component() {
               />
             </div>
 
-            {/* Breed */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                Breed
-              </label>
-              <Input
-                name="breed"
-                placeholder="e.g. Golden Retriever"
-                autoComplete="off"
-                defaultValue={petData?.breed}
-                className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg"
-              />
+            {/* Species first, then Breed (locked until a species is picked) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                  Species
+                </label>
+                <select
+                  name="species_id"
+                  required
+                  value={speciesId}
+                  onChange={(e) => setPickedSpecies(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
+                >
+                  <option value="">Select</option>
+                  {species?.map((s) => (
+                    <option key={s.species_id} value={s.species_id}>
+                      {s.species}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+                  Breed
+                </label>
+                <Input
+                  name="breed"
+                  placeholder={speciesId ? "e.g. Golden Retriever" : "Select species first"}
+                  autoComplete="off"
+                  disabled={!speciesId}
+                  defaultValue={petData?.breed}
+                  className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 h-10 rounded-lg"
+                />
+              </div>
             </div>
 
             {/* Split Row: Date of Birth & Weight */}
@@ -241,27 +268,8 @@ export function Component() {
               </label>
             </div>
 
-            {/* Species / Gender / Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
-                  Species
-                </label>
-                <select
-                  name="species_id"
-                  required
-                  defaultValue={petData?.species_id ?? ""}
-                  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm px-2"
-                >
-                  <option value="">Select</option>
-                  {species?.map((s) => (
-                    <option key={s.species_id} value={s.species_id}>
-                      {s.species}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+            {/* Gender / Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
                   Gender

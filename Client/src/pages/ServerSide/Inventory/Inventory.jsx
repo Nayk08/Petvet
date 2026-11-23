@@ -17,7 +17,9 @@ import QueryState from "@/components/ui/QueryState";
 import BatchesModal from "./components/BatchesModal.jsx";
 import ProductSalesInsights from "./components/ProductSalesInsights.jsx";
 import ProductHistoryModal from "./components/ProductHistoryModal.jsx";
-import { History, Layers, PackagePlus, RotateCcw, Trash2 } from "lucide-react";
+import { FileDown, History, Layers, PackagePlus, RotateCcw, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button.jsx";
+import { generateInventoryReport } from "@/utils/generateInventoryReport.js";
 import { toast } from "sonner";
 import ModuleTabs from "@/components/ui/ModuleTabs";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -114,6 +116,33 @@ export default function Inventory() {
 
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
 
+  // Report of what the Active table is showing: same search/filters, every
+  // matching product rather than just the current page.
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  async function handleGenerateReport() {
+    setIsGeneratingReport(true);
+    try {
+      const all = await fetchInventory({
+        page: 1,
+        limit: "all",
+        search: debouncedSearch,
+        filters,
+        grouped: true,
+      });
+      if (!all?.rows?.length) {
+        toast.info("No products match the current filters");
+        return;
+      }
+      await generateInventoryReport(all.rows, { search: debouncedSearch, filters });
+    } catch (err) {
+      toast.error("Failed to generate report", {
+        description: err.message || "Something went wrong.",
+      });
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
   const permanentDeleteMutation = useMutation({
     mutationFn: permanentlyDeleteProduct,
     ...optimisticMutation({
@@ -201,6 +230,18 @@ export default function Inventory() {
                 filters={filters}
                 onFiltersChange={setFilters}
                 onLimitChange={setLimit}
+                extraActions={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isGeneratingReport}
+                    onClick={handleGenerateReport}
+                    className="flex items-center gap-2"
+                  >
+                    <FileDown size={14} />
+                    <span>{isGeneratingReport ? "Generating..." : "Generate Report"}</span>
+                  </Button>
+                }
               />
               <Pagination
                 page={page}
